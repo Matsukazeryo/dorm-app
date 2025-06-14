@@ -122,12 +122,39 @@
         .favorite-star:hover { transform: scale(1.2); }
         .count-cell { display: flex; align-items: center; justify-content: center; gap: 10px; }
         .count-span { min-width: 25px; font-weight: bold; font-size: 1.2em; }
-        button { 
-            background-color: #2980b9; color: white; border: none; padding: 5px 10px;
-            border-radius: 5px; cursor: pointer; font-size: 1em;
+        
+        /* ===== ↓↓↓ ここからボタンのスタイルを変更 ↓↓↓ ===== */
+        .count-cell button {
+            background-color: transparent;
+            border: 1.5px solid #bdc3c7;
+            color: #34495e;
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+            transition: all 0.2s;
         }
-        button.minus { background-color: #e74c3c; }
-        .delete-btn { background-color: #c0392b; font-size: 12px; padding: 4px 8px; }
+        .count-cell button:hover {
+            background-color: #ecf0f1;
+            transform: scale(1.1);
+        }
+        .delete-btn { 
+            background-color: #c0392b; 
+            color: white;
+            border: none;
+            font-size: 12px; 
+            padding: 4px 8px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        /* ===== ↑↑↑ ここまでボタンのスタイルを変更 ↑↑↑ ===== */
 
         .count-cell button, .edit-op-header, .edit-op-cell { display: none; }
         body.count-edit-mode .count-cell button { display: inline-block; }
@@ -140,27 +167,25 @@
             body.admin-logged-in .mode-selector { grid-template-columns: 1fr 1fr 1fr; }
             .mode-selector label { text-align: center; font-size: 14px; }
 
-            /* ===== ↓↓↓ ここからスマホ表示対応のコードを追加・修正 ↓↓↓ ===== */
             th, td {
-                padding: 10px 5px; /* テーブルの余白を調整 */
+                padding: 10px 5px;
                 font-size: 14px;
             }
             .count-cell {
-                flex-direction: column; /* 個数変更ボタンを縦に並べる */
-                gap: 5px;
+                flex-direction: column;
+                gap: 8px; /* 少し間隔を広げる */
             }
             .count-span {
                 font-size: 1.1em;
             }
             .name-cell {
-                flex-direction: column; /* 名前、部屋番号、星を縦に並べる */
-                align-items: flex-start; /* 左寄せにする */
+                flex-direction: column;
+                align-items: flex-start;
                 gap: 4px;
             }
             .favorite-star {
                 font-size: 20px;
             }
-            /* ===== ↑↑↑ ここまでスマホ表示対応のコードを追加・修正 ↑↑↑ ===== */
         }
     </style>
 </head>
@@ -211,7 +236,6 @@
 
 <script>
     // ===== ↓↓↓ 管理者パスワード設定 ↓↓↓ =====
-    // 必ず、あなただけのパスワードに変更してください！
     const ADMIN_PASSWORD = "password";
     // ===== ↑↑↑ 管理者パスワード設定 ↑↑↑ =====
 
@@ -367,7 +391,6 @@
         deleteSelectedBtn.disabled = selectedCheckboxes.length === 0;
     }
 
-    // ===== 管理者ログイン機能 =====
     function handleLoginLogout() {
         if (sessionStorage.getItem('isAdminLoggedIn') === 'true') {
             logout();
@@ -390,7 +413,6 @@
     function logout() {
         sessionStorage.removeItem('isAdminLoggedIn');
         alert('ログアウトしました。');
-        // ログアウトしたら安全な閲覧モードに戻す
         document.getElementById('view-mode').checked = true;
         setMode('view-mode');
         updateLoginStatus();
@@ -407,7 +429,6 @@
             loginLogoutBtn.classList.remove('logout');
         }
     }
-    // ===== ここまで =====
 
     function setMode(mode) { 
         document.body.className = sessionStorage.getItem('isAdminLoggedIn') === 'true' ? 'admin-logged-in' : '';
@@ -428,7 +449,7 @@
     });
     
     setMode('view-mode');
-    updateLoginStatus(); // ページ読み込み時にログイン状態を確認
+    updateLoginStatus();
     searchInput.addEventListener('input', renderTable);
     addResidentBtn.addEventListener('click', addResidentsInBulk);
     deleteSelectedBtn.addEventListener('click', deleteSelectedResidents);
