@@ -85,13 +85,11 @@
         table { 
             width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed;
         }
-        /* ===== ↓↓↓ ここからレイアウト崩れ対策の修正 ↓↓↓ ===== */
         th, td { 
-            padding: 12px; border: 1px solid #ddd; text-align: center; vertical-align: middle;
+            padding: 8px 12px;
+            border: 1px solid #ddd; text-align: center; vertical-align: middle;
             word-wrap: break-word;
-            height: 54px; /* 全てのセルの高さを固定してガタつきを防止 */
         }
-        /* ===== ↑↑↑ ここまでレイアウト崩れ対策の修正 ↑↑↑ ===== */
         th.checkbox-col, td.checkbox-col {
             width: 45px; display: none;
         }
@@ -102,7 +100,15 @@
         th:nth-child(5) { width: 16%; }
         
         th { background-color: #3498db; color: #fff; font-weight: bold; }
-        .name-cell { display: flex; align-items: center; font-weight: 500; text-align: left; }
+        /* ===== ↓↓↓ ここからレイアウト崩れ対策の修正 ↓↓↓ ===== */
+        .name-cell { 
+            display: flex; 
+            align-items: center; 
+            font-weight: 500; 
+            text-align: left;
+            min-height: 28px; /* 他のセルと高さを揃えるための最小の高さを設定 */
+        }
+        /* ===== ↑↑↑ ここまでレイアウト崩れ対策の修正 ↑↑↑ ===== */
         .room-number {
             font-size: 0.9em; color: #7f8c8d; margin-right: 8px;
             min-width: 35px; text-align: right;
@@ -132,11 +138,12 @@
         }
         
         .count-cell button {
-            opacity: 0; pointer-events: none; transition: opacity 0.2s ease-in-out;
+            visibility: hidden; /* レイアウトを維持したまま非表示にする */
         }
         body.count-edit-mode .count-cell button {
-            opacity: 1; pointer-events: auto;
+            visibility: visible; /* 個数変更モードの時だけ表示する */
         }
+
         .edit-op-header, .edit-op-cell { display: none; }
         body.resident-edit-mode .edit-op-header,
         body.resident-edit-mode .edit-op-cell { display: table-cell; }
@@ -147,7 +154,7 @@
             body.admin-logged-in .mode-selector { grid-template-columns: 1fr 1fr 1fr; }
             .mode-selector label { text-align: center; font-size: 14px; }
 
-            th, td { padding: 10px 5px; font-size: 14px; }
+            th, td { padding: 8px 5px; font-size: 14px; }
             .count-cell { gap: 5px; transform: scale(0.9); }
             .name-cell { align-items: center; gap: 4px; font-size: 13px; }
             .favorite-star { font-size: 20px; margin-right: 4px; }
