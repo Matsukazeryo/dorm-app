@@ -9,6 +9,7 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
             margin: 0; padding: 20px; background-color: #f4f7f9; color: #333; transition: background-color 0.3s;
         }
+        /* ===== モードごとの背景色 ===== */
         body.count-edit-mode { background-color: #f0f8ff; }
         body.resident-edit-mode { background-color: #fff8f8; }
 
@@ -27,14 +28,15 @@
         }
         .top-controls {
             display: flex;
+            align-items: center;
             width: 100%;
             gap: 15px;
-            flex-wrap: wrap;
         }
         #search-input {
             flex-grow: 1; min-width: 150px; padding: 10px; border: 1px solid #ddd;
             border-radius: 6px; font-size: 16px;
         }
+        /* ===== 3モード選択のデザイン ===== */
         .mode-selector {
             display: flex; border-radius: 6px; overflow: hidden;
             border: 1px solid #bdc3c7; flex-shrink: 0;
@@ -52,6 +54,7 @@
         body.resident-edit-mode .mode-selector input:checked + label {
             background-color: #e74c3c;
         }
+        /* ===== ここまで ===== */
         .bulk-ops-container {
             display: none; /* デフォルト非表示 */
             width: 100%;
@@ -117,10 +120,28 @@
         button.minus { background-color: #e74c3c; }
         .delete-btn { background-color: #c0392b; font-size: 12px; padding: 4px 8px; }
 
+        /* ===== モードごとの表示/非表示制御 ===== */
         .count-cell button, .edit-op-header, .edit-op-cell { display: none; }
         body.count-edit-mode .count-cell button { display: inline-block; }
         body.resident-edit-mode .edit-op-header,
         body.resident-edit-mode .edit-op-cell { display: table-cell; }
+
+        /* スマホ表示対応 */
+        @media (max-width: 640px) {
+            .top-controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .mode-selector {
+                width: 100%;
+                display: grid;
+                grid-template-columns: 1fr 1fr 1fr;
+            }
+            .mode-selector label {
+                text-align: center;
+                font-size: 14px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -272,7 +293,7 @@
         let addedCount = 0;
 
         lines.forEach(line => {
-            const parts = line.trim().split(/\s+/); // スペースやタブで分割
+            const parts = line.trim().split(/\s+/);
             if (parts.length >= 2) {
                 const room = parts[0];
                 const name = parts.slice(1).join(' ');
@@ -330,18 +351,14 @@
 
     function setMode(mode) { 
         document.body.className = mode;
-        selectAllCheckbox.checked = false;
+        if (mode !== 'resident-edit-mode') {
+            selectAllCheckbox.checked = false;
+        }
         renderTable();
     }
 
     modeSelectors.forEach(input => {
         input.addEventListener('change', () => { if(input.checked) setMode(input.id); });
-    });
-
-    selectAllCheckbox.addEventListener('change', (e) => {
-        const checkboxes = document.querySelectorAll('.resident-checkbox');
-        checkboxes.forEach(checkbox => checkbox.checked = e.target.checked);
-        updateDeleteButtonState();
     });
     
     tableBody.addEventListener('change', (e) => {
@@ -349,11 +366,15 @@
             updateDeleteButtonState();
         }
     });
-
+    
     setMode('view-mode');
     searchInput.addEventListener('input', renderTable);
     addResidentBtn.addEventListener('click', addResidentsInBulk);
     deleteSelectedBtn.addEventListener('click', deleteSelectedResidents);
+    selectAllCheckbox.addEventListener('change', (e) => {
+        document.querySelectorAll('.resident-checkbox').forEach(cb => cb.checked = e.target.checked);
+        updateDeleteButtonState();
+    });
 
 </script>
 
