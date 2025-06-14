@@ -139,6 +139,28 @@
             .mode-selector { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
             body.admin-logged-in .mode-selector { grid-template-columns: 1fr 1fr 1fr; }
             .mode-selector label { text-align: center; font-size: 14px; }
+
+            /* ===== ↓↓↓ ここからスマホ表示対応のコードを追加・修正 ↓↓↓ ===== */
+            th, td {
+                padding: 10px 5px; /* テーブルの余白を調整 */
+                font-size: 14px;
+            }
+            .count-cell {
+                flex-direction: column; /* 個数変更ボタンを縦に並べる */
+                gap: 5px;
+            }
+            .count-span {
+                font-size: 1.1em;
+            }
+            .name-cell {
+                flex-direction: column; /* 名前、部屋番号、星を縦に並べる */
+                align-items: flex-start; /* 左寄せにする */
+                gap: 4px;
+            }
+            .favorite-star {
+                font-size: 20px;
+            }
+            /* ===== ↑↑↑ ここまでスマホ表示対応のコードを追加・修正 ↑↑↑ ===== */
         }
     </style>
 </head>
