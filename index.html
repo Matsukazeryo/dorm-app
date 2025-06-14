@@ -9,7 +9,6 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
             margin: 0; padding: 20px; background-color: #f4f7f9; color: #333; transition: background-color 0.3s;
         }
-        /* ===== モードごとの背景色 ===== */
         body.count-edit-mode { background-color: #f0f8ff; }
         body.resident-edit-mode { background-color: #fff8f8; }
 
@@ -20,6 +19,25 @@
         h1 { 
             text-align: center; color: #2c3e50; border-bottom: 2px solid #3498db; 
             padding-bottom: 10px; margin-top: 0; 
+        }
+        .header-area {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        #login-logout-btn {
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+            background-color: #3498db;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #login-logout-btn.logout {
+            background-color: #e74c3c;
         }
         .controls-container {
             display: flex; flex-direction: column;
@@ -36,7 +54,6 @@
             flex-grow: 1; min-width: 150px; padding: 10px; border: 1px solid #ddd;
             border-radius: 6px; font-size: 16px;
         }
-        /* ===== 3モード選択のデザイン ===== */
         .mode-selector {
             display: flex; border-radius: 6px; overflow: hidden;
             border: 1px solid #bdc3c7; flex-shrink: 0;
@@ -51,28 +68,23 @@
         .mode-selector input:checked + label {
             background-color: #3498db; color: white; font-weight: bold;
         }
+        #resident-edit-mode-label {
+            display: none; /* 管理者以外には非表示 */
+        }
+        body.admin-logged-in #resident-edit-mode-label {
+            display: block; /* 管理者ログイン時に表示 */
+        }
         body.resident-edit-mode .mode-selector input:checked + label {
             background-color: #e74c3c;
         }
-        /* ===== ここまで ===== */
         .bulk-ops-container {
-            display: none; /* デフォルト非表示 */
-            width: 100%;
-            gap: 10px;
+            display: none; width: 100%; gap: 10px;
         }
-        body.resident-edit-mode .bulk-ops-container {
-            display: flex; /* 寮生編集モードで表示 */
-        }
+        body.resident-edit-mode .bulk-ops-container { display: flex; }
         .bulk-ops-container button {
-             flex-grow: 1;
-             padding: 10px;
-             color: white;
-             border: none;
-             border-radius: 6px;
-             font-size: 14px;
-             font-weight: bold;
-             cursor: pointer;
-             transition: background-color 0.2s;
+             flex-grow: 1; padding: 10px; color: white; border: none;
+             border-radius: 6px; font-size: 14px; font-weight: bold;
+             cursor: pointer; transition: background-color 0.2s;
         }
         #add-resident-btn { background-color: #2ecc71; }
         #add-resident-btn:hover { background-color: #27ae60; }
@@ -88,16 +100,13 @@
             word-wrap: break-word;
         }
         th.checkbox-col, td.checkbox-col {
-            width: 45px;
-            display: none;
+            width: 45px; display: none;
         }
         body.resident-edit-mode th.checkbox-col,
-        body.resident-edit-mode td.checkbox-col {
-            display: table-cell;
-        }
-        th:nth-child(2) { width: 48%; } /* 名前列 */
-        th:nth-child(3), th:nth-child(4) { width: 18%; } /* 荷物・郵便列 */
-        th:nth-child(5) { width: 16%; } /* 操作列 */
+        body.resident-edit-mode td.checkbox-col { display: table-cell; }
+        th:nth-child(2) { width: 48%; }
+        th:nth-child(3), th:nth-child(4) { width: 18%; }
+        th:nth-child(5) { width: 16%; }
         
         th { background-color: #3498db; color: #fff; font-weight: bold; }
         .name-cell { display: flex; align-items: center; font-weight: 500; text-align: left; }
@@ -120,34 +129,26 @@
         button.minus { background-color: #e74c3c; }
         .delete-btn { background-color: #c0392b; font-size: 12px; padding: 4px 8px; }
 
-        /* ===== モードごとの表示/非表示制御 ===== */
         .count-cell button, .edit-op-header, .edit-op-cell { display: none; }
         body.count-edit-mode .count-cell button { display: inline-block; }
         body.resident-edit-mode .edit-op-header,
         body.resident-edit-mode .edit-op-cell { display: table-cell; }
-
-        /* スマホ表示対応 */
+        
         @media (max-width: 640px) {
-            .top-controls {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            .mode-selector {
-                width: 100%;
-                display: grid;
-                grid-template-columns: 1fr 1fr 1fr;
-            }
-            .mode-selector label {
-                text-align: center;
-                font-size: 14px;
-            }
+            .top-controls { flex-direction: column; align-items: stretch; }
+            .mode-selector { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
+            body.admin-logged-in .mode-selector { grid-template-columns: 1fr 1fr 1fr; }
+            .mode-selector label { text-align: center; font-size: 14px; }
         }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>荷物管理アプリ</h1>
+    <div class="header-area">
+        <h1>荷物管理アプリ</h1>
+        <button id="login-logout-btn">管理者ログイン</button>
+    </div>
 
     <div class="controls-container">
         <div class="top-controls">
@@ -158,7 +159,7 @@
                 <input type="radio" id="count-edit-mode" name="mode">
                 <label for="count-edit-mode">個数変更</label>
                 <input type="radio" id="resident-edit-mode" name="mode">
-                <label for="resident-edit-mode">寮生編集</label>
+                <label for="resident-edit-mode" id="resident-edit-mode-label">寮生編集</label>
             </div>
         </div>
         <div class="bulk-ops-container">
@@ -187,6 +188,11 @@
 <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore-compat.js"></script>
 
 <script>
+    // ===== ↓↓↓ 管理者パスワード設定 ↓↓↓ =====
+    // 必ず、あなただけのパスワードに変更してください！
+    const ADMIN_PASSWORD = "password";
+    // ===== ↑↑↑ 管理者パスワード設定 ↑↑↑ =====
+
     const firebaseConfig = {
       apiKey: "AIzaSyDUevNVtZEycMZ7jl9xSimUqg0PB5SbheY",
       authDomain: "dorm-manager-30ce8.firebaseapp.com",
@@ -206,6 +212,7 @@
     const deleteSelectedBtn = document.getElementById('delete-selected-btn');
     const selectAllCheckbox = document.getElementById('select-all-checkbox');
     const modeSelectors = document.querySelectorAll('input[name="mode"]');
+    const loginLogoutBtn = document.getElementById('login-logout-btn');
 
     let allResidents = []; 
 
@@ -287,24 +294,19 @@
     function addResidentsInBulk() {
         const text = prompt("追加する寮生のリストを貼り付けてください。\n形式：部屋番号 名前 (1行に1人)\n例:\n101 山田 太郎\n102 鈴木 花子");
         if (!text) return;
-
         const lines = text.trim().split('\n');
         const batch = db.batch();
         let addedCount = 0;
-
         lines.forEach(line => {
             const parts = line.trim().split(/\s+/);
             if (parts.length >= 2) {
                 const room = parts[0];
                 const name = parts.slice(1).join(' ');
                 const newResidentRef = db.collection("residents").doc();
-                batch.set(newResidentRef, {
-                    roomNumber: room, name: name, luggage: 0, mail: 0
-                });
+                batch.set(newResidentRef, { roomNumber: room, name: name, luggage: 0, mail: 0 });
                 addedCount++;
             }
         });
-
         if (addedCount > 0) {
             batch.commit()
                 .then(() => alert(`${addedCount}人の寮生を追加しました。`))
@@ -316,17 +318,11 @@
 
     function deleteSelectedResidents() {
         const selectedCheckboxes = document.querySelectorAll('.resident-checkbox:checked');
-        if (selectedCheckboxes.length === 0) {
-            alert("削除する寮生が選択されていません。");
-            return;
-        }
-
-        if (confirm(`選択した ${selectedCheckboxes.length} 人の寮生を本当に削除しますか？\nこの操作は元に戻せません。`)) {
+        if (selectedCheckboxes.length === 0) return;
+        if (confirm(`選択した ${selectedCheckboxes.length} 人の寮生を本当に削除しますか？`)) {
             const batch = db.batch();
             selectedCheckboxes.forEach(checkbox => {
-                const docId = checkbox.dataset.id;
-                const docRef = db.collection("residents").doc(docId);
-                batch.delete(docRef);
+                batch.delete(db.collection("residents").doc(checkbox.dataset.id));
             });
             batch.commit()
                 .then(() => {
@@ -338,7 +334,7 @@
     }
 
     function deleteResident(residentId, residentName) {
-        if (confirm(`本当に「${residentName}」さんをリストから削除しますか？\nこの操作は元に戻せません。`)) {
+        if (confirm(`本当に「${residentName}」さんをリストから削除しますか？`)) {
             db.collection("residents").doc(residentId).delete()
             .catch(error => console.error("削除エラー:", error));
         }
@@ -349,8 +345,52 @@
         deleteSelectedBtn.disabled = selectedCheckboxes.length === 0;
     }
 
+    // ===== 管理者ログイン機能 =====
+    function handleLoginLogout() {
+        if (sessionStorage.getItem('isAdminLoggedIn') === 'true') {
+            logout();
+        } else {
+            login();
+        }
+    }
+
+    function login() {
+        const password = prompt('管理者パスワードを入力してください:');
+        if (password === ADMIN_PASSWORD) {
+            sessionStorage.setItem('isAdminLoggedIn', 'true');
+            alert('管理者としてログインしました。');
+            updateLoginStatus();
+        } else if (password !== null) {
+            alert('パスワードが違います。');
+        }
+    }
+
+    function logout() {
+        sessionStorage.removeItem('isAdminLoggedIn');
+        alert('ログアウトしました。');
+        // ログアウトしたら安全な閲覧モードに戻す
+        document.getElementById('view-mode').checked = true;
+        setMode('view-mode');
+        updateLoginStatus();
+    }
+
+    function updateLoginStatus() {
+        const isLoggedIn = sessionStorage.getItem('isAdminLoggedIn') === 'true';
+        document.body.classList.toggle('admin-logged-in', isLoggedIn);
+        if (isLoggedIn) {
+            loginLogoutBtn.textContent = 'ログアウト';
+            loginLogoutBtn.classList.add('logout');
+        } else {
+            loginLogoutBtn.textContent = '管理者ログイン';
+            loginLogoutBtn.classList.remove('logout');
+        }
+    }
+    // ===== ここまで =====
+
     function setMode(mode) { 
-        document.body.className = mode;
+        document.body.className = sessionStorage.getItem('isAdminLoggedIn') === 'true' ? 'admin-logged-in' : '';
+        document.body.classList.add(mode);
+        
         if (mode !== 'resident-edit-mode') {
             selectAllCheckbox.checked = false;
         }
@@ -362,12 +402,11 @@
     });
     
     tableBody.addEventListener('change', (e) => {
-        if (e.target.classList.contains('resident-checkbox')) {
-            updateDeleteButtonState();
-        }
+        if (e.target.classList.contains('resident-checkbox')) updateDeleteButtonState();
     });
     
     setMode('view-mode');
+    updateLoginStatus(); // ページ読み込み時にログイン状態を確認
     searchInput.addEventListener('input', renderTable);
     addResidentBtn.addEventListener('click', addResidentsInBulk);
     deleteSelectedBtn.addEventListener('click', deleteSelectedResidents);
@@ -375,6 +414,7 @@
         document.querySelectorAll('.resident-checkbox').forEach(cb => cb.checked = e.target.checked);
         updateDeleteButtonState();
     });
+    loginLogoutBtn.addEventListener('click', handleLoginLogout);
 
 </script>
 
