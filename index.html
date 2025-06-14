@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>荷物管理アプリ</title>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
+            margin: 0; padding: 20px; background-color: #f4f7f9; color: #333; transition: background-color 0.3s;
+        }
+        body.count-edit-mode { background-color: #f0f8ff; }
+        body.resident-edit-mode { background-color: #fff8f8; }
+
+        .container { 
+            max-width: 800px; margin: 0 auto; background-color: #fff; 
+            padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+        }
+        h1 { 
+            text-align: center; color: #2c3e50; border-bottom: 2px solid #3498db; 
+            padding-bottom: 10px; margin-top: 0; 
+        }
+        .controls-container {
+            display: flex; flex-direction: column;
+            gap: 15px; padding: 15px; margin: 20px 0;
+            background-color: #ecf0f1; border-radius: 8px;
+        }
+        .top-controls {
+            display: flex;
+            width: 100%;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        #search-input {
+            flex-grow: 1; min-width: 150px; padding: 10px; border: 1px solid #ddd;
+            border-radius: 6px; font-size: 16px;
+        }
+        .mode-selector {
+            display: flex; border-radius: 6px; overflow: hidden;
+            border: 1px solid #bdc3c7; flex-shrink: 0;
+        }
+        .mode-selector input { display: none; }
+        .mode-selector label {
+            padding: 10px 12px; cursor: pointer; background-color: #fff;
+            color: #34495e; transition: background-color 0.2s;
+            border-left: 1px solid #bdc3c7; white-space: nowrap;
+        }
+        .mode-selector label:first-child { border-left: none; }
+        .mode-selector input:checked + label {
+            background-color: #3498db; color: white; font-weight: bold;
+        }
+        body.resident-edit-mode .mode-selector input:checked + label {
+            background-color: #e74c3c;
+        }
+        .bulk-ops-container {
+            display: none; /* デフォルト非表示 */
+            width: 100%;
+            gap: 10px;
+        }
+        body.resident-edit-mode .bulk-ops-container {
+            display: flex; /* 寮生編集モードで表示 */
+        }
+        .bulk-ops-container button {
+             flex-grow: 1;
+             padding: 10px;
+             color: white;
+             border: none;
+             border-radius: 6px;
+             font-size: 14px;
+             font-weight: bold;
+             cursor: pointer;
+             transition: background-color 0.2s;
+        }
+        #add-resident-btn { background-color: #2ecc71; }
+        #add-resident-btn:hover { background-color: #27ae60; }
+        #delete-selected-btn { background-color: #e74c3c; }
+        #delete-selected-btn:hover { background-color: #c0392b; }
+        #delete-selected-btn:disabled { background-color: #bdc3c7; cursor: not-allowed; }
+        
+        table { 
+            width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed;
+        }
+        th, td { 
+            padding: 12px; border: 1px solid #ddd; text-align: center; vertical-align: middle;
+            word-wrap: break-word;
+        }
+        th.checkbox-col, td.checkbox-col {
+            width: 45px;
+            display: none;
+        }
+        body.resident-edit-mode th.checkbox-col,
+        body.resident-edit-mode td.checkbox-col {
+            display: table-cell;
+        }
+        th:nth-child(2) { width: 48%; } /* 名前列 */
+        th:nth-child(3), th:nth-child(4) { width: 18%; } /* 荷物・郵便列 */
+        th:nth-child(5) { width: 16%; } /* 操作列 */
+        
+        th { background-color: #3498db; color: #fff; font-weight: bold; }
+        .name-cell { display: flex; align-items: center; font-weight: 500; text-align: left; }
+        .room-number {
+            font-size: 0.9em; color: #7f8c8d; margin-right: 8px;
+            min-width: 35px; text-align: right;
+        }
+        .favorite-star {
+            cursor: pointer; font-size: 22px; margin-right: 10px;
+            color: #bdc3c7; transition: transform 0.2s, color 0.2s;
+        }
+        .favorite-star.favorited { color: #f1c40f; }
+        .favorite-star:hover { transform: scale(1.2); }
+        .count-cell { display: flex; align-items: center; justify-content: center; gap: 10px; }
+        .count-span { min-width: 25px; font-weight: bold; font-size: 1.2em; }
+        button { 
+            background-color: #2980b9; color: white; border: none; padding: 5px 10px;
+            border-radius: 5px; cursor: pointer; font-size: 1em;
+        }
+        button.minus { background-color: #e74c3c; }
+        .delete-btn { background-color: #c0392b; font-size: 12px; padding: 4px 8px; }
+
+        .count-cell button, .edit-op-header, .edit-op-cell { display: none; }
+        body.count-edit-mode .count-cell button { display: inline-block; }
+        body.resident-edit-mode .edit-op-header,
+        body.resident-edit-mode .edit-op-cell { display: table-cell; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>荷物管理アプリ</h1>
+
+    <div class="controls-container">
+        <div class="top-controls">
+            <input type="search" id="search-input" placeholder="名前や部屋番号で検索...">
+            <div class="mode-selector">
+                <input type="radio" id="view-mode" name="mode" checked>
+                <label for="view-mode">閲覧</label>
+                <input type="radio" id="count-edit-mode" name="mode">
+                <label for="count-edit-mode">個数変更</label>
+                <input type="radio" id="resident-edit-mode" name="mode">
+                <label for="resident-edit-mode">寮生編集</label>
+            </div>
+        </div>
+        <div class="bulk-ops-container">
+            <button id="add-resident-btn">寮生を一括追加</button>
+            <button id="delete-selected-btn" disabled>選択した寮生を削除</button>
+        </div>
+    </div>
+
+    <table id="resident-table">
+        <thead>
+            <tr>
+                <th class="checkbox-col"><input type="checkbox" id="select-all-checkbox"></th>
+                <th>名前</th>
+                <th>荷物</th>
+                <th>郵便</th>
+                <th class="edit-op-header">操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td colspan="5">データベースから読み込み中...</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore-compat.js"></script>
+
+<script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDUevNVtZEycMZ7jl9xSimUqg0PB5SbheY",
+      authDomain: "dorm-manager-30ce8.firebaseapp.com",
+      projectId: "dorm-manager-30ce8",
+      storageBucket: "dorm-manager-30ce8.appspot.com",
+      messagingSenderId: "775850695904",
+      appId: "1:775850695904:web:0c1ee061060482c1368485",
+      measurementId: "G-Y9XBHQKJW2"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const tableBody = document.querySelector("#resident-table tbody");
+    const searchInput = document.getElementById('search-input');
+    const addResidentBtn = document.getElementById('add-resident-btn');
+    const deleteSelectedBtn = document.getElementById('delete-selected-btn');
+    const selectAllCheckbox = document.getElementById('select-all-checkbox');
+    const modeSelectors = document.querySelectorAll('input[name="mode"]');
+
+    let allResidents = []; 
+
+    db.collection("residents").onSnapshot(snapshot => {
+        allResidents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        renderTable(); 
+    }, error => console.error("データの読み込みに失敗しました:", error));
+
+    function renderTable() {
+        const searchTerm = searchInput.value.toLowerCase();
+        const favoriteId = localStorage.getItem('dormAppFavoriteId');
+
+        allResidents.sort((a, b) => {
+            if (a.id === favoriteId) return -1;
+            if (b.id === favoriteId) return 1;
+            return parseInt(a.roomNumber, 10) - parseInt(b.roomNumber, 10);
+        });
+
+        const filteredResidents = allResidents.filter(r => 
+            r.name.toLowerCase().includes(searchTerm) ||
+            r.roomNumber.includes(searchTerm)
+        );
+
+        tableBody.innerHTML = ''; 
+
+        if (filteredResidents.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="5">該当する寮生が見つかりません。</td></tr>';
+        } else {
+            filteredResidents.forEach(resident => {
+                const isFavorited = resident.id === favoriteId;
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="checkbox-col"><input type="checkbox" class="resident-checkbox" data-id="${resident.id}"></td>
+                    <td class="name-cell">
+                        <span class="favorite-star ${isFavorited ? 'favorited' : ''}" onclick="toggleFavorite('${resident.id}')">★</span>
+                        <span class="room-number">${resident.roomNumber}</span>
+                        <span>${resident.name}</span>
+                    </td>
+                    <td>
+                        <div class="count-cell">
+                            <button class="minus" onclick="updateCount('${resident.id}', 'luggage', -1)">-</button>
+                            <span class="count-span">${resident.luggage}</span>
+                            <button onclick="updateCount('${resident.id}', 'luggage', 1)">+</button>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="count-cell">
+                            <button class="minus" onclick="updateCount('${resident.id}', 'mail', -1)">-</button>
+                            <span class="count-span">${resident.mail}</span>
+                            <button onclick="updateCount('${resident.id}', 'mail', 1)">+</button>
+                        </div>
+                    </td>
+                    <td class="edit-op-cell">
+                        <button class="delete-btn" onclick="deleteResident('${resident.id}', '${resident.name}')">削除</button>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+        updateDeleteButtonState();
+    }
+
+    function toggleFavorite(residentId) {
+        const currentFavorite = localStorage.getItem('dormAppFavoriteId');
+        localStorage.setItem('dormAppFavoriteId', currentFavorite === residentId ? '' : residentId);
+        renderTable();
+    }
+
+    function updateCount(residentId, type, value) {
+        const docRef = db.collection("residents").doc(residentId);
+        const increment = firebase.firestore.FieldValue.increment(value);
+        docRef.get().then(doc => {
+            if (doc.exists && (doc.data()[type] > 0 || value > 0)) {
+                docRef.update({ [type]: increment });
+            }
+        }).catch(error => console.error("更新エラー:", error));
+    }
+
+    function addResidentsInBulk() {
+        const text = prompt("追加する寮生のリストを貼り付けてください。\n形式：部屋番号 名前 (1行に1人)\n例:\n101 山田 太郎\n102 鈴木 花子");
+        if (!text) return;
+
+        const lines = text.trim().split('\n');
+        const batch = db.batch();
+        let addedCount = 0;
+
+        lines.forEach(line => {
+            const parts = line.trim().split(/\s+/); // スペースやタブで分割
+            if (parts.length >= 2) {
+                const room = parts[0];
+                const name = parts.slice(1).join(' ');
+                const newResidentRef = db.collection("residents").doc();
+                batch.set(newResidentRef, {
+                    roomNumber: room, name: name, luggage: 0, mail: 0
+                });
+                addedCount++;
+            }
+        });
+
+        if (addedCount > 0) {
+            batch.commit()
+                .then(() => alert(`${addedCount}人の寮生を追加しました。`))
+                .catch(error => alert(`追加中にエラーが発生しました: ${error.message}`));
+        } else {
+            alert("有効な形式のデータがありませんでした。");
+        }
+    }
+
+    function deleteSelectedResidents() {
+        const selectedCheckboxes = document.querySelectorAll('.resident-checkbox:checked');
+        if (selectedCheckboxes.length === 0) {
+            alert("削除する寮生が選択されていません。");
+            return;
+        }
+
+        if (confirm(`選択した ${selectedCheckboxes.length} 人の寮生を本当に削除しますか？\nこの操作は元に戻せません。`)) {
+            const batch = db.batch();
+            selectedCheckboxes.forEach(checkbox => {
+                const docId = checkbox.dataset.id;
+                const docRef = db.collection("residents").doc(docId);
+                batch.delete(docRef);
+            });
+            batch.commit()
+                .then(() => {
+                    alert(`${selectedCheckboxes.length}人の寮生を削除しました。`);
+                    selectAllCheckbox.checked = false;
+                })
+                .catch(error => alert(`削除中にエラーが発生しました: ${error.message}`));
+        }
+    }
+
+    function deleteResident(residentId, residentName) {
+        if (confirm(`本当に「${residentName}」さんをリストから削除しますか？\nこの操作は元に戻せません。`)) {
+            db.collection("residents").doc(residentId).delete()
+            .catch(error => console.error("削除エラー:", error));
+        }
+    }
+    
+    function updateDeleteButtonState() {
+        const selectedCheckboxes = document.querySelectorAll('.resident-checkbox:checked');
+        deleteSelectedBtn.disabled = selectedCheckboxes.length === 0;
+    }
+
+    function setMode(mode) { 
+        document.body.className = mode;
+        selectAllCheckbox.checked = false;
+        renderTable();
+    }
+
+    modeSelectors.forEach(input => {
+        input.addEventListener('change', () => { if(input.checked) setMode(input.id); });
+    });
+
+    selectAllCheckbox.addEventListener('change', (e) => {
+        const checkboxes = document.querySelectorAll('.resident-checkbox');
+        checkboxes.forEach(checkbox => checkbox.checked = e.target.checked);
+        updateDeleteButtonState();
+    });
+    
+    tableBody.addEventListener('change', (e) => {
+        if (e.target.classList.contains('resident-checkbox')) {
+            updateDeleteButtonState();
+        }
+    });
+
+    setMode('view-mode');
+    searchInput.addEventListener('input', renderTable);
+    addResidentBtn.addEventListener('click', addResidentsInBulk);
+    deleteSelectedBtn.addEventListener('click', deleteSelectedResidents);
+
+</script>
+
+</body>
+</html>
