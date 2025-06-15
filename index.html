@@ -54,7 +54,11 @@
         }
         .header-area {
             display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 10px; gap: 10px;
+            margin-bottom: 10px; gap: 10px; flex-wrap: wrap;
+        }
+        h1 { 
+            text-align: center; color: var(--header-text); border-bottom: 2px solid var(--header-border); 
+            padding-bottom: 10px; margin: 0; flex-grow: 1;
         }
         .header-buttons { display: flex; gap: 8px; align-items: center; }
         .header-btn {
@@ -176,6 +180,22 @@
         #log-list li { padding: 8px 0; border-bottom: 1px solid var(--border-color); font-size: 14px; }
         #log-list li:last-child { border-bottom: none; }
         #log-list .log-time { font-size: 12px; color: #7f8c8d; display: block; }
+
+        /* ===== ↓↓↓ フッター（テーマ設定）のスタイル ===== */
+        .footer {
+            margin-top: 24px;
+            padding: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            color: #7f8c8d;
+        }
+        body.dark-theme .footer {
+            color: #bdc3c7;
+        }
+        /* ===== ↑↑↑ フッター（テーマ設定）のスタイル ↑↑↑ ===== */
         
         @media (max-width: 640px) {
             .top-controls { flex-direction: column; align-items: stretch; }
@@ -195,16 +215,6 @@
     <div class="header-area">
         <h1>荷物管理アプリ</h1>
         <div class="header-buttons">
-            <!-- ===== ↓↓↓ テーマ選択ボタンに変更 ↓↓↓ ===== -->
-            <div id="theme-selector" class="mode-selector">
-                <input type="radio" id="theme-system" name="theme" value="system">
-                <label for="theme-system">システム</label>
-                <input type="radio" id="theme-light" name="theme" value="light">
-                <label for="theme-light">昼</label>
-                <input type="radio" id="theme-dark" name="theme" value="dark">
-                <label for="theme-dark">夜</label>
-            </div>
-            <!-- ===== ↑↑↑ テーマ選択ボタンに変更 ↑↑↑ ===== -->
             <button id="log-view-btn" class="header-btn">操作履歴</button>
             <button id="login-logout-btn" class="header-btn">管理者ログイン</button>
         </div>
@@ -259,6 +269,21 @@
         </ul>
     </div>
 </div>
+
+<!-- ===== ↓↓↓ フッターにテーマ設定を移動 ↓↓↓ ===== -->
+<footer class="footer">
+    <span>表示テーマ:</span>
+    <div id="theme-selector" class="mode-selector">
+        <input type="radio" id="theme-system" name="theme" value="system">
+        <label for="theme-system">システム</label>
+        <input type="radio" id="theme-light" name="theme" value="light">
+        <label for="theme-light">昼</label>
+        <input type="radio" id="theme-dark" name="theme" value="dark">
+        <label for="theme-dark">夜</label>
+    </div>
+</footer>
+<!-- ===== ↑↑↑ フッターにテーマ設定を移動 ↑↑↑ ===== -->
+
 
 <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore-compat.js"></script>
@@ -501,14 +526,12 @@
     function setMode(mode) { 
         document.body.className = sessionStorage.getItem('isAdminLoggedIn') === 'true' ? 'admin-logged-in' : '';
         document.body.classList.add(mode);
-        // 現在のテーマを維持する
         const currentTheme = localStorage.getItem('theme') || 'system';
         handleThemeChange(currentTheme);
         if (mode !== 'resident-edit-mode') selectAllCheckbox.checked = false;
         renderTable();
     }
 
-    // ===== ↓↓↓ テーマ設定のロジック =====
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
 
     function applyTheme(theme) {
@@ -527,29 +550,11 @@
         }
     }
 
-    // イベントリスナーと初期化
-    themeSelectors.forEach(input => {
-        input.addEventListener('change', (e) => {
-            const selectedTheme = e.target.value;
-            localStorage.setItem('theme', selectedTheme);
-            handleThemeChange(selectedTheme);
-        });
-    });
-
-    prefersDark.addEventListener('change', () => {
-        const savedTheme = localStorage.getItem('theme') || 'system';
-        if (savedTheme === 'system') {
-            handleThemeChange('system');
-        }
-    });
-
     function initializeTheme() {
         const savedTheme = localStorage.getItem('theme') || 'system';
         document.getElementById(`theme-${savedTheme}`).checked = true;
         handleThemeChange(savedTheme);
     }
-    // ===== ↑↑↑ テーマ設定のロジック ↑↑↑ =====
-
 
     // イベントリスナー
     modeSelectors.forEach(input => input.addEventListener('change', () => { if(input.checked) setMode(input.id); }));
@@ -569,7 +574,22 @@
     modalCloseBtn.addEventListener('click', () => logModal.style.display = 'none');
     logModal.addEventListener('click', e => { if(e.target === logModal) logModal.style.display = 'none'; });
     
-    initializeTheme(); // ページ読み込み時にテーマを初期化
+    themeSelectors.forEach(input => {
+        input.addEventListener('change', e => {
+            const selectedTheme = e.target.value;
+            localStorage.setItem('theme', selectedTheme);
+            handleThemeChange(selectedTheme);
+        });
+    });
+
+    prefersDark.addEventListener('change', () => {
+        const savedTheme = localStorage.getItem('theme') || 'system';
+        if (savedTheme === 'system') {
+            handleThemeChange('system');
+        }
+    });
+    
+    initializeTheme();
 
 </script>
 
