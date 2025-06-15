@@ -38,6 +38,7 @@
             --mode-label-bg: #7f8c8d;
             --mode-label-text: #ecf0f1;
         }
+        /* ===== ここまで ===== */
 
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
@@ -67,9 +68,7 @@
         }
         #login-logout-btn { background-color: #3498db; }
         #login-logout-btn.logout { background-color: #e74c3c; }
-        #log-view-btn { background-color: #8e44ad; display: none; }
-        body.admin-logged-in #log-view-btn { display: inline-block; }
-
+        
         .controls-container {
             display: flex; flex-direction: column;
             gap: 15px; padding: 15px; margin: 20px 0;
@@ -77,7 +76,6 @@
             position: -webkit-sticky; position: sticky;
             top: 0; z-index: 1000; border-bottom: 1px solid var(--border-color);
         }
-
         .top-controls { display: flex; align-items: center; width: 100%; gap: 15px; }
         #search-input {
             flex-grow: 1; min-width: 150px; padding: 10px; border: 1px solid var(--border-color);
@@ -163,40 +161,21 @@
         .edit-op-header, .edit-op-cell { display: none; }
         body.resident-edit-mode .edit-op-header,
         body.resident-edit-mode .edit-op-cell { display: table-cell; }
-
-        .modal-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background-color: rgba(0,0,0,0.6); display: none;
-            justify-content: center; align-items: center; z-index: 2000;
-        }
-        .modal-content {
-            background-color: var(--container-bg); padding: 20px;
-            border-radius: 8px; width: 90%; max-width: 600px;
-            max-height: 80vh; overflow-y: auto;
-        }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; }
-        #modal-close-btn { font-size: 24px; cursor: pointer; border: none; background: none; color: var(--text-color); }
-        #log-list { list-style: none; padding: 0; margin-top: 15px; }
-        #log-list li { padding: 8px 0; border-bottom: 1px solid var(--border-color); font-size: 14px; }
-        #log-list li:last-child { border-bottom: none; }
-        #log-list .log-time { font-size: 12px; color: #7f8c8d; display: block; }
-
-        /* ===== ↓↓↓ フッター（テーマ設定）のスタイル ===== */
-        .footer {
-            margin-top: 24px;
-            padding: 10px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 10px;
-            font-size: 14px;
-            color: #7f8c8d;
-        }
-        body.dark-theme .footer {
-            color: #bdc3c7;
-        }
-        /* ===== ↑↑↑ フッター（テーマ設定）のスタイル ↑↑↑ ===== */
         
+        .footer {
+            margin-top: 24px; padding: 10px; display: flex;
+            justify-content: center; align-items: center;
+            gap: 10px; font-size: 14px; color: #7f8c8d;
+        }
+        body.dark-theme .footer { color: #bdc3c7; }
+        #theme-selector {
+             background-color: var(--mode-label-bg);
+             color: var(--text-color);
+             border: 1px solid var(--mode-selector-border);
+             border-radius: 6px;
+             padding: 5px;
+        }
+
         @media (max-width: 640px) {
             .top-controls { flex-direction: column; align-items: stretch; }
             .mode-selector { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
@@ -215,7 +194,6 @@
     <div class="header-area">
         <h1>荷物管理アプリ</h1>
         <div class="header-buttons">
-            <button id="log-view-btn" class="header-btn">操作履歴</button>
             <button id="login-logout-btn" class="header-btn">管理者ログイン</button>
         </div>
     </div>
@@ -257,36 +235,18 @@
     </table>
 </div>
 
-<!-- 操作履歴モーダル -->
-<div id="log-modal" class="modal-overlay">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>操作履歴</h2>
-            <button id="modal-close-btn">&times;</button>
-        </div>
-        <ul id="log-list">
-            <li>読み込み中...</li>
-        </ul>
-    </div>
-</div>
-
-<!-- ===== ↓↓↓ フッターにテーマ設定を移動 ↓↓↓ ===== -->
 <footer class="footer">
     <span>表示テーマ:</span>
-    <div id="theme-selector" class="mode-selector">
-        <input type="radio" id="theme-system" name="theme" value="system">
-        <label for="theme-system">システム</label>
-        <input type="radio" id="theme-light" name="theme" value="light">
-        <label for="theme-light">昼</label>
-        <input type="radio" id="theme-dark" name="theme" value="dark">
-        <label for="theme-dark">夜</label>
-    </div>
+    <select id="theme-selector">
+        <option value="system">システム</option>
+        <option value="light">昼</option>
+        <option value="dark">夜</option>
+    </select>
 </footer>
-<!-- ===== ↑↑↑ フッターにテーマ設定を移動 ↑↑↑ ===== -->
-
 
 <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-messaging-compat.js"></script>
 
 <script>
     const ADMIN_PASSWORD = "password";
@@ -302,6 +262,18 @@
 
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
+    const messaging = firebase.messaging();
+
+    function requestNotificationPermission() {
+        Notification.requestPermission().then((permission) => {
+            if (permission === 'granted') {
+                const vapidKey = 'BP-A4DPeS4EWGjWtRUBYPLExlhQXq-4l_te7txwJa8qAR7RxQnbaaabUKpX3akGRFxwAeg9IpUjM1w0Nmrq77KQ';
+                messaging.getToken({ vapidKey: vapidKey }).then((currentToken) => {
+                    if (currentToken) console.log('FCM Token:', currentToken);
+                });
+            }
+        });
+    }
 
     const tableBody = document.querySelector("#resident-table tbody");
     const searchInput = document.getElementById('search-input');
@@ -311,10 +283,7 @@
     const modeSelectors = document.querySelectorAll('input[name="mode"]');
     const loginLogoutBtn = document.getElementById('login-logout-btn');
     const resetAllBtn = document.getElementById('reset-all-btn');
-    const themeSelectors = document.querySelectorAll('input[name="theme"]');
-    const logViewBtn = document.getElementById('log-view-btn');
-    const logModal = document.getElementById('log-modal');
-    const modalCloseBtn = document.getElementById('modal-close-btn');
+    const themeSelector = document.getElementById('theme-selector');
 
     let allResidents = []; 
 
@@ -352,8 +321,8 @@
                         <span class="room-number">${resident.roomNumber}</span>
                         <span>${resident.name}</span>
                     </td>
-                    <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1)">-</button><span class="count-span">${resident.luggage}</span><button onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1)">+</button></div></td>
-                    <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', -1)">-</button><span class="count-span">${resident.mail}</span><button onclick="updateCount('${resident.id}', '${resident.name}', 'mail', 1)">+</button></div></td>
+                    <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', 'luggage', -1)">-</button><span class="count-span">${resident.luggage}</span><button onclick="updateCount('${resident.id}', 'luggage', 1)">+</button></div></td>
+                    <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', 'mail', -1)">-</button><span class="count-span">${resident.mail}</span><button onclick="updateCount('${resident.id}', 'mail', 1)">+</button></div></td>
                     <td class="edit-op-cell"><button class="delete-btn" onclick="deleteResident('${resident.id}', '${resident.name}')">削除</button></td>
                 `;
                 tableBody.appendChild(row);
@@ -362,52 +331,19 @@
         updateDeleteButtonState();
     }
 
-    async function addLog(action, details) {
-        try {
-            await db.collection("logs").add({
-                action: action, details: details,
-                isAdmin: sessionStorage.getItem('isAdminLoggedIn') === 'true',
-                timestamp: firebase.firestore.FieldValue.serverTimestamp()
-            });
-        } catch (error) { console.error("ログの追加に失敗しました:", error); }
-    }
-
-    async function showLog() {
-        logModal.style.display = 'flex';
-        const logList = document.getElementById('log-list');
-        logList.innerHTML = '<li>読み込み中...</li>';
-        try {
-            const snapshot = await db.collection("logs").orderBy("timestamp", "desc").limit(50).get();
-            if (snapshot.empty) { logList.innerHTML = '<li>履歴はありません。</li>'; return; }
-            logList.innerHTML = '';
-            snapshot.forEach(doc => {
-                const log = doc.data();
-                const date = log.timestamp ? log.timestamp.toDate().toLocaleString('ja-JP') : '日時不明';
-                const adminBadge = log.isAdmin ? ' (管理者)' : '';
-                const li = document.createElement('li');
-                li.innerHTML = `${log.details}${adminBadge}<span class="log-time">${date}</span>`;
-                logList.appendChild(li);
-            });
-        } catch (error) {
-            logList.innerHTML = '<li>履歴の読み込みに失敗しました。</li>';
-            console.error("ログの読み込みエラー:", error);
-        }
-    }
-
     function toggleFavorite(residentId) {
         const currentFavorite = localStorage.getItem('dormAppFavoriteId');
         localStorage.setItem('dormAppFavoriteId', currentFavorite === residentId ? '' : residentId);
+        requestNotificationPermission();
         renderTable();
     }
 
-    function updateCount(residentId, residentName, type, value) {
+    function updateCount(residentId, type, value) {
         const docRef = db.collection("residents").doc(residentId);
         const increment = firebase.firestore.FieldValue.increment(value);
         docRef.get().then(doc => {
             if (doc.exists && (doc.data()[type] > 0 || value > 0)) {
                 docRef.update({ [type]: increment });
-                const actionType = type === 'luggage' ? '荷物' : '郵便';
-                addLog('個数変更', `${residentName} の${actionType}を ${value > 0 ? '+1' : '-1'}`);
             }
         }).catch(error => console.error("更新エラー:", error));
     }
@@ -417,7 +353,7 @@
         if (!text) return;
         const lines = text.trim().split('\n');
         const batch = db.batch();
-        let addedNames = [];
+        let addedCount = 0;
         lines.forEach(line => {
             const parts = line.trim().split(/\s+/);
             if (parts.length >= 2) {
@@ -425,15 +361,10 @@
                 const name = parts.slice(1).join(' ');
                 const newResidentRef = db.collection("residents").doc();
                 batch.set(newResidentRef, { roomNumber: room, name: name, luggage: 0, mail: 0 });
-                addedNames.push(name);
+                addedCount++;
             }
         });
-        if (addedNames.length > 0) {
-            batch.commit().then(() => {
-                alert(`${addedNames.length}人の寮生を追加しました。`);
-                addLog('寮生一括追加', `${addedNames.join(', ')} を追加`);
-            });
-        }
+        if (addedCount > 0) batch.commit().then(() => alert(`${addedCount}人の寮生を追加しました。`));
     }
 
     function deleteSelectedResidents() {
@@ -441,33 +372,19 @@
         if (selectedCheckboxes.length === 0) return;
         if (confirm(`選択した ${selectedCheckboxes.length} 人の寮生を本当に削除しますか？`)) {
             const batch = db.batch();
-            let deletedNames = [];
-            let promises = [];
             selectedCheckboxes.forEach(checkbox => {
-                promises.push(db.collection("residents").doc(checkbox.dataset.id).get());
+                batch.delete(db.collection("residents").doc(checkbox.dataset.id));
             });
-
-            Promise.all(promises).then(docs => {
-                docs.forEach(doc => {
-                    if (doc.exists) {
-                        deletedNames.push(doc.data().name);
-                        batch.delete(doc.ref);
-                    }
-                });
-                batch.commit().then(() => {
-                    alert(`${deletedNames.length}人の寮生を削除しました。`);
-                    addLog('寮生一括削除', `${deletedNames.join(', ')} を削除`);
-                    selectAllCheckbox.checked = false;
-                });
+            batch.commit().then(() => {
+                alert(`${selectedCheckboxes.length}人の寮生を削除しました。`);
+                selectAllCheckbox.checked = false;
             });
         }
     }
 
     function deleteResident(residentId, residentName) {
         if (confirm(`本当に「${residentName}」さんをリストから削除しますか？`)) {
-            db.collection("residents").doc(residentId).delete().then(() => {
-                addLog('寮生削除', `${residentName} を削除`);
-            });
+            db.collection("residents").doc(residentId).delete();
         }
     }
 
@@ -477,10 +394,7 @@
             allResidents.forEach(resident => {
                 batch.update(db.collection("residents").doc(resident.id), { luggage: 0, mail: 0 });
             });
-            batch.commit().then(() => {
-                alert('全てのカウントを0にリセットしました。');
-                addLog('全リセット', '全ての荷物/郵便を0にしました');
-            });
+            batch.commit().then(() => alert('全てのカウントを0にリセットしました。'));
         }
     }
     
@@ -552,11 +466,10 @@
 
     function initializeTheme() {
         const savedTheme = localStorage.getItem('theme') || 'system';
-        document.getElementById(`theme-${savedTheme}`).checked = true;
+        themeSelector.value = savedTheme;
         handleThemeChange(savedTheme);
     }
 
-    // イベントリスナー
     modeSelectors.forEach(input => input.addEventListener('change', () => { if(input.checked) setMode(input.id); }));
     tableBody.addEventListener('change', e => { if (e.target.classList.contains('resident-checkbox')) updateDeleteButtonState(); });
     setMode('view-mode');
@@ -570,16 +483,11 @@
         updateDeleteButtonState();
     });
     loginLogoutBtn.addEventListener('click', handleLoginLogout);
-    logViewBtn.addEventListener('click', showLog);
-    modalCloseBtn.addEventListener('click', () => logModal.style.display = 'none');
-    logModal.addEventListener('click', e => { if(e.target === logModal) logModal.style.display = 'none'; });
     
-    themeSelectors.forEach(input => {
-        input.addEventListener('change', e => {
-            const selectedTheme = e.target.value;
-            localStorage.setItem('theme', selectedTheme);
-            handleThemeChange(selectedTheme);
-        });
+    themeSelector.addEventListener('change', (e) => {
+        const selectedTheme = e.target.value;
+        localStorage.setItem('theme', selectedTheme);
+        handleThemeChange(selectedTheme);
     });
 
     prefersDark.addEventListener('change', () => {
