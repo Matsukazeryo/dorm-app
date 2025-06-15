@@ -163,6 +163,23 @@
         body.resident-edit-mode .edit-op-header,
         body.resident-edit-mode .edit-op-cell { display: table-cell; }
 
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.6); display: none;
+            justify-content: center; align-items: center; z-index: 2000;
+        }
+        .modal-content {
+            background-color: var(--container-bg); padding: 20px;
+            border-radius: 8px; width: 90%; max-width: 600px;
+            max-height: 80vh; overflow-y: auto;
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; }
+        #modal-close-btn { font-size: 24px; cursor: pointer; border: none; background: none; color: var(--text-color); }
+        #log-list { list-style: none; padding: 0; margin-top: 15px; }
+        #log-list li { padding: 8px 0; border-bottom: 1px solid var(--border-color); font-size: 14px; }
+        #log-list li:last-child { border-bottom: none; }
+        #log-list .log-time { font-size: 12px; color: #7f8c8d; display: block; }
+        
         .footer {
             margin-top: 24px; padding: 10px; display: flex;
             justify-content: center; align-items: center;
@@ -176,7 +193,7 @@
              border-radius: 6px;
              padding: 5px;
         }
-        
+
         @media (max-width: 640px) {
             .top-controls { flex-direction: column; align-items: stretch; }
             .mode-selector { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
@@ -195,6 +212,7 @@
     <div class="header-area">
         <h1>荷物管理アプリ</h1>
         <div class="header-buttons">
+            <button id="log-view-btn" class="header-btn">操作履歴</button>
             <button id="login-logout-btn" class="header-btn">管理者ログイン</button>
         </div>
     </div>
@@ -247,7 +265,6 @@
 
 <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-messaging-compat.js"></script>
 
 <script>
     const ADMIN_PASSWORD = "password";
@@ -263,38 +280,6 @@
 
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
-    const messaging = firebase.messaging();
-
-    let currentToken = '';
-
-    function requestNotificationPermission() {
-        Notification.requestPermission().then((permission) => {
-            if (permission === 'granted') {
-                const vapidKey = 'BP-A4DPeS4EWGjWtRUBYPLExlhQXq-4l_te7txwJa8qAR7RxQnbaaabUKpX3akGRFxwAeg9IpUjM1w0Nmrq77KQ';
-                messaging.getToken({ vapidKey: vapidKey }).then((token) => {
-                    if (token) {
-                        currentToken = token;
-                        const favoriteId = localStorage.getItem('dormAppFavoriteId');
-                        if(favoriteId) {
-                            saveTokenToDB(token, favoriteId);
-                        }
-                    }
-                });
-            }
-        });
-    }
-    
-    function saveTokenToDB(token, favoriteResidentId) {
-        if (!token) return;
-        db.collection('fcmTokens').doc(token).set({
-            favoriteResidentId: favoriteResidentId
-        });
-    }
-    
-    function removeTokenFromDB(token) {
-        if (!token) return;
-        db.collection('fcmTokens').doc(token).delete();
-    }
 
     const tableBody = document.querySelector("#resident-table tbody");
     const searchInput = document.getElementById('search-input');
@@ -305,6 +290,9 @@
     const loginLogoutBtn = document.getElementById('login-logout-btn');
     const resetAllBtn = document.getElementById('reset-all-btn');
     const themeSelector = document.getElementById('theme-selector');
+    const logViewBtn = document.getElementById('log-view-btn');
+    const logModal = document.getElementById('log-modal');
+    const modalCloseBtn = document.getElementById('modal-close-btn');
 
     let allResidents = []; 
 
@@ -342,8 +330,8 @@
                         <span class="room-number">${resident.roomNumber}</span>
                         <span>${resident.name}</span>
                     </td>
-                    <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', 'luggage', -1)">-</button><span class="count-span">${resident.luggage}</span><button onclick="updateCount('${resident.id}', 'luggage', 1)">+</button></div></td>
-                    <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', 'mail', -1)">-</button><span class="count-span">${resident.mail}</span><button onclick="updateCount('${resident.id}', 'mail', 1)">+</button></div></td>
+                    <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1)">-</button><span class="count-span">${resident.luggage}</span><button onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1)">+</button></div></td>
+                    <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', -1)">-</button><span class="count-span">${resident.mail}</span><button onclick="updateCount('${resident.id}', '${resident.name}', 'mail', 1)">+</button></div></td>
                     <td class="edit-op-cell"><button class="delete-btn" onclick="deleteResident('${resident.id}', '${resident.name}')">削除</button></td>
                 `;
                 tableBody.appendChild(row);
@@ -352,29 +340,54 @@
         updateDeleteButtonState();
     }
 
+    async function addLog(action, details) {
+        try {
+            await db.collection("logs").add({
+                action: action, details: details,
+                isAdmin: sessionStorage.getItem('isAdminLoggedIn') === 'true',
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        } catch (error) { console.error("ログの追加に失敗しました:", error); }
+    }
+
+    async function showLog() {
+        logModal.style.display = 'flex';
+        const logList = document.getElementById('log-list');
+        logList.innerHTML = '<li>読み込み中...</li>';
+        try {
+            const snapshot = await db.collection("logs").orderBy("timestamp", "desc").limit(50).get();
+            if (snapshot.empty) { logList.innerHTML = '<li>履歴はありません。</li>'; return; }
+            logList.innerHTML = '';
+            snapshot.forEach(doc => {
+                const log = doc.data();
+                const date = log.timestamp ? log.timestamp.toDate().toLocaleString('ja-JP') : '日時不明';
+                const adminBadge = log.isAdmin ? ' (管理者)' : '';
+                const li = document.createElement('li');
+                li.innerHTML = `${log.details}${adminBadge}<span class="log-time">${date}</span>`;
+                logList.appendChild(li);
+            });
+        } catch (error) {
+            logList.innerHTML = '<li>履歴の読み込みに失敗しました。</li>';
+            console.error("ログの読み込みエラー:", error);
+        }
+    }
+
     function toggleFavorite(residentId) {
         const currentFavorite = localStorage.getItem('dormAppFavoriteId');
-        const newFavoriteId = currentFavorite === residentId ? null : residentId;
-
-        if (newFavoriteId) {
-            localStorage.setItem('dormAppFavoriteId', newFavoriteId);
-            if (currentToken) saveTokenToDB(currentToken, newFavoriteId);
-            else requestNotificationPermission();
-        } else {
-            localStorage.removeItem('dormAppFavoriteId');
-            if (currentToken) removeTokenFromDB(currentToken);
-        }
+        localStorage.setItem('dormAppFavoriteId', currentFavorite === residentId ? '' : residentId);
         renderTable();
     }
 
-    function updateCount(residentId, type, value) {
+    function updateCount(residentId, residentName, type, value) {
         const docRef = db.collection("residents").doc(residentId);
         const increment = firebase.firestore.FieldValue.increment(value);
         docRef.get().then(doc => {
             if (doc.exists && (doc.data()[type] > 0 || value > 0)) {
                 docRef.update({ [type]: increment });
+                const actionType = type === 'luggage' ? '荷物' : '郵便';
+                addLog('個数変更', `${residentName} の${actionType}を ${value > 0 ? '+1' : '-1'}`);
             }
-        });
+        }).catch(error => console.error("更新エラー:", error));
     }
 
     function addResidentsInBulk() {
@@ -382,7 +395,7 @@
         if (!text) return;
         const lines = text.trim().split('\n');
         const batch = db.batch();
-        let addedCount = 0;
+        let addedNames = [];
         lines.forEach(line => {
             const parts = line.trim().split(/\s+/);
             if (parts.length >= 2) {
@@ -390,10 +403,15 @@
                 const name = parts.slice(1).join(' ');
                 const newResidentRef = db.collection("residents").doc();
                 batch.set(newResidentRef, { roomNumber: room, name: name, luggage: 0, mail: 0 });
-                addedCount++;
+                addedNames.push(name);
             }
         });
-        if (addedCount > 0) batch.commit().then(() => alert(`${addedCount}人の寮生を追加しました。`));
+        if (addedNames.length > 0) {
+            batch.commit().then(() => {
+                alert(`${addedNames.length}人の寮生を追加しました。`);
+                addLog('寮生一括追加', `${addedNames.join(', ')} を追加`);
+            });
+        }
     }
 
     function deleteSelectedResidents() {
@@ -401,19 +419,33 @@
         if (selectedCheckboxes.length === 0) return;
         if (confirm(`選択した ${selectedCheckboxes.length} 人の寮生を本当に削除しますか？`)) {
             const batch = db.batch();
+            let deletedNames = [];
+            let promises = [];
             selectedCheckboxes.forEach(checkbox => {
-                batch.delete(db.collection("residents").doc(checkbox.dataset.id));
+                promises.push(db.collection("residents").doc(checkbox.dataset.id).get());
             });
-            batch.commit().then(() => {
-                alert(`${selectedCheckboxes.length}人の寮生を削除しました。`);
-                selectAllCheckbox.checked = false;
+
+            Promise.all(promises).then(docs => {
+                docs.forEach(doc => {
+                    if (doc.exists) {
+                        deletedNames.push(doc.data().name);
+                        batch.delete(doc.ref);
+                    }
+                });
+                batch.commit().then(() => {
+                    alert(`${deletedNames.length}人の寮生を削除しました。`);
+                    addLog('寮生一括削除', `${deletedNames.join(', ')} を削除`);
+                    selectAllCheckbox.checked = false;
+                });
             });
         }
     }
 
     function deleteResident(residentId, residentName) {
         if (confirm(`本当に「${residentName}」さんをリストから削除しますか？`)) {
-            db.collection("residents").doc(residentId).delete();
+            db.collection("residents").doc(residentId).delete().then(() => {
+                addLog('寮生削除', `${residentName} を削除`);
+            });
         }
     }
 
@@ -423,7 +455,10 @@
             allResidents.forEach(resident => {
                 batch.update(db.collection("residents").doc(resident.id), { luggage: 0, mail: 0 });
             });
-            batch.commit().then(() => alert('全てのカウントを0にリセットしました。'));
+            batch.commit().then(() => {
+                alert('全てのカウントを0にリセットしました。');
+                addLog('全リセット', '全ての荷物/郵便を0にしました');
+            });
         }
     }
     
@@ -527,7 +562,6 @@
     });
     
     initializeTheme();
-    document.addEventListener('DOMContentLoaded', requestNotificationPermission);
 
 </script>
 
