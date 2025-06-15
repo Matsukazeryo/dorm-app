@@ -4,69 +4,96 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>荷物管理アプリ</title>
+    <!-- ===== アプリアイコン設定 ===== -->
+    <link rel="apple-touch-icon" sizes="180x180" href="https://placehold.co/180x180/3498db/ffffff?text=寮">
+    <link rel="icon" type="image/png" sizes="32x32" href="https://placehold.co/32x32/3498db/ffffff?text=寮">
+    <link rel="icon" type="image/png" sizes="16x16" href="https://placehold.co/16x16/3498db/ffffff?text=寮">
     <style>
+        /* ===== カラーテーマ設定 ===== */
+        :root {
+            --bg-color: #f4f7f9;
+            --container-bg: #ffffff;
+            --text-color: #333;
+            --border-color: #ddd;
+            --header-border: #3498db;
+            --header-text: #2c3e50;
+            --controls-bg: #ecf0f1;
+            --mode-selector-border: #bdc3c7;
+            --mode-label-bg: #fff;
+            --mode-label-text: #34495e;
+            --mode-label-checked-bg: #3498db;
+            --mode-label-checked-text: white;
+            --admin-mode-bg: #e74c3c;
+        }
+
+        body.dark-theme {
+            --bg-color: #2c3e50;
+            --container-bg: #34495e;
+            --text-color: #ecf0f1;
+            --border-color: #7f8c8d;
+            --header-border: #5dade2;
+            --header-text: #ecf0f1;
+            --controls-bg: #2c3e50;
+            --mode-selector-border: #95a5a6;
+            --mode-label-bg: #7f8c8d;
+            --mode-label-text: #ecf0f1;
+        }
+
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
-            margin: 0; padding: 20px; background-color: #f4f7f9; color: #333; transition: background-color 0.3s;
+            margin: 0; padding: 20px; background-color: var(--bg-color); color: var(--text-color); transition: background-color 0.3s;
         }
-        body.count-edit-mode { background-color: #f0f8ff; }
-        body.resident-edit-mode { background-color: #fff8f8; }
+        body.count-edit-mode { background-color: var(--count-edit-mode-bg, #f0f8ff); }
+        body.resident-edit-mode { background-color: var(--resident-edit-mode-bg, #fff8f8); }
+        body.dark-theme.count-edit-mode { background-color: #2f4f4f; }
+        body.dark-theme.resident-edit-mode { background-color: #553c3c; }
 
         .container { 
-            max-width: 800px; margin: 0 auto; background-color: #fff; 
+            max-width: 800px; margin: 0 auto; background-color: var(--container-bg); 
             padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
         }
-        h1 { 
-            text-align: center; color: #2c3e50; border-bottom: 2px solid #3498db; 
-            padding-bottom: 10px; margin-top: 0; 
-        }
         .header-area {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 10px; gap: 10px;
         }
-        #login-logout-btn {
+        .header-buttons { display: flex; gap: 8px; align-items: center; }
+        .header-btn {
             padding: 6px 12px; font-size: 12px; font-weight: bold; color: white;
-            background-color: #3498db; border: none; border-radius: 5px; cursor: pointer;
+            border: none; border-radius: 5px; cursor: pointer;
         }
+        #login-logout-btn { background-color: #3498db; }
         #login-logout-btn.logout { background-color: #e74c3c; }
+        #log-view-btn { background-color: #8e44ad; display: none; }
+        body.admin-logged-in #log-view-btn { display: inline-block; }
 
-        /* ===== ↓↓↓ ここからレイアウト崩れ対策の修正 ↓↓↓ ===== */
         .controls-container {
             display: flex; flex-direction: column;
             gap: 15px; padding: 15px; margin: 20px 0;
-            background-color: #ecf0f1; border-radius: 8px;
-            position: -webkit-sticky; /* Safari対応 */
-            position: sticky;
-            top: 0;
-            z-index: 1000; /* 他の要素より上に表示 */
-            border-bottom: 1px solid #ddd;
+            background-color: var(--controls-bg); border-radius: 8px;
+            position: -webkit-sticky; position: sticky;
+            top: 0; z-index: 1000; border-bottom: 1px solid var(--border-color);
         }
-        /* ===== ↑↑↑ ここまでレイアウト崩れ対策の修正 ↑↑↑ ===== */
 
-        .top-controls {
-            display: flex; align-items: center; width: 100%; gap: 15px;
-        }
+        .top-controls { display: flex; align-items: center; width: 100%; gap: 15px; }
         #search-input {
-            flex-grow: 1; min-width: 150px; padding: 10px; border: 1px solid #ddd;
-            border-radius: 6px; font-size: 16px;
+            flex-grow: 1; min-width: 150px; padding: 10px; border: 1px solid var(--border-color);
+            border-radius: 6px; font-size: 16px; background-color: var(--mode-label-bg); color: var(--text-color);
         }
         .mode-selector {
             display: flex; border-radius: 6px; overflow: hidden;
-            border: 1px solid #bdc3c7; flex-shrink: 0;
+            border: 1px solid var(--mode-selector-border); flex-shrink: 0;
         }
         .mode-selector input { display: none; }
         .mode-selector label {
-            padding: 10px 12px; cursor: pointer; background-color: #fff;
-            color: #34495e; transition: background-color 0.2s;
-            border-left: 1px solid #bdc3c7; white-space: nowrap;
+            padding: 10px 12px; cursor: pointer; background-color: var(--mode-label-bg);
+            color: var(--mode-label-text); transition: background-color 0.2s;
+            border-left: 1px solid var(--mode-selector-border); white-space: nowrap;
         }
         .mode-selector label:first-child { border-left: none; }
-        .mode-selector input:checked + label { background-color: #3498db; color: white; font-weight: bold; }
+        .mode-selector input:checked + label { background-color: var(--mode-label-checked-bg); color: var(--mode-label-checked-text); font-weight: bold; }
         #resident-edit-mode-label { display: none; }
         body.admin-logged-in #resident-edit-mode-label { display: block; }
-        body.resident-edit-mode .mode-selector input:checked + label { background-color: #e74c3c; }
+        body.resident-edit-mode .mode-selector input:checked + label { background-color: var(--admin-mode-bg); }
         
         .ops-container { display: none; width: 100%; gap: 10px; flex-direction: column; }
         body.count-edit-mode .ops-container,
@@ -77,90 +104,84 @@
              border-radius: 6px; font-size: 14px; font-weight: bold;
              cursor: pointer; transition: background-color 0.2s;
         }
-        #reset-all-btn {
-            background-color: #f39c12; display: none;
-        }
+        #reset-all-btn { background-color: #f39c12; display: none; }
         #reset-all-btn:hover { background-color: #e67e22; }
         body.count-edit-mode #reset-all-btn { display: block; }
 
         .bulk-ops-container { display: none; width: 100%; gap: 10px; }
         body.resident-edit-mode .bulk-ops-container { display: flex; }
         #add-resident-btn { background-color: #2ecc71; flex-grow: 1; }
-        #add-resident-btn:hover { background-color: #27ae60; }
         #delete-selected-btn { background-color: #e74c3c; flex-grow: 1; }
-        #delete-selected-btn:hover { background-color: #c0392b; }
-        #delete-selected-btn:disabled { background-color: #bdc3c7; cursor: not-allowed; }
         
         table { 
             width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed;
         }
         th, td { 
             padding: 8px 12px;
-            border: 1px solid #ddd; text-align: center; vertical-align: middle;
+            border: 1px solid var(--border-color); text-align: center; vertical-align: middle;
             word-wrap: break-word;
         }
-        td {
-            height: 1px; /* テーブルセルの高さを内容に追従させるための設定 */
-        }
-        th.checkbox-col, td.checkbox-col {
-            width: 45px; display: none;
-        }
+        td { height: 1px; }
+        th.checkbox-col, td.checkbox-col { width: 45px; display: none; }
         body.resident-edit-mode th.checkbox-col,
         body.resident-edit-mode td.checkbox-col { display: table-cell; }
         th:nth-child(2) { width: 48%; }
         th:nth-child(3), th:nth-child(4) { width: 18%; }
         th:nth-child(5) { width: 16%; }
         
-        th { background-color: #3498db; color: #fff; font-weight: bold; }
-        .name-cell { 
-            display: flex; align-items: center; font-weight: 500; text-align: left;
-            min-height: 28px;
-        }
+        th { background-color: var(--mode-label-checked-bg); color: var(--mode-label-checked-text); font-weight: bold; }
+        .name-cell { display: flex; align-items: center; font-weight: 500; text-align: left; min-height: 28px; }
         .room-number {
-            font-size: 0.9em; color: #7f8c8d; margin-right: 8px;
-            min-width: 35px; text-align: right;
+            font-size: 0.9em; color: #7f8c8d; margin-right: 8px; min-width: 35px; text-align: right;
         }
+        body.dark-theme .room-number { color: #bdc3c7; }
         .favorite-star {
-            cursor: pointer; font-size: 22px; margin-right: 10px;
-            color: #bdc3c7; transition: transform 0.2s, color 0.2s;
+            cursor: pointer; font-size: 22px; margin-right: 10px; color: #bdc3c7;
         }
         .favorite-star.favorited { color: #f1c40f; }
-        .favorite-star:hover { transform: scale(1.2); }
-        .count-cell { 
-            display: flex; align-items: center; justify-content: center; gap: 10px;
-        }
+        .count-cell { display: flex; align-items: center; justify-content: center; gap: 10px; }
         .count-span { min-width: 25px; font-weight: bold; font-size: 1.2em; }
         
         .count-cell button {
-            background-color: transparent; border: 1.5px solid #bdc3c7; color: #34495e;
+            background-color: transparent; border: 1.5px solid var(--mode-selector-border); color: var(--text-color);
             width: 28px; height: 28px; padding: 0; border-radius: 50%;
             cursor: pointer; font-size: 18px; font-weight: 600;
-            display: flex; align-items: center; justify-content: center;
-            line-height: 1; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center; line-height: 1;
         }
-        .count-cell button:hover { background-color: #ecf0f1; transform: scale(1.1); }
         .delete-btn { 
-            background-color: #c0392b; color: white; border: none;
-            font-size: 12px; padding: 4px 8px; border-radius: 5px; cursor: pointer;
+            background-color: #c0392b; color: white; border: none; font-size: 12px;
+            padding: 4px 8px; border-radius: 5px; cursor: pointer;
         }
         
-        .count-cell button {
-            visibility: hidden;
-        }
-        body.count-edit-mode .count-cell button {
-            visibility: visible;
-        }
+        .count-cell button { visibility: hidden; }
+        body.count-edit-mode .count-cell button { visibility: visible; }
 
         .edit-op-header, .edit-op-cell { display: none; }
         body.resident-edit-mode .edit-op-header,
         body.resident-edit-mode .edit-op-cell { display: table-cell; }
+
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.6); display: none;
+            justify-content: center; align-items: center; z-index: 2000;
+        }
+        .modal-content {
+            background-color: var(--container-bg); padding: 20px;
+            border-radius: 8px; width: 90%; max-width: 600px;
+            max-height: 80vh; overflow-y: auto;
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; }
+        #modal-close-btn { font-size: 24px; cursor: pointer; border: none; background: none; color: var(--text-color); }
+        #log-list { list-style: none; padding: 0; margin-top: 15px; }
+        #log-list li { padding: 8px 0; border-bottom: 1px solid var(--border-color); font-size: 14px; }
+        #log-list li:last-child { border-bottom: none; }
+        #log-list .log-time { font-size: 12px; color: #7f8c8d; display: block; }
         
         @media (max-width: 640px) {
             .top-controls { flex-direction: column; align-items: stretch; }
             .mode-selector { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
             body.admin-logged-in .mode-selector { grid-template-columns: 1fr 1fr 1fr; }
             .mode-selector label { text-align: center; font-size: 14px; }
-
             th, td { padding: 8px 5px; font-size: 14px; }
             .count-cell { gap: 5px; transform: scale(0.9); }
             .name-cell { align-items: center; gap: 4px; font-size: 13px; }
@@ -173,7 +194,20 @@
 <div class="container">
     <div class="header-area">
         <h1>荷物管理アプリ</h1>
-        <button id="login-logout-btn">管理者ログイン</button>
+        <div class="header-buttons">
+            <!-- ===== ↓↓↓ テーマ選択ボタンに変更 ↓↓↓ ===== -->
+            <div id="theme-selector" class="mode-selector">
+                <input type="radio" id="theme-system" name="theme" value="system">
+                <label for="theme-system">システム</label>
+                <input type="radio" id="theme-light" name="theme" value="light">
+                <label for="theme-light">昼</label>
+                <input type="radio" id="theme-dark" name="theme" value="dark">
+                <label for="theme-dark">夜</label>
+            </div>
+            <!-- ===== ↑↑↑ テーマ選択ボタンに変更 ↑↑↑ ===== -->
+            <button id="log-view-btn" class="header-btn">操作履歴</button>
+            <button id="login-logout-btn" class="header-btn">管理者ログイン</button>
+        </div>
     </div>
 
     <div class="controls-container">
@@ -213,6 +247,19 @@
     </table>
 </div>
 
+<!-- 操作履歴モーダル -->
+<div id="log-modal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>操作履歴</h2>
+            <button id="modal-close-btn">&times;</button>
+        </div>
+        <ul id="log-list">
+            <li>読み込み中...</li>
+        </ul>
+    </div>
+</div>
+
 <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore-compat.js"></script>
 
@@ -239,10 +286,14 @@
     const modeSelectors = document.querySelectorAll('input[name="mode"]');
     const loginLogoutBtn = document.getElementById('login-logout-btn');
     const resetAllBtn = document.getElementById('reset-all-btn');
+    const themeSelectors = document.querySelectorAll('input[name="theme"]');
+    const logViewBtn = document.getElementById('log-view-btn');
+    const logModal = document.getElementById('log-modal');
+    const modalCloseBtn = document.getElementById('modal-close-btn');
 
     let allResidents = []; 
 
-    db.collection("residents").onSnapshot(snapshot => {
+    db.collection("residents").orderBy("roomNumber").onSnapshot(snapshot => {
         allResidents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         renderTable(); 
     }, error => console.error("データの読み込みに失敗しました:", error));
@@ -258,8 +309,7 @@
         });
 
         const filteredResidents = allResidents.filter(r => 
-            r.name.toLowerCase().includes(searchTerm) ||
-            r.roomNumber.includes(searchTerm)
+            r.name.toLowerCase().includes(searchTerm) || r.roomNumber.includes(searchTerm)
         );
 
         tableBody.innerHTML = ''; 
@@ -277,28 +327,46 @@
                         <span class="room-number">${resident.roomNumber}</span>
                         <span>${resident.name}</span>
                     </td>
-                    <td>
-                        <div class="count-cell">
-                            <button class="minus" onclick="updateCount('${resident.id}', 'luggage', -1)">-</button>
-                            <span class="count-span">${resident.luggage}</span>
-                            <button onclick="updateCount('${resident.id}', 'luggage', 1)">+</button>
-                        </div>
-                    </td>
-                    <td>
-                        <div class="count-cell">
-                            <button class="minus" onclick="updateCount('${resident.id}', 'mail', -1)">-</button>
-                            <span class="count-span">${resident.mail}</span>
-                            <button onclick="updateCount('${resident.id}', 'mail', 1)">+</button>
-                        </div>
-                    </td>
-                    <td class="edit-op-cell">
-                        <button class="delete-btn" onclick="deleteResident('${resident.id}', '${resident.name}')">削除</button>
-                    </td>
+                    <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1)">-</button><span class="count-span">${resident.luggage}</span><button onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1)">+</button></div></td>
+                    <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', -1)">-</button><span class="count-span">${resident.mail}</span><button onclick="updateCount('${resident.id}', '${resident.name}', 'mail', 1)">+</button></div></td>
+                    <td class="edit-op-cell"><button class="delete-btn" onclick="deleteResident('${resident.id}', '${resident.name}')">削除</button></td>
                 `;
                 tableBody.appendChild(row);
             });
         }
         updateDeleteButtonState();
+    }
+
+    async function addLog(action, details) {
+        try {
+            await db.collection("logs").add({
+                action: action, details: details,
+                isAdmin: sessionStorage.getItem('isAdminLoggedIn') === 'true',
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        } catch (error) { console.error("ログの追加に失敗しました:", error); }
+    }
+
+    async function showLog() {
+        logModal.style.display = 'flex';
+        const logList = document.getElementById('log-list');
+        logList.innerHTML = '<li>読み込み中...</li>';
+        try {
+            const snapshot = await db.collection("logs").orderBy("timestamp", "desc").limit(50).get();
+            if (snapshot.empty) { logList.innerHTML = '<li>履歴はありません。</li>'; return; }
+            logList.innerHTML = '';
+            snapshot.forEach(doc => {
+                const log = doc.data();
+                const date = log.timestamp ? log.timestamp.toDate().toLocaleString('ja-JP') : '日時不明';
+                const adminBadge = log.isAdmin ? ' (管理者)' : '';
+                const li = document.createElement('li');
+                li.innerHTML = `${log.details}${adminBadge}<span class="log-time">${date}</span>`;
+                logList.appendChild(li);
+            });
+        } catch (error) {
+            logList.innerHTML = '<li>履歴の読み込みに失敗しました。</li>';
+            console.error("ログの読み込みエラー:", error);
+        }
     }
 
     function toggleFavorite(residentId) {
@@ -307,22 +375,24 @@
         renderTable();
     }
 
-    function updateCount(residentId, type, value) {
+    function updateCount(residentId, residentName, type, value) {
         const docRef = db.collection("residents").doc(residentId);
         const increment = firebase.firestore.FieldValue.increment(value);
         docRef.get().then(doc => {
             if (doc.exists && (doc.data()[type] > 0 || value > 0)) {
                 docRef.update({ [type]: increment });
+                const actionType = type === 'luggage' ? '荷物' : '郵便';
+                addLog('個数変更', `${residentName} の${actionType}を ${value > 0 ? '+1' : '-1'}`);
             }
         }).catch(error => console.error("更新エラー:", error));
     }
 
     function addResidentsInBulk() {
-        const text = prompt("追加する寮生のリストを貼り付けてください。\n形式：部屋番号 名前 (1行に1人)\n例:\n101 山田 太郎\n102 鈴木 花子");
+        const text = prompt("追加する寮生のリストを貼り付けてください。\n形式：部屋番号 名前 (1行に1人)");
         if (!text) return;
         const lines = text.trim().split('\n');
         const batch = db.batch();
-        let addedCount = 0;
+        let addedNames = [];
         lines.forEach(line => {
             const parts = line.trim().split(/\s+/);
             if (parts.length >= 2) {
@@ -330,15 +400,14 @@
                 const name = parts.slice(1).join(' ');
                 const newResidentRef = db.collection("residents").doc();
                 batch.set(newResidentRef, { roomNumber: room, name: name, luggage: 0, mail: 0 });
-                addedCount++;
+                addedNames.push(name);
             }
         });
-        if (addedCount > 0) {
-            batch.commit()
-                .then(() => alert(`${addedCount}人の寮生を追加しました。`))
-                .catch(error => alert(`追加中にエラーが発生しました: ${error.message}`));
-        } else {
-            alert("有効な形式のデータがありませんでした。");
+        if (addedNames.length > 0) {
+            batch.commit().then(() => {
+                alert(`${addedNames.length}人の寮生を追加しました。`);
+                addLog('寮生一括追加', `${addedNames.join(', ')} を追加`);
+            });
         }
     }
 
@@ -347,35 +416,46 @@
         if (selectedCheckboxes.length === 0) return;
         if (confirm(`選択した ${selectedCheckboxes.length} 人の寮生を本当に削除しますか？`)) {
             const batch = db.batch();
+            let deletedNames = [];
+            let promises = [];
             selectedCheckboxes.forEach(checkbox => {
-                batch.delete(db.collection("residents").doc(checkbox.dataset.id));
+                promises.push(db.collection("residents").doc(checkbox.dataset.id).get());
             });
-            batch.commit()
-                .then(() => {
-                    alert(`${selectedCheckboxes.length}人の寮生を削除しました。`);
+
+            Promise.all(promises).then(docs => {
+                docs.forEach(doc => {
+                    if (doc.exists) {
+                        deletedNames.push(doc.data().name);
+                        batch.delete(doc.ref);
+                    }
+                });
+                batch.commit().then(() => {
+                    alert(`${deletedNames.length}人の寮生を削除しました。`);
+                    addLog('寮生一括削除', `${deletedNames.join(', ')} を削除`);
                     selectAllCheckbox.checked = false;
-                })
-                .catch(error => alert(`削除中にエラーが発生しました: ${error.message}`));
+                });
+            });
         }
     }
 
     function deleteResident(residentId, residentName) {
         if (confirm(`本当に「${residentName}」さんをリストから削除しますか？`)) {
-            db.collection("residents").doc(residentId).delete()
-            .catch(error => console.error("削除エラー:", error));
+            db.collection("residents").doc(residentId).delete().then(() => {
+                addLog('寮生削除', `${residentName} を削除`);
+            });
         }
     }
 
     function resetAllCounts() {
-        if (confirm('本当に全ての荷物と郵便の数を0にしますか？\nこの操作は元に戻せません。')) {
+        if (confirm('本当に全ての荷物と郵便の数を0にしますか？')) {
             const batch = db.batch();
             allResidents.forEach(resident => {
-                const docRef = db.collection("residents").doc(resident.id);
-                batch.update(docRef, { luggage: 0, mail: 0 });
+                batch.update(db.collection("residents").doc(resident.id), { luggage: 0, mail: 0 });
             });
-            batch.commit()
-                .then(() => alert('全てのカウントを0にリセットしました。'))
-                .catch(error => alert(`リセット中にエラーが発生しました: ${error.message}`));
+            batch.commit().then(() => {
+                alert('全てのカウントを0にリセットしました。');
+                addLog('全リセット', '全ての荷物/郵便を0にしました');
+            });
         }
     }
     
@@ -385,11 +465,8 @@
     }
 
     function handleLoginLogout() {
-        if (sessionStorage.getItem('isAdminLoggedIn') === 'true') {
-            logout();
-        } else {
-            login();
-        }
+        if (sessionStorage.getItem('isAdminLoggedIn') === 'true') logout();
+        else login();
     }
 
     function login() {
@@ -398,9 +475,7 @@
             sessionStorage.setItem('isAdminLoggedIn', 'true');
             alert('管理者としてログインしました。');
             updateLoginStatus();
-        } else if (password !== null) {
-            alert('パスワードが違います。');
-        }
+        } else if (password) alert('パスワードが違います。');
     }
 
     function logout() {
@@ -426,32 +501,75 @@
     function setMode(mode) { 
         document.body.className = sessionStorage.getItem('isAdminLoggedIn') === 'true' ? 'admin-logged-in' : '';
         document.body.classList.add(mode);
-        
-        if (mode !== 'resident-edit-mode') {
-            selectAllCheckbox.checked = false;
-        }
+        // 現在のテーマを維持する
+        const currentTheme = localStorage.getItem('theme') || 'system';
+        handleThemeChange(currentTheme);
+        if (mode !== 'resident-edit-mode') selectAllCheckbox.checked = false;
         renderTable();
     }
 
-    modeSelectors.forEach(input => {
-        input.addEventListener('change', () => { if(input.checked) setMode(input.id); });
+    // ===== ↓↓↓ テーマ設定のロジック =====
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
+
+    function applyTheme(theme) {
+        if (theme === 'dark') {
+            document.body.classList.add('dark-theme');
+        } else {
+            document.body.classList.remove('dark-theme');
+        }
+    }
+
+    function handleThemeChange(selectedTheme) {
+        if (selectedTheme === 'system') {
+            applyTheme(prefersDark.matches ? 'dark' : 'light');
+        } else {
+            applyTheme(selectedTheme);
+        }
+    }
+
+    // イベントリスナーと初期化
+    themeSelectors.forEach(input => {
+        input.addEventListener('change', (e) => {
+            const selectedTheme = e.target.value;
+            localStorage.setItem('theme', selectedTheme);
+            handleThemeChange(selectedTheme);
+        });
     });
-    
-    tableBody.addEventListener('change', (e) => {
-        if (e.target.classList.contains('resident-checkbox')) updateDeleteButtonState();
+
+    prefersDark.addEventListener('change', () => {
+        const savedTheme = localStorage.getItem('theme') || 'system';
+        if (savedTheme === 'system') {
+            handleThemeChange('system');
+        }
     });
-    
+
+    function initializeTheme() {
+        const savedTheme = localStorage.getItem('theme') || 'system';
+        document.getElementById(`theme-${savedTheme}`).checked = true;
+        handleThemeChange(savedTheme);
+    }
+    // ===== ↑↑↑ テーマ設定のロジック ↑↑↑ =====
+
+
+    // イベントリスナー
+    modeSelectors.forEach(input => input.addEventListener('change', () => { if(input.checked) setMode(input.id); }));
+    tableBody.addEventListener('change', e => { if (e.target.classList.contains('resident-checkbox')) updateDeleteButtonState(); });
     setMode('view-mode');
     updateLoginStatus();
     searchInput.addEventListener('input', renderTable);
     addResidentBtn.addEventListener('click', addResidentsInBulk);
     deleteSelectedBtn.addEventListener('click', deleteSelectedResidents);
     resetAllBtn.addEventListener('click', resetAllCounts);
-    selectAllCheckbox.addEventListener('change', (e) => {
+    selectAllCheckbox.addEventListener('change', e => {
         document.querySelectorAll('.resident-checkbox').forEach(cb => cb.checked = e.target.checked);
         updateDeleteButtonState();
     });
     loginLogoutBtn.addEventListener('click', handleLoginLogout);
+    logViewBtn.addEventListener('click', showLog);
+    modalCloseBtn.addEventListener('click', () => logModal.style.display = 'none');
+    logModal.addEventListener('click', e => { if(e.target === logModal) logModal.style.display = 'none'; });
+    
+    initializeTheme(); // ページ読み込み時にテーマを初期化
 
 </script>
 
