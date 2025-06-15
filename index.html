@@ -9,7 +9,6 @@
     <link rel="icon" type="image/png" sizes="32x32" href="https://placehold.co/32x32/3498db/ffffff?text=寮">
     <link rel="icon" type="image/png" sizes="16x16" href="https://placehold.co/16x16/3498db/ffffff?text=寮">
     <style>
-        /* ===== カラーテーマ設定 ===== */
         :root {
             --bg-color: #f4f7f9;
             --container-bg: #ffffff;
@@ -38,7 +37,6 @@
             --mode-label-bg: #7f8c8d;
             --mode-label-text: #ecf0f1;
         }
-        /* ===== ここまで ===== */
 
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
@@ -68,7 +66,9 @@
         }
         #login-logout-btn { background-color: #3498db; }
         #login-logout-btn.logout { background-color: #e74c3c; }
-        
+        #log-view-btn { background-color: #8e44ad; display: none; }
+        body.admin-logged-in #log-view-btn { display: inline-block; }
+
         .controls-container {
             display: flex; flex-direction: column;
             gap: 15px; padding: 15px; margin: 20px 0;
@@ -76,6 +76,7 @@
             position: -webkit-sticky; position: sticky;
             top: 0; z-index: 1000; border-bottom: 1px solid var(--border-color);
         }
+
         .top-controls { display: flex; align-items: center; width: 100%; gap: 15px; }
         #search-input {
             flex-grow: 1; min-width: 150px; padding: 10px; border: 1px solid var(--border-color);
@@ -161,7 +162,7 @@
         .edit-op-header, .edit-op-cell { display: none; }
         body.resident-edit-mode .edit-op-header,
         body.resident-edit-mode .edit-op-cell { display: table-cell; }
-        
+
         .footer {
             margin-top: 24px; padding: 10px; display: flex;
             justify-content: center; align-items: center;
@@ -175,7 +176,7 @@
              border-radius: 6px;
              padding: 5px;
         }
-
+        
         @media (max-width: 640px) {
             .top-controls { flex-direction: column; align-items: stretch; }
             .mode-selector { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
@@ -264,15 +265,35 @@
     const db = firebase.firestore();
     const messaging = firebase.messaging();
 
+    let currentToken = '';
+
     function requestNotificationPermission() {
         Notification.requestPermission().then((permission) => {
             if (permission === 'granted') {
                 const vapidKey = 'BP-A4DPeS4EWGjWtRUBYPLExlhQXq-4l_te7txwJa8qAR7RxQnbaaabUKpX3akGRFxwAeg9IpUjM1w0Nmrq77KQ';
-                messaging.getToken({ vapidKey: vapidKey }).then((currentToken) => {
-                    if (currentToken) console.log('FCM Token:', currentToken);
+                messaging.getToken({ vapidKey: vapidKey }).then((token) => {
+                    if (token) {
+                        currentToken = token;
+                        const favoriteId = localStorage.getItem('dormAppFavoriteId');
+                        if(favoriteId) {
+                            saveTokenToDB(token, favoriteId);
+                        }
+                    }
                 });
             }
         });
+    }
+    
+    function saveTokenToDB(token, favoriteResidentId) {
+        if (!token) return;
+        db.collection('fcmTokens').doc(token).set({
+            favoriteResidentId: favoriteResidentId
+        });
+    }
+    
+    function removeTokenFromDB(token) {
+        if (!token) return;
+        db.collection('fcmTokens').doc(token).delete();
     }
 
     const tableBody = document.querySelector("#resident-table tbody");
@@ -333,8 +354,16 @@
 
     function toggleFavorite(residentId) {
         const currentFavorite = localStorage.getItem('dormAppFavoriteId');
-        localStorage.setItem('dormAppFavoriteId', currentFavorite === residentId ? '' : residentId);
-        requestNotificationPermission();
+        const newFavoriteId = currentFavorite === residentId ? null : residentId;
+
+        if (newFavoriteId) {
+            localStorage.setItem('dormAppFavoriteId', newFavoriteId);
+            if (currentToken) saveTokenToDB(currentToken, newFavoriteId);
+            else requestNotificationPermission();
+        } else {
+            localStorage.removeItem('dormAppFavoriteId');
+            if (currentToken) removeTokenFromDB(currentToken);
+        }
         renderTable();
     }
 
@@ -345,7 +374,7 @@
             if (doc.exists && (doc.data()[type] > 0 || value > 0)) {
                 docRef.update({ [type]: increment });
             }
-        }).catch(error => console.error("更新エラー:", error));
+        });
     }
 
     function addResidentsInBulk() {
@@ -498,6 +527,7 @@
     });
     
     initializeTheme();
+    document.addEventListener('DOMContentLoaded', requestNotificationPermission);
 
 </script>
 
