@@ -69,13 +69,18 @@
         #log-view-btn { background-color: #8e44ad; display: none; }
         body.admin-logged-in #log-view-btn { display: inline-block; }
 
+        /* ===== ↓↓↓ スティッキー（追従）パネルの設定をこちらに移動 ↓↓↓ ===== */
         .controls-container {
             display: flex; flex-direction: column;
             gap: 15px; padding: 15px; margin: 20px 0;
             background-color: var(--controls-bg); border-radius: 8px;
-            position: -webkit-sticky; position: sticky;
-            top: 0; z-index: 1000; border-bottom: 1px solid var(--border-color);
+            position: -webkit-sticky;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            border-bottom: 1px solid var(--border-color);
         }
+        /* ===== ↑↑↑ スティッキー（追従）パネルの設定をこちらに移動 ↑↑↑ ===== */
 
         .top-controls { display: flex; align-items: center; width: 100%; gap: 15px; }
         #search-input {
@@ -209,6 +214,7 @@
 <body>
 
 <div class="container">
+    <!-- ===== ↓↓↓ HTMLの構造を変更 ↓↓↓ ===== -->
     <div class="header-area">
         <h1>荷物管理アプリ</h1>
         <div class="header-buttons">
@@ -216,7 +222,7 @@
             <button id="login-logout-btn" class="header-btn">管理者ログイン</button>
         </div>
     </div>
-
+    
     <div class="controls-container">
         <div class="top-controls">
             <input type="search" id="search-input" placeholder="名前や部屋番号で検索...">
@@ -237,6 +243,7 @@
             </div>
         </div>
     </div>
+    <!-- ===== ↑↑↑ HTMLの構造を変更 ↑↑↑ ===== -->
 
     <table id="resident-table">
         <thead>
@@ -252,6 +259,18 @@
             <tr><td colspan="5">データベースから読み込み中...</td></tr>
         </tbody>
     </table>
+</div>
+
+<div id="log-modal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>操作履歴</h2>
+            <button id="modal-close-btn">&times;</button>
+        </div>
+        <ul id="log-list">
+            <li>読み込み中...</li>
+        </ul>
+    </div>
 </div>
 
 <footer class="footer">
