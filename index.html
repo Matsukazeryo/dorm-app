@@ -69,6 +69,7 @@
         #log-view-btn { background-color: #8e44ad; display: none; }
         body.admin-logged-in #log-view-btn { display: inline-block; }
 
+        /* ===== ↓↓↓ スティッキー（追従）パネルの設定を修正 ↓↓↓ ===== */
         .controls-container {
             display: flex; flex-direction: column;
             gap: 15px; padding: 15px; margin: 20px 0;
@@ -79,6 +80,7 @@
             z-index: 1000;
             border-bottom: 1px solid var(--border-color);
         }
+        /* ===== ↑↑↑ スティッキー（追従）パネルの設定を修正 ↑↑↑ ===== */
 
         .top-controls { display: flex; align-items: center; width: 100%; gap: 15px; }
         #search-input {
@@ -166,21 +168,19 @@
         body.resident-edit-mode .edit-op-header,
         body.resident-edit-mode .edit-op-cell { display: table-cell; }
 
-        /* ===== ↓↓↓ 操作履歴モーダルのスタイルを変更 ↓↓↓ ===== */
         .modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background-color: rgba(0,0,0,0.6);
-            display: flex; /* 常時flexにしておく */
+            display: flex;
             justify-content: center; align-items: center; z-index: 2000;
             opacity: 0;
-            visibility: hidden; /* 表示/非表示はこちらで制御 */
+            visibility: hidden;
             transition: opacity 0.3s ease, visibility 0.3s;
         }
         .modal-overlay.active {
             opacity: 1;
             visibility: visible;
         }
-        /* ===== ↑↑↑ 操作履歴モーダルのスタイルを変更 ↑↑↑ ===== */
         .modal-content {
             background-color: var(--container-bg); padding: 20px;
             border-radius: 8px; width: 90%; max-width: 600px;
@@ -222,36 +222,36 @@
 <body>
 
 <div class="container">
-    <div class="top-sticky-panel">
-        <div class="header-area">
-            <h1>荷物管理アプリ</h1>
-            <div class="header-buttons">
-                <button id="log-view-btn" class="header-btn">操作履歴</button>
-                <button id="login-logout-btn" class="header-btn">管理者ログイン</button>
+    <!-- ===== ↓↓↓ HTMLの構造を元に戻す ↓↓↓ ===== -->
+    <div class="header-area">
+        <h1>荷物管理アプリ</h1>
+        <div class="header-buttons">
+            <button id="log-view-btn" class="header-btn">操作履歴</button>
+            <button id="login-logout-btn" class="header-btn">管理者ログイン</button>
+        </div>
+    </div>
+    
+    <div class="controls-container">
+        <div class="top-controls">
+            <input type="search" id="search-input" placeholder="名前や部屋番号で検索...">
+            <div class="mode-selector">
+                <input type="radio" id="view-mode" name="mode" checked>
+                <label for="view-mode">閲覧</label>
+                <input type="radio" id="count-edit-mode" name="mode">
+                <label for="count-edit-mode">個数変更</label>
+                <input type="radio" id="resident-edit-mode" name="mode">
+                <label for="resident-edit-mode" id="resident-edit-mode-label">寮生編集</label>
             </div>
         </div>
-        
-        <div class="controls-container">
-            <div class="top-controls">
-                <input type="search" id="search-input" placeholder="名前や部屋番号で検索...">
-                <div class="mode-selector">
-                    <input type="radio" id="view-mode" name="mode" checked>
-                    <label for="view-mode">閲覧</label>
-                    <input type="radio" id="count-edit-mode" name="mode">
-                    <label for="count-edit-mode">個数変更</label>
-                    <input type="radio" id="resident-edit-mode" name="mode">
-                    <label for="resident-edit-mode" id="resident-edit-mode-label">寮生編集</label>
-                </div>
-            </div>
-            <div class="ops-container">
-                 <button id="reset-all-btn">全ての荷物/郵便を０にする</button>
-                 <div class="bulk-ops-container">
-                    <button id="add-resident-btn">寮生を一括追加</button>
-                    <button id="delete-selected-btn" disabled>選択した寮生を削除</button>
-                </div>
+        <div class="ops-container">
+             <button id="reset-all-btn">全ての荷物/郵便を０にする</button>
+             <div class="bulk-ops-container">
+                <button id="add-resident-btn">寮生を一括追加</button>
+                <button id="delete-selected-btn" disabled>選択した寮生を削除</button>
             </div>
         </div>
     </div>
+    <!-- ===== ↑↑↑ HTMLの構造を元に戻す ↑↑↑ ===== -->
 
     <table id="resident-table">
         <thead>
@@ -377,7 +377,6 @@
         } catch (error) { console.error("ログの追加に失敗しました:", error); }
     }
     
-    // ===== ↓↓↓ 操作履歴の表示/非表示ロジックを修正 ↓↓↓ =====
     function showLogModal() {
         logModal.classList.add('active');
         fetchLogs();
@@ -407,7 +406,6 @@
             console.error("ログの読み込みエラー:", error);
         }
     }
-    // ===== ↑↑↑ 操作履歴の表示/非表示ロジックを修正 ↑↑↑ =====
 
     function toggleFavorite(residentId) {
         const currentFavorite = localStorage.getItem('dormAppFavoriteId');
@@ -600,11 +598,9 @@
     
     initializeTheme();
     
-    // ===== ↓↓↓ イベントリスナーの修正 ↓↓↓ =====
     logViewBtn.addEventListener('click', showLogModal);
     modalCloseBtn.addEventListener('click', hideLogModal);
     logModal.addEventListener('click', e => { if (e.target === logModal) hideLogModal(); });
-    // ===== ↑↑↑ イベントリスナーの修正 ↑↑↑ =====
 
 </script>
 
