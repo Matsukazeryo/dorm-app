@@ -156,7 +156,42 @@
         .footer { margin-top: 24px; padding: 10px; display: flex; justify-content: center; align-items: center; gap: 10px; font-size: 14px; color: #7f8c8d; }
         body.dark-theme .footer { color: #bdc3c7; }
         #theme-selector { background-color: var(--mode-label-bg); color: var(--text-color); border: 1px solid var(--mode-selector-border); border-radius: 6px; padding: 5px; }
-    </style>
+        /* ===== スマホ用の省スペース調整 ===== */
+        @media (max-width:600px){
+            /* テーブル全体を少し小さく */
+            th, td{
+              padding: 0;          /* パディングをゼロに */
+            }
+
+            /* 名前セルの余白・最小幅を縮める */
+            .name-cell{
+             padding-left: 4px;   /* 左余白ちょっとだけ残す */
+              min-width: 120px;    /* ← 元が 180px なので 120px に短縮 */
+               font-size: 0.9rem;   /* 文字も気持ち小さく */
+             }
+
+             /* 部屋番号の文字サイズをさらに小さく */
+             .room-number{
+               font-size: 0.75rem;
+               margin-right: 4px;
+             }
+
+             /* カウント部分もコンパクトに */
+             .count-cell{
+               gap: 4px;            /* ボタンと数字の間隔を半分に */
+             }
+             .count-span{
+               min-width: 18px;     /* 幅を少し縮める */
+               font-size: 1rem;
+             }
+             .count-cell button{
+               width: 22px;         /* ボタンを少しだけ小さく */
+               height: 22px;
+               font-size: 14px;
+             }
+
+            }
+   </style>
 </head>
 <body>
 
