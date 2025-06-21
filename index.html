@@ -85,7 +85,6 @@
         
         .table-container { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
         table { width: 100%; border-collapse: collapse; }
-        
         th, td { padding: 0; border: 1px solid var(--border-color); text-align: center; vertical-align: middle; }
         
         .furigana-col, .circle-col { display: none; }
@@ -203,7 +202,7 @@
             <thead>
                 <tr>
                     <th class="checkbox-col"><input type="checkbox" id="select-all-checkbox"></th>
-                    <th><div class="cell-content name-cell">名前</div></th>
+                    <th><div class="cell-content">名前</div></th>
                     <th class="furigana-col"><div class="cell-content">ふりがな</div></th>
                     <th class="circle-col"><div class="cell-content">サークル</div></th>
                     <th><div class="cell-content">荷物</div></th>
@@ -218,9 +217,62 @@
     </div>
 </div>
 
-<div id="log-modal" class="modal-overlay"> <!-- ... --> </div>
-<div id="add-resident-modal" class="modal-overlay"> <!-- ... --> </div>
-<div id="add-bulk-modal" class="modal-overlay"> <!-- ... --> </div>
+<div id="log-modal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>操作履歴</h2>
+            <button id="modal-close-btn" class="modal-close-btn">&times;</button>
+        </div>
+        <ul id="log-list"></ul>
+    </div>
+</div>
+<div id="add-resident-modal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>新しい寮生を追加</h2>
+            <button id="add-modal-close-btn" class="modal-close-btn">&times;</button>
+        </div>
+        <form id="add-resident-form">
+            <div class="form-group">
+                <label for="form-dorm">寮</label>
+                <select id="form-dorm" required><option value="shofu">松風寮</option><option value="meizen">明善寮</option></select>
+            </div>
+            <div class="form-group"><label for="form-name">名前 (必須)</label><input type="text" id="form-name" required></div>
+            <div class="form-group"><label for="form-room">部屋番号</label><input type="text" id="form-room"></div>
+            <div class="form-group"><label for="form-furigana">ふりがな</label><input type="text" id="form-furigana"></div>
+            <div class="form-group"><label for="form-circle">サークル</label><input type="text" id="form-circle"></div>
+            <div class="form-group">
+                <label>初期の荷物/郵便 (任意)</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="number" id="form-luggage" min="0" value="0" placeholder="荷物">
+                    <input type="number" id="form-mail" min="0" value="0" placeholder="郵便">
+                </div>
+            </div>
+            <div class="form-actions"><button type="submit" class="header-btn" style="background-color: #2ecc71;">登録する</button></div>
+        </form>
+    </div>
+</div>
+<div id="add-bulk-modal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>寮生を一括追加</h2>
+            <button id="add-bulk-modal-close-btn" class="modal-close-btn">&times;</button>
+        </div>
+        <form id="add-bulk-form">
+            <div class="form-group">
+                <label for="bulk-form-dorm">追加先の寮</label>
+                <select id="bulk-form-dorm" required><option value="shofu">松風寮</option><option value="meizen">明善寮</option></select>
+            </div>
+            <div id="bulk-form-entries">
+                <!-- 寮生入力フォームがここに追加されます -->
+            </div>
+            <div class="bulk-add-controls">
+                <button type="button" id="add-form-entry-btn">+ 寮生を追加</button>
+                <button type="submit" class="header-btn" style="background-color: #2ecc71;">全て登録する</button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <footer class="footer">
     <span>表示テーマ:</span>
@@ -253,332 +305,329 @@
     let allResidents = []; 
     let unsubscribe; 
 
-    const elements = {
-        tableBody: document.querySelector("#resident-table tbody"),
-        searchInput: document.getElementById('search-input'),
-        addResidentBtn: document.getElementById('add-resident-btn'),
-        addBulkBtn: document.getElementById('add-bulk-btn'),
-        deleteSelectedBtn: document.getElementById('delete-selected-btn'),
-        selectAllCheckbox: document.getElementById('select-all-checkbox'),
-        modeSelectors: document.querySelectorAll('input[name="mode"]'),
-        loginLogoutBtn: document.getElementById('login-logout-btn'),
-        resetAllBtn: document.getElementById('reset-all-btn'),
-        themeSelector: document.getElementById('theme-selector'),
-        logViewBtn: document.getElementById('log-view-btn'),
-        logModal: document.getElementById('log-modal'),
-        modalCloseBtn: document.getElementById('modal-close-btn'),
-        toggleFurigana: document.getElementById('toggle-furigana'),
-        toggleCircle: document.getElementById('toggle-circle'),
-        dormSelector: document.getElementById('dorm-selector'),
-        addResidentModal: document.getElementById('add-resident-modal'),
-        addModalCloseBtn: document.getElementById('add-modal-close-btn'),
-        addResidentForm: document.getElementById('add-resident-form'),
-        addBulkModal: document.getElementById('add-bulk-modal'),
-        addBulkModalCloseBtn: document.getElementById('add-bulk-modal-close-btn'),
-        addBulkForm: document.getElementById('add-bulk-form'),
-        addFormEntryBtn: document.getElementById('add-form-entry-btn'),
-        bulkFormEntries: document.getElementById('bulk-form-entries'),
-    };
-    
-    function renderTable() {
-        // ... (renderTable内のロジックは変更なし)
-        const searchTerm = elements.searchInput.value.toLowerCase();
-        const favoriteId = localStorage.getItem(`dormAppFavoriteId_${currentCollectionName}`);
-        allResidents.sort((a, b) => {
-            if (a.id === favoriteId) return -1;
-            if (b.id === favoriteId) return 1;
-            return parseInt(a.roomNumber, 10) - parseInt(b.roomNumber, 10);
-        });
-        const filteredResidents = allResidents.filter(r => 
-            r.name.toLowerCase().includes(searchTerm) || 
-            r.roomNumber.includes(searchTerm) ||
-            (r.furigana && r.furigana.toLowerCase().includes(searchTerm))
-        );
-        elements.tableBody.innerHTML = ''; 
-        if (filteredResidents.length === 0) {
-            elements.tableBody.innerHTML = '<tr><td colspan="7">該当する寮生が見つかりません。</td></tr>';
-        } else {
-            filteredResidents.forEach(resident => {
-                const isFavorited = resident.id === favoriteId;
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td class="checkbox-col"><div class="cell-content"><input type="checkbox" class="resident-checkbox" data-id="${resident.id}"></div></td>
-                    <td><div class="cell-content name-cell"><span class="favorite-star ${isFavorited ? 'favorited' : ''}">★</span><span class="room-number">${resident.roomNumber}</span><span>${resident.name}</span></div></td>
-                    <td class="furigana-col"><div class="cell-content"><span class="furigana">${resident.furigana || ''}</span></div></td>
-                    <td class="circle-col"><div class="cell-content">${resident.circle || ''}</div></td>
-                    <td><div class="count-cell"><button class="minus">-</button><span class="count-span">${resident.luggage}</span><button class="plus">+</button></div></td>
-                    <td><div class="count-cell"><button class="minus">-</button><span class="count-span">${resident.mail}</span><button class="plus">+</button></div></td>
-                    <td class="edit-op-cell"><div class="cell-content"><button class="delete-btn">削除</button></div></td>
-                `;
-                // イベントリスナーを動的に追加
-                row.querySelector('.favorite-star').addEventListener('click', () => toggleFavorite(resident.id));
-                row.querySelector('.delete-btn')?.addEventListener('click', () => deleteResident(resident.id, resident.name));
-                const countCells = row.querySelectorAll('.count-cell');
-                countCells[0].querySelector('.minus').addEventListener('click', () => updateCount(resident.id, resident.name, 'luggage', -1));
-                countCells[0].querySelector('.plus').addEventListener('click', () => updateCount(resident.id, resident.name, 'luggage', 1));
-                countCells[1].querySelector('.minus').addEventListener('click', () => updateCount(resident.id, resident.name, 'mail', -1));
-                countCells[1].querySelector('.plus').addEventListener('click', () => updateCount(resident.id, resident.name, 'mail', 1));
-                elements.tableBody.appendChild(row);
-            });
-        }
-        updateDeleteButtonState();
-    }
-    
-    // ===== ↓↓↓ JavaScriptの完全版（これ以降の関数も全て含む）↓↓↓ =====
-    function listenToCollection(collectionName) {
-        if (unsubscribe) unsubscribe();
-        unsubscribe = db.collection(collectionName).onSnapshot(snapshot => {
-            allResidents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            renderTable(); 
-        }, error => console.error("データの読み込みに失敗しました:", error));
-    }
-    
-    function switchDorm(dorm) {
-        currentCollectionName = `residents_${dorm}`;
-        localStorage.setItem('currentDorm', currentCollectionName);
-        document.querySelectorAll('#dorm-selector button').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.dorm === dorm);
-        });
-        listenToCollection(currentCollectionName);
-    }
-    
-    async function addLog(action, details) {
-        try {
-            await db.collection("logs").add({ action, details, isAdmin: sessionStorage.getItem('isAdminLoggedIn') === 'true', timestamp: firebase.firestore.FieldValue.serverTimestamp() });
-        } catch (error) { console.error("ログの追加に失敗しました:", error); }
-    }
-    
-    function showLogModal() {
-        elements.logModal.classList.add('active');
-        fetchLogs();
-    }
-
-    function hideLogModal() {
-        elements.logModal.classList.remove('active');
-    }
-
-    async function fetchLogs() {
-        const logList = document.getElementById('log-list');
-        logList.innerHTML = '<li>読み込み中...</li>';
-        try {
-            const snapshot = await db.collection("logs").orderBy("timestamp", "desc").limit(50).get();
-            if (snapshot.empty) { logList.innerHTML = '<li>履歴はありません。</li>'; return; }
-            logList.innerHTML = '';
-            snapshot.forEach(doc => {
-                const log = doc.data();
-                const date = log.timestamp ? log.timestamp.toDate().toLocaleString('ja-JP') : '日時不明';
-                const adminBadge = log.isAdmin ? ' (管理者)' : '';
-                const li = document.createElement('li');
-                li.innerHTML = `${log.details}${adminBadge}<span class="log-time">${date}</span>`;
-                logList.appendChild(li);
-            });
-        } catch (error) {
-            logList.innerHTML = '<li>履歴の読み込みに失敗しました。</li>';
-        }
-    }
-
-    function toggleFavorite(residentId) {
-        const favKey = `dormAppFavoriteId_${currentCollectionName}`;
-        const currentFavorite = localStorage.getItem(favKey);
-        localStorage.setItem(favKey, currentFavorite === residentId ? '' : residentId);
-        renderTable();
-    }
-
-    function updateCount(residentId, residentName, type, value) {
-        const docRef = db.collection(currentCollectionName).doc(residentId);
-        const increment = firebase.firestore.FieldValue.increment(value);
-        docRef.get().then(doc => {
-            if (doc.exists && (doc.data()[type] > 0 || value > 0)) {
-                docRef.update({ [type]: increment });
-                addLog('個数変更', `[${currentCollectionName.split('_')[1]}] ${residentName} の${type}を ${value > 0 ? '+1' : '-1'}`);
-            }
-        });
-    }
-
-    function showAddResidentModal() {
-        elements.addResidentForm.reset();
-        document.getElementById('form-dorm').value = currentCollectionName.split('_')[1];
-        elements.addResidentModal.classList.add('active');
-    }
-    
-    function hideAddResidentModal() {
-        elements.addResidentModal.classList.remove('active');
-    }
-
-    function saveNewResident(event) {
-        event.preventDefault();
-        const dorm = document.getElementById('form-dorm').value;
-        const collection = `residents_${dorm}`;
-        const newResident = {
-            name: document.getElementById('form-name').value.trim(),
-            roomNumber: document.getElementById('form-room').value.trim() || '',
-            furigana: document.getElementById('form-furigana').value.trim() || '',
-            circle: document.getElementById('form-circle').value.trim() || '',
-            luggage: parseInt(document.getElementById('form-luggage').value) || 0,
-            mail: parseInt(document.getElementById('form-mail').value) || 0,
-        };
-        if (!newResident.name) { alert('名前は必須です。'); return; }
-        db.collection(collection).add(newResident).then(() => {
-            alert(`${newResident.name} さんを登録しました。`);
-            addLog('寮生追加', `[${dorm}] ${newResident.name} を追加`);
-            hideAddResidentModal();
-        });
-    }
-    
-    function createBulkFormEntry() {
-        const entryDiv = document.createElement('div');
-        entryDiv.className = 'bulk-add-entry';
-        entryDiv.innerHTML = `
-            <div class="form-group"><label>部屋番号</label><input type="text" class="bulk-room"></div>
-            <div class="form-group"><label>名前 (必須)</label><input type="text" class="bulk-name" required></div>
-            <div class="form-group"><label>ふりがな</label><input type="text" class="bulk-furigana"></div>
-            <div class="form-group"><label>サークル</label><input type="text" class="bulk-circle"></div>
-        `;
-        return entryDiv;
-    }
-    
-    function showBulkAddModal() {
-        elements.bulkFormEntries.innerHTML = '';
-        elements.bulkFormEntries.appendChild(createBulkFormEntry());
-        document.getElementById('bulk-form-dorm').value = currentCollectionName.split('_')[1];
-        elements.addBulkModal.classList.add('active');
-    }
-    
-    function hideBulkAddModal() {
-        elements.addBulkModal.classList.remove('active');
-    }
-
-    function handleBulkAddSubmit(event) {
-        event.preventDefault();
-        const dorm = document.getElementById('bulk-form-dorm').value;
-        const collection = `residents_${dorm}`;
-        const entries = document.querySelectorAll('.bulk-add-entry');
-        const batch = db.batch();
-        let addedNames = [];
-
-        entries.forEach(entry => {
-            const name = entry.querySelector('.bulk-name').value.trim();
-            if (name) {
-                const newResidentRef = db.collection(collection).doc();
-                batch.set(newResidentRef, { 
-                    roomNumber: entry.querySelector('.bulk-room').value.trim() || '',
-                    name: name,
-                    furigana: entry.querySelector('.bulk-furigana').value.trim() || '',
-                    circle: entry.querySelector('.bulk-circle').value.trim() || '',
-                    luggage: 0, mail: 0 
-                });
-                addedNames.push(name);
-            }
-        });
-
-        if (addedNames.length > 0) {
-            batch.commit().then(() => {
-                alert(`${addedNames.length}人の寮生を追加しました。`);
-                addLog('寮生一括追加', `[${dorm}] ${addedNames.join(', ')} を追加`);
-                hideBulkAddModal();
-            });
-        }
-    }
-
-    function deleteResident(residentId, residentName) {
-        if (confirm(`本当に「${residentName}」さんをリストから削除しますか？`)) {
-            db.collection(currentCollectionName).doc(residentId).delete().then(() => {
-                addLog('寮生削除', `[${currentCollectionName}] ${residentName} を削除`);
-            });
-        }
-    }
-    
-    function deleteSelectedResidents() {
-        const selectedCheckboxes = document.querySelectorAll('.resident-checkbox:checked');
-        if (selectedCheckboxes.length === 0) return;
-        if (confirm(`選択した ${selectedCheckboxes.length} 人の寮生を本当に削除しますか？`)) {
-            const batch = db.batch();
-            selectedCheckboxes.forEach(checkbox => batch.delete(db.collection(currentCollectionName).doc(checkbox.dataset.id)));
-            batch.commit().then(() => {
-                alert(`${selectedCheckboxes.length}人の寮生を削除しました。`);
-                addLog('寮生一括削除', `[${currentCollectionName}] ${selectedCheckboxes.length}人を削除`);
-            });
-        }
-    }
-
-    function resetAllCounts() {
-        if (confirm(`本当に${currentCollectionName === 'residents_shofu' ? '松風寮' : '明善寮'}の全ての荷物と郵便の数を0にしますか？`)) {
-            const batch = db.batch();
-            allResidents.forEach(r => batch.update(db.collection(currentCollectionName).doc(r.id), { luggage: 0, mail: 0 }));
-            batch.commit().then(() => {
-                alert('全てのカウントを0にリセットしました。');
-                addLog('全リセット', `[${currentCollectionName}] の全カウントをリセット`);
-            });
-        }
-    }
-    
-    function updateDeleteButtonState() {
-        const selectedCheckboxes = document.querySelectorAll('.resident-checkbox:checked');
-        elements.deleteSelectedBtn.disabled = selectedCheckboxes.length === 0;
-    }
-
-    function handleLoginLogout() {
-        if (sessionStorage.getItem('isAdminLoggedIn') === 'true') logout();
-        else login();
-    }
-
-    function login() {
-        const password = prompt('管理者パスワードを入力してください:');
-        if (password === ADMIN_PASSWORD) {
-            sessionStorage.setItem('isAdminLoggedIn', 'true');
-            alert('管理者としてログインしました。');
-            updateLoginStatus();
-        } else if (password) alert('パスワードが違います。');
-    }
-
-    function logout() {
-        sessionStorage.removeItem('isAdminLoggedIn');
-        alert('ログアウトしました。');
-        document.getElementById('view-mode').checked = true;
-        setMode('view-mode');
-        updateLoginStatus();
-    }
-
-    function updateLoginStatus() {
-        const isLoggedIn = sessionStorage.getItem('isAdminLoggedIn') === 'true';
-        document.body.classList.toggle('admin-logged-in', isLoggedIn);
-        if (isLoggedIn) {
-            elements.loginLogoutBtn.textContent = 'ログアウト';
-            elements.loginLogoutBtn.classList.add('logout');
-        } else {
-            elements.loginLogoutBtn.textContent = '管理者ログイン';
-            elements.loginLogoutBtn.classList.remove('logout');
-        }
-    }
-
-    function setMode(mode) { 
-        document.body.className = sessionStorage.getItem('isAdminLoggedIn') === 'true' ? 'admin-logged-in' : '';
-        document.body.classList.add(mode);
-        const currentTheme = localStorage.getItem('theme') || 'system';
-        handleThemeChange(currentTheme);
-        if (mode !== 'resident-edit-mode') elements.selectAllCheckbox.checked = false;
-        renderTable();
-    }
-
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
-
-    function applyTheme(theme) {
-        if (theme === 'dark') document.body.classList.add('dark-theme');
-        else document.body.classList.remove('dark-theme');
-    }
-
-    function handleThemeChange(selectedTheme) {
-        if (selectedTheme === 'system') applyTheme(prefersDark.matches ? 'dark' : 'light');
-        else applyTheme(selectedTheme);
-    }
-
-    function initializeTheme() {
-        const savedTheme = localStorage.getItem('theme') || 'system';
-        elements.themeSelector.value = savedTheme;
-        handleThemeChange(savedTheme);
-    }
-    
     document.addEventListener('DOMContentLoaded', () => {
+        const elements = {
+            tableBody: document.querySelector("#resident-table tbody"),
+            searchInput: document.getElementById('search-input'),
+            addResidentBtn: document.getElementById('add-resident-btn'),
+            addBulkBtn: document.getElementById('add-bulk-btn'),
+            deleteSelectedBtn: document.getElementById('delete-selected-btn'),
+            selectAllCheckbox: document.getElementById('select-all-checkbox'),
+            modeSelectors: document.querySelectorAll('input[name="mode"]'),
+            loginLogoutBtn: document.getElementById('login-logout-btn'),
+            resetAllBtn: document.getElementById('reset-all-btn'),
+            themeSelector: document.getElementById('theme-selector'),
+            logViewBtn: document.getElementById('log-view-btn'),
+            logModal: document.getElementById('log-modal'),
+            modalCloseBtn: document.getElementById('modal-close-btn'),
+            toggleFurigana: document.getElementById('toggle-furigana'),
+            toggleCircle: document.getElementById('toggle-circle'),
+            dormSelector: document.getElementById('dorm-selector'),
+            addResidentModal: document.getElementById('add-resident-modal'),
+            addModalCloseBtn: document.getElementById('add-modal-close-btn'),
+            addResidentForm: document.getElementById('add-resident-form'),
+            addBulkModal: document.getElementById('add-bulk-modal'),
+            addBulkModalCloseBtn: document.getElementById('add-bulk-modal-close-btn'),
+            addBulkForm: document.getElementById('add-bulk-form'),
+            addFormEntryBtn: document.getElementById('add-form-entry-btn'),
+            bulkFormEntries: document.getElementById('bulk-form-entries'),
+        };
+    
+        function listenToCollection(collectionName) {
+            if (unsubscribe) unsubscribe();
+            unsubscribe = db.collection(collectionName).onSnapshot(snapshot => {
+                allResidents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderTable(); 
+            }, error => console.error("データの読み込みに失敗しました:", error));
+        }
+        
+        function switchDorm(dorm) {
+            currentCollectionName = `residents_${dorm}`;
+            localStorage.setItem('currentDorm', currentCollectionName);
+            document.querySelectorAll('#dorm-selector button').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.dorm === dorm);
+            });
+            listenToCollection(currentCollectionName);
+        }
+
+        function renderTable() {
+            const searchTerm = elements.searchInput.value.toLowerCase();
+            const favoriteId = localStorage.getItem(`dormAppFavoriteId_${currentCollectionName}`);
+            allResidents.sort((a, b) => {
+                if (a.id === favoriteId) return -1;
+                if (b.id === favoriteId) return 1;
+                return parseInt(a.roomNumber, 10) - parseInt(b.roomNumber, 10);
+            });
+            const filteredResidents = allResidents.filter(r => 
+                r.name.toLowerCase().includes(searchTerm) || 
+                r.roomNumber.includes(searchTerm) ||
+                (r.furigana && r.furigana.toLowerCase().includes(searchTerm))
+            );
+            elements.tableBody.innerHTML = ''; 
+            if (filteredResidents.length === 0) {
+                elements.tableBody.innerHTML = '<tr><td colspan="7">該当する寮生が見つかりません。</td></tr>';
+            } else {
+                filteredResidents.forEach(resident => {
+                    const isFavorited = resident.id === favoriteId;
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="checkbox-col"><div class="cell-content"><input type="checkbox" class="resident-checkbox" data-id="${resident.id}"></div></td>
+                        <td><div class="cell-content name-cell"><span class="favorite-star ${isFavorited ? 'favorited' : ''}">★</span><span class="room-number">${resident.roomNumber}</span><span>${resident.name}</span></div></td>
+                        <td class="furigana-col"><div class="cell-content"><span class="furigana">${resident.furigana || ''}</span></div></td>
+                        <td class="circle-col"><div class="cell-content">${resident.circle || ''}</div></td>
+                        <td><div class="count-cell"><button class="minus">-</button><span class="count-span">${resident.luggage}</span><button class="plus">+</button></div></td>
+                        <td><div class="count-cell"><button class="minus">-</button><span class="count-span">${resident.mail}</span><button class="plus">+</button></div></td>
+                        <td class="edit-op-cell"><div class="cell-content"><button class="delete-btn">削除</button></div></td>
+                    `;
+                    row.querySelector('.favorite-star').addEventListener('click', () => toggleFavorite(resident.id));
+                    row.querySelector('.delete-btn')?.addEventListener('click', () => deleteResident(resident.id, resident.name));
+                    const countCells = row.querySelectorAll('.count-cell');
+                    countCells[0].querySelector('.minus').addEventListener('click', () => updateCount(resident.id, resident.name, 'luggage', -1));
+                    countCells[0].querySelector('.plus').addEventListener('click', () => updateCount(resident.id, resident.name, 'luggage', 1));
+                    countCells[1].querySelector('.minus').addEventListener('click', () => updateCount(resident.id, resident.name, 'mail', -1));
+                    countCells[1].querySelector('.plus').addEventListener('click', () => updateCount(resident.id, resident.name, 'mail', 1));
+                    elements.tableBody.appendChild(row);
+                });
+            }
+            updateDeleteButtonState();
+        }
+        
+        async function addLog(action, details) {
+            try {
+                await db.collection("logs").add({ action, details, isAdmin: sessionStorage.getItem('isAdminLoggedIn') === 'true', timestamp: firebase.firestore.FieldValue.serverTimestamp() });
+            } catch (error) { console.error("ログの追加に失敗しました:", error); }
+        }
+        
+        function showLogModal() {
+            elements.logModal.classList.add('active');
+            fetchLogs();
+        }
+
+        function hideLogModal() {
+            elements.logModal.classList.remove('active');
+        }
+
+        async function fetchLogs() {
+            const logList = document.getElementById('log-list');
+            logList.innerHTML = '<li>読み込み中...</li>';
+            try {
+                const snapshot = await db.collection("logs").orderBy("timestamp", "desc").limit(50).get();
+                if (snapshot.empty) { logList.innerHTML = '<li>履歴はありません。</li>'; return; }
+                logList.innerHTML = '';
+                snapshot.forEach(doc => {
+                    const log = doc.data();
+                    const date = log.timestamp ? log.timestamp.toDate().toLocaleString('ja-JP') : '日時不明';
+                    const adminBadge = log.isAdmin ? ' (管理者)' : '';
+                    const li = document.createElement('li');
+                    li.innerHTML = `${log.details}${adminBadge}<span class="log-time">${date}</span>`;
+                    logList.appendChild(li);
+                });
+            } catch (error) {
+                logList.innerHTML = '<li>履歴の読み込みに失敗しました。</li>';
+            }
+        }
+
+        function toggleFavorite(residentId) {
+            const favKey = `dormAppFavoriteId_${currentCollectionName}`;
+            const currentFavorite = localStorage.getItem(favKey);
+            localStorage.setItem(favKey, currentFavorite === residentId ? '' : residentId);
+            renderTable();
+        }
+
+        function updateCount(residentId, residentName, type, value) {
+            const docRef = db.collection(currentCollectionName).doc(residentId);
+            const increment = firebase.firestore.FieldValue.increment(value);
+            docRef.get().then(doc => {
+                if (doc.exists && (doc.data()[type] > 0 || value > 0)) {
+                    docRef.update({ [type]: increment });
+                    addLog('個数変更', `[${currentCollectionName.split('_')[1]}] ${residentName} の${type}を ${value > 0 ? '+1' : '-1'}`);
+                }
+            });
+        }
+
+        function showAddResidentModal() {
+            elements.addResidentForm.reset();
+            document.getElementById('form-dorm').value = currentCollectionName.split('_')[1];
+            elements.addResidentModal.classList.add('active');
+        }
+        
+        function hideAddResidentModal() {
+            elements.addResidentModal.classList.remove('active');
+        }
+
+        function saveNewResident(event) {
+            event.preventDefault();
+            const dorm = document.getElementById('form-dorm').value;
+            const collection = `residents_${dorm}`;
+            const newResident = {
+                name: document.getElementById('form-name').value.trim(),
+                roomNumber: document.getElementById('form-room').value.trim() || '',
+                furigana: document.getElementById('form-furigana').value.trim() || '',
+                circle: document.getElementById('form-circle').value.trim() || '',
+                luggage: parseInt(document.getElementById('form-luggage').value) || 0,
+                mail: parseInt(document.getElementById('form-mail').value) || 0,
+            };
+            if (!newResident.name) { alert('名前は必須です。'); return; }
+            db.collection(collection).add(newResident).then(() => {
+                alert(`${newResident.name} さんを登録しました。`);
+                addLog('寮生追加', `[${dorm}] ${newResident.name} を追加`);
+                hideAddResidentModal();
+            });
+        }
+        
+        function createBulkFormEntry() {
+            const entryDiv = document.createElement('div');
+            entryDiv.className = 'bulk-add-entry';
+            entryDiv.innerHTML = `
+                <div class="form-group"><label>部屋番号</label><input type="text" class="bulk-room"></div>
+                <div class="form-group"><label>名前 (必須)</label><input type="text" class="bulk-name" required></div>
+                <div class="form-group"><label>ふりがな</label><input type="text" class="bulk-furigana"></div>
+                <div class="form-group"><label>サークル</label><input type="text" class="bulk-circle"></div>
+            `;
+            return entryDiv;
+        }
+        
+        function showBulkAddModal() {
+            elements.bulkFormEntries.innerHTML = '';
+            elements.bulkFormEntries.appendChild(createBulkFormEntry());
+            document.getElementById('bulk-form-dorm').value = currentCollectionName.split('_')[1];
+            elements.addBulkModal.classList.add('active');
+        }
+        
+        function hideBulkAddModal() {
+            elements.addBulkModal.classList.remove('active');
+        }
+
+        function handleBulkAddSubmit(event) {
+            event.preventDefault();
+            const dorm = document.getElementById('bulk-form-dorm').value;
+            const collection = `residents_${dorm}`;
+            const entries = document.querySelectorAll('.bulk-add-entry');
+            const batch = db.batch();
+            let addedNames = [];
+
+            entries.forEach(entry => {
+                const name = entry.querySelector('.bulk-name').value.trim();
+                if (name) {
+                    const newResidentRef = db.collection(collection).doc();
+                    batch.set(newResidentRef, { 
+                        roomNumber: entry.querySelector('.bulk-room').value.trim() || '',
+                        name: name,
+                        furigana: entry.querySelector('.bulk-furigana').value.trim() || '',
+                        circle: entry.querySelector('.bulk-circle').value.trim() || '',
+                        luggage: 0, mail: 0 
+                    });
+                    addedNames.push(name);
+                }
+            });
+
+            if (addedNames.length > 0) {
+                batch.commit().then(() => {
+                    alert(`${addedNames.length}人の寮生を追加しました。`);
+                    addLog('寮生一括追加', `[${dorm}] ${addedNames.join(', ')} を追加`);
+                    hideBulkAddModal();
+                });
+            }
+        }
+
+        function deleteResident(residentId, residentName) {
+            if (confirm(`本当に「${residentName}」さんをリストから削除しますか？`)) {
+                db.collection(currentCollectionName).doc(residentId).delete().then(() => {
+                    addLog('寮生削除', `[${currentCollectionName}] ${residentName} を削除`);
+                });
+            }
+        }
+        
+        function deleteSelectedResidents() {
+            const selectedCheckboxes = document.querySelectorAll('.resident-checkbox:checked');
+            if (selectedCheckboxes.length === 0) return;
+            if (confirm(`選択した ${selectedCheckboxes.length} 人の寮生を本当に削除しますか？`)) {
+                const batch = db.batch();
+                selectedCheckboxes.forEach(checkbox => batch.delete(db.collection(currentCollectionName).doc(checkbox.dataset.id)));
+                batch.commit().then(() => {
+                    alert(`${selectedCheckboxes.length}人の寮生を削除しました。`);
+                    addLog('寮生一括削除', `[${currentCollectionName}] ${selectedCheckboxes.length}人を削除`);
+                });
+            }
+        }
+
+        function resetAllCounts() {
+            if (confirm(`本当に${currentCollectionName === 'residents_shofu' ? '松風寮' : '明善寮'}の全ての荷物と郵便の数を0にしますか？`)) {
+                const batch = db.batch();
+                allResidents.forEach(r => batch.update(db.collection(currentCollectionName).doc(r.id), { luggage: 0, mail: 0 }));
+                batch.commit().then(() => {
+                    alert('全てのカウントを0にリセットしました。');
+                    addLog('全リセット', `[${currentCollectionName}] の全カウントをリセット`);
+                });
+            }
+        }
+        
+        function updateDeleteButtonState() {
+            const selectedCheckboxes = document.querySelectorAll('.resident-checkbox:checked');
+            elements.deleteSelectedBtn.disabled = selectedCheckboxes.length === 0;
+        }
+
+        function handleLoginLogout() {
+            if (sessionStorage.getItem('isAdminLoggedIn') === 'true') logout();
+            else login();
+        }
+
+        function login() {
+            const password = prompt('管理者パスワードを入力してください:');
+            if (password === ADMIN_PASSWORD) {
+                sessionStorage.setItem('isAdminLoggedIn', 'true');
+                alert('管理者としてログインしました。');
+                updateLoginStatus();
+            } else if (password) alert('パスワードが違います。');
+        }
+
+        function logout() {
+            sessionStorage.removeItem('isAdminLoggedIn');
+            alert('ログアウトしました。');
+            document.getElementById('view-mode').checked = true;
+            setMode('view-mode');
+            updateLoginStatus();
+        }
+
+        function updateLoginStatus() {
+            const isLoggedIn = sessionStorage.getItem('isAdminLoggedIn') === 'true';
+            document.body.classList.toggle('admin-logged-in', isLoggedIn);
+            if (isLoggedIn) {
+                elements.loginLogoutBtn.textContent = 'ログアウト';
+                elements.loginLogoutBtn.classList.add('logout');
+            } else {
+                elements.loginLogoutBtn.textContent = '管理者ログイン';
+                elements.loginLogoutBtn.classList.remove('logout');
+            }
+        }
+
+        function setMode(mode) { 
+            document.body.className = sessionStorage.getItem('isAdminLoggedIn') === 'true' ? 'admin-logged-in' : '';
+            document.body.classList.add(mode);
+            const currentTheme = localStorage.getItem('theme') || 'system';
+            handleThemeChange(currentTheme);
+            if (mode !== 'resident-edit-mode') elements.selectAllCheckbox.checked = false;
+            renderTable();
+        }
+
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
+
+        function applyTheme(theme) {
+            if (theme === 'dark') document.body.classList.add('dark-theme');
+            else document.body.classList.remove('dark-theme');
+        }
+
+        function handleThemeChange(selectedTheme) {
+            if (selectedTheme === 'system') applyTheme(prefersDark.matches ? 'dark' : 'light');
+            else applyTheme(selectedTheme);
+        }
+
+        function initializeTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'system';
+            elements.themeSelector.value = savedTheme;
+            handleThemeChange(savedTheme);
+        }
+        
         const savedDorm = localStorage.getItem('currentDorm') ? (localStorage.getItem('currentDorm').split('_')[1]) : 'shofu';
         switchDorm(savedDorm);
         
