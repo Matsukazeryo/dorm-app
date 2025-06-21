@@ -83,9 +83,10 @@
         #add-bulk-btn { background-color: #2ecc71; flex-grow: 1; }
         #delete-selected-btn { background-color: #e74c3c; flex-grow: 1; }
         
+        .table-container { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
         table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 8px 12px; border: 1px solid var(--border-color); text-align: center; vertical-align: middle; word-wrap: break-word; }
-        td { height: 1px; }
+        
+        th, td { padding: 0; border: 1px solid var(--border-color); text-align: center; vertical-align: middle; }
         
         .furigana-col, .circle-col { display: none; }
         body.show-furigana .furigana-col { display: table-cell; }
@@ -98,13 +99,15 @@
         body.resident-edit-mode th.checkbox-col,
         body.resident-edit-mode td.checkbox-col { display: table-cell; }
         
-        th { background-color: var(--mode-label-checked-bg); color: var(--mode-label-checked-text); font-weight: bold; }
-        .name-cell { display: flex; align-items: center; font-weight: 500; text-align: left; min-height: 28px; }
+        th { background-color: var(--mode-label-checked-bg); color: var(--mode-label-checked-text); font-weight: bold; padding: 8px 12px; }
+        .cell-content { min-height: 42px; display:flex; align-items:center; justify-content:center; padding: 8px 12px; }
+        .name-cell { justify-content: flex-start; text-align: left; font-weight: 500; }
+
         .room-number { font-size: 0.9em; color: #7f8c8d; margin-right: 8px; min-width: 35px; text-align: right; }
         body.dark-theme .room-number { color: #bdc3c7; }
         .favorite-star { cursor: pointer; font-size: 22px; margin-right: 10px; color: #bdc3c7; }
         .favorite-star.favorited { color: #f1c40f; }
-        .count-cell { display: flex; align-items: center; justify-content: center; gap: 10px; }
+        .count-cell { gap: 10px; }
         .count-span { min-width: 25px; font-weight: bold; font-size: 1.2em; }
         
         .count-cell button {
@@ -112,12 +115,11 @@
             width: 28px; height: 28px; padding: 0; border-radius: 50%;
             cursor: pointer; font-size: 18px; font-weight: 600;
             display: flex; align-items: center; justify-content: center; line-height: 1;
+            visibility: hidden;
         }
+        body.count-edit-mode .count-cell button { visibility: visible; }
         .delete-btn { background-color: #c0392b; color: white; border: none; font-size: 12px; padding: 4px 8px; border-radius: 5px; cursor: pointer; }
         
-        .count-cell button { visibility: hidden; }
-        body.count-edit-mode .count-cell button { visibility: visible; }
-
         .edit-op-header, .edit-op-cell { display: none; }
         body.resident-edit-mode .edit-op-header,
         body.resident-edit-mode .edit-op-cell { display: table-cell; }
@@ -130,7 +132,7 @@
         .modal-overlay.active { opacity: 1; visibility: visible; }
         .modal-content { background-color: var(--container-bg); padding: 20px; border-radius: 8px; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
         .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 20px;}
-        #modal-close-btn, #add-modal-close-btn, #add-bulk-modal-close-btn { font-size: 24px; cursor: pointer; border: none; background: none; color: var(--text-color); }
+        .modal-close-btn { font-size: 24px; cursor: pointer; border: none; background: none; color: var(--text-color); }
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
         .form-group input, .form-group select, .form-group textarea { width: 95%; padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; background-color: var(--mode-label-bg); color: var(--text-color); font-family: inherit; }
@@ -201,12 +203,12 @@
             <thead>
                 <tr>
                     <th class="checkbox-col"><input type="checkbox" id="select-all-checkbox"></th>
-                    <th>名前</th>
-                    <th class="furigana-col">ふりがな</th>
-                    <th class="circle-col">サークル</th>
-                    <th>荷物</th>
-                    <th>郵便</th>
-                    <th class="edit-op-header">操作</th>
+                    <th><div class="cell-content name-cell">名前</div></th>
+                    <th class="furigana-col"><div class="cell-content">ふりがな</div></th>
+                    <th class="circle-col"><div class="cell-content">サークル</div></th>
+                    <th><div class="cell-content">荷物</div></th>
+                    <th><div class="cell-content">郵便</div></th>
+                    <th class="edit-op-header"><div class="cell-content">操作</div></th>
                 </tr>
             </thead>
             <tbody>
@@ -218,31 +220,16 @@
 
 <div id="log-modal" class="modal-overlay"> <!-- ... --> </div>
 <div id="add-resident-modal" class="modal-overlay"> <!-- ... --> </div>
+<div id="add-bulk-modal" class="modal-overlay"> <!-- ... --> </div>
 
-<div id="add-bulk-modal" class="modal-overlay">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>寮生を一括追加</h2>
-            <button id="add-bulk-modal-close-btn" class="modal-close-btn">&times;</button>
-        </div>
-        <form id="add-bulk-form">
-            <div class="form-group">
-                <label for="bulk-form-dorm">追加先の寮</label>
-                <select id="bulk-form-dorm" required><option value="shofu">松風寮</option><option value="meizen">明善寮</option></select>
-            </div>
-            <div id="bulk-form-entries">
-                <!-- 寮生入力フォームがここに追加されます -->
-            </div>
-            <div class="bulk-add-controls">
-                <button type="button" id="add-form-entry-btn">+ 寮生を追加</button>
-                <button type="submit" class="header-btn" style="background-color: #2ecc71;">全て登録する</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-
-<footer class="footer"> <!-- ... --> </footer>
+<footer class="footer">
+    <span>表示テーマ:</span>
+    <select id="theme-selector">
+        <option value="system">システム</option>
+        <option value="light">昼</option>
+        <option value="dark">夜</option>
+    </select>
+</footer>
 
 <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore-compat.js"></script>
@@ -293,25 +280,8 @@
         bulkFormEntries: document.getElementById('bulk-form-entries'),
     };
     
-    // ===== ↓↓↓ JavaScriptの完全版 ↓↓↓ =====
-    function listenToCollection(collectionName) {
-        if (unsubscribe) unsubscribe();
-        unsubscribe = db.collection(collectionName).onSnapshot(snapshot => {
-            allResidents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            renderTable(); 
-        }, error => console.error("データの読み込みに失敗しました:", error));
-    }
-    
-    function switchDorm(dorm) {
-        currentCollectionName = `residents_${dorm}`;
-        localStorage.setItem('currentDorm', currentCollectionName);
-        document.querySelectorAll('#dorm-selector button').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.dorm === dorm);
-        });
-        listenToCollection(currentCollectionName);
-    }
-
     function renderTable() {
+        // ... (renderTable内のロジックは変更なし)
         const searchTerm = elements.searchInput.value.toLowerCase();
         const favoriteId = localStorage.getItem(`dormAppFavoriteId_${currentCollectionName}`);
         allResidents.sort((a, b) => {
@@ -332,22 +302,44 @@
                 const isFavorited = resident.id === favoriteId;
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td class="checkbox-col"><input type="checkbox" class="resident-checkbox" data-id="${resident.id}"></td>
-                    <td class="name-cell">
-                        <span class="favorite-star ${isFavorited ? 'favorited' : ''}" onclick="toggleFavorite('${resident.id}')">★</span>
-                        <span class="room-number">${resident.roomNumber}</span>
-                        <span>${resident.name}</span>
-                    </td>
-                    <td class="furigana-col"><span class="furigana">${resident.furigana || ''}</span></td>
-                    <td class="circle-col">${resident.circle || ''}</td>
-                    <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1)">-</button><span class="count-span">${resident.luggage}</span><button onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1)">+</button></div></td>
-                    <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', -1)">-</button><span class="count-span">${resident.mail}</span><button onclick="updateCount('${resident.id}', '${resident.name}', 'mail', 1)">+</button></div></td>
-                    <td class="edit-op-cell"><button class="delete-btn" onclick="deleteResident('${resident.id}', '${resident.name}')">削除</button></td>
+                    <td class="checkbox-col"><div class="cell-content"><input type="checkbox" class="resident-checkbox" data-id="${resident.id}"></div></td>
+                    <td><div class="cell-content name-cell"><span class="favorite-star ${isFavorited ? 'favorited' : ''}">★</span><span class="room-number">${resident.roomNumber}</span><span>${resident.name}</span></div></td>
+                    <td class="furigana-col"><div class="cell-content"><span class="furigana">${resident.furigana || ''}</span></div></td>
+                    <td class="circle-col"><div class="cell-content">${resident.circle || ''}</div></td>
+                    <td><div class="count-cell"><button class="minus">-</button><span class="count-span">${resident.luggage}</span><button class="plus">+</button></div></td>
+                    <td><div class="count-cell"><button class="minus">-</button><span class="count-span">${resident.mail}</span><button class="plus">+</button></div></td>
+                    <td class="edit-op-cell"><div class="cell-content"><button class="delete-btn">削除</button></div></td>
                 `;
+                // イベントリスナーを動的に追加
+                row.querySelector('.favorite-star').addEventListener('click', () => toggleFavorite(resident.id));
+                row.querySelector('.delete-btn')?.addEventListener('click', () => deleteResident(resident.id, resident.name));
+                const countCells = row.querySelectorAll('.count-cell');
+                countCells[0].querySelector('.minus').addEventListener('click', () => updateCount(resident.id, resident.name, 'luggage', -1));
+                countCells[0].querySelector('.plus').addEventListener('click', () => updateCount(resident.id, resident.name, 'luggage', 1));
+                countCells[1].querySelector('.minus').addEventListener('click', () => updateCount(resident.id, resident.name, 'mail', -1));
+                countCells[1].querySelector('.plus').addEventListener('click', () => updateCount(resident.id, resident.name, 'mail', 1));
                 elements.tableBody.appendChild(row);
             });
         }
         updateDeleteButtonState();
+    }
+    
+    // ===== ↓↓↓ JavaScriptの完全版（これ以降の関数も全て含む）↓↓↓ =====
+    function listenToCollection(collectionName) {
+        if (unsubscribe) unsubscribe();
+        unsubscribe = db.collection(collectionName).onSnapshot(snapshot => {
+            allResidents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            renderTable(); 
+        }, error => console.error("データの読み込みに失敗しました:", error));
+    }
+    
+    function switchDorm(dorm) {
+        currentCollectionName = `residents_${dorm}`;
+        localStorage.setItem('currentDorm', currentCollectionName);
+        document.querySelectorAll('#dorm-selector button').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.dorm === dorm);
+        });
+        listenToCollection(currentCollectionName);
     }
     
     async function addLog(action, details) {
@@ -385,14 +377,14 @@
         }
     }
 
-    window.toggleFavorite = function(residentId) {
+    function toggleFavorite(residentId) {
         const favKey = `dormAppFavoriteId_${currentCollectionName}`;
         const currentFavorite = localStorage.getItem(favKey);
         localStorage.setItem(favKey, currentFavorite === residentId ? '' : residentId);
         renderTable();
     }
 
-    window.updateCount = function(residentId, residentName, type, value) {
+    function updateCount(residentId, residentName, type, value) {
         const docRef = db.collection(currentCollectionName).doc(residentId);
         const increment = firebase.firestore.FieldValue.increment(value);
         docRef.get().then(doc => {
@@ -432,13 +424,13 @@
             hideAddResidentModal();
         });
     }
-
+    
     function createBulkFormEntry() {
         const entryDiv = document.createElement('div');
         entryDiv.className = 'bulk-add-entry';
         entryDiv.innerHTML = `
             <div class="form-group"><label>部屋番号</label><input type="text" class="bulk-room"></div>
-            <div class="form-group"><label>名前</label><input type="text" class="bulk-name"></div>
+            <div class="form-group"><label>名前 (必須)</label><input type="text" class="bulk-name" required></div>
             <div class="form-group"><label>ふりがな</label><input type="text" class="bulk-furigana"></div>
             <div class="form-group"><label>サークル</label><input type="text" class="bulk-circle"></div>
         `;
@@ -488,7 +480,7 @@
         }
     }
 
-    window.deleteResident = function(residentId, residentName) {
+    function deleteResident(residentId, residentName) {
         if (confirm(`本当に「${residentName}」さんをリストから削除しますか？`)) {
             db.collection(currentCollectionName).doc(residentId).delete().then(() => {
                 addLog('寮生削除', `[${currentCollectionName}] ${residentName} を削除`);
