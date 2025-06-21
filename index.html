@@ -386,6 +386,7 @@
     let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_shofu';
     let allResidents = []; 
     let unsubscribe; 
+    let logUnsubscribe = null;   // 操作履歴のリアルタイム listener
 
     // 全ての関数をグローバルスコープに配置
     function toggleFavorite(residentId) {
@@ -509,38 +510,73 @@
         
         async function addLog(action, details) {
             try {
-                await db.collection("logs").add({ action, details, isAdmin: sessionStorage.getItem('isAdminLoggedIn') === 'true', timestamp: firebase.firestore.FieldValue.serverTimestamp() });
+                const now = new Date();
+                await db.collection("logs").add({
+                    action,
+                    details,
+                    isAdmin: sessionStorage.getItem('isAdminLoggedIn') === 'true',
+                    timestamp: firebase.firestore.Timestamp.fromDate(now)   // クライアント時刻を書き込む
+                });
             } catch (error) { console.error("ログの追加に失敗しました:", error); }
         }
-        
-        function showLogModal() {
+
+        function showLogModal(){
             elements.logModal.classList.add('active');
-            fetchLogs();
+            // 既に listener があれば一度解除
+            if(logUnsubscribe) logUnsubscribe();
+            logUnsubscribe = db.collection("logs")
+              .orderBy("timestamp", "desc")
+              .limit(50)
+              .onSnapshot(renderLogs, (e) => {
+                  console.error("logs onSnapshot error", e);
+                  document.getElementById('log-list').innerHTML = '<li>履歴の読み込みに失敗しました。</li>';
+              });
         }
 
-        function hideLogModal() {
+        function hideLogModal(){
             elements.logModal.classList.remove('active');
-        }
-
-        async function fetchLogs() {
-            const logList = document.getElementById('log-list');
-            logList.innerHTML = '<li>読み込み中...</li>';
-            try {
-                const snapshot = await db.collection("logs").orderBy("timestamp", "desc").limit(50).get();
-                if (snapshot.empty) { logList.innerHTML = '<li>履歴はありません。</li>'; return; }
-                logList.innerHTML = '';
-                snapshot.forEach(doc => {
-                    const log = doc.data();
-                    const date = log.timestamp ? log.timestamp.toDate().toLocaleString('ja-JP') : '日時不明';
-                    const adminBadge = log.isAdmin ? ' (管理者)' : '';
-                    const li = document.createElement('li');
-                    li.innerHTML = `${log.details}${adminBadge}<span class="log-time">${date}</span>`;
-                    logList.appendChild(li);
-                });
-            } catch (error) {
-                logList.innerHTML = '<li>履歴の読み込みに失敗しました。</li>';
+            if(logUnsubscribe){
+                logUnsubscribe();
+                logUnsubscribe = null;
             }
         }
+
+        function renderLogs(snapshot){
+            const logList = document.getElementById('log-list');
+            if(snapshot.empty){
+                logList.innerHTML = '<li>履歴はありません。</li>';
+                return;
+            }
+            logList.innerHTML = '';
+            snapshot.forEach(doc=>{
+                const log = doc.data();
+                const date = log.timestamp ? log.timestamp.toDate().toLocaleString('ja-JP') : '日時不明';
+                const adminBadge = log.isAdmin ? ' (管理者)' : '';
+                const li = document.createElement('li');
+                li.innerHTML = `${log.details}${adminBadge}<span class="log-time">${date}</span>`;
+                logList.appendChild(li);
+            });
+        }
+
+        // async function fetchLogs() {
+        //     const logList = document.getElementById('log-list');
+        //     logList.innerHTML = '<li>読み込み中...</li>';
+        //     try {
+        //         const snapshot = await db.collection("logs").orderBy("timestamp", "desc").limit(50).get();
+        //         if (snapshot.empty) { logList.innerHTML = '<li>履歴はありません。</li>'; return; }
+        //         logList.innerHTML = '';
+        //         snapshot.forEach(doc => {
+        //             const log = doc.data();
+        //             const date = log.timestamp ? log.timestamp.toDate().toLocaleString('ja-JP') : '日時不明';
+        //             const adminBadge = log.isAdmin ? ' (管理者)' : '';
+        //             const li = document.createElement('li');
+        //             li.innerHTML = `${log.details}${adminBadge}<span class="log-time">${date}</span>`;
+        //             logList.appendChild(li);
+        //         });
+        //     } catch (error) {
+        //         logList.innerHTML = '<li>履歴の読み込みに失敗しました。</li>';
+        //     }
+        // }
         
         function showAddResidentModal() {
             elements.addResidentForm.reset();
