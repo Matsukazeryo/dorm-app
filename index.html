@@ -512,65 +512,67 @@
             claimModal:       document.getElementById('claim-modal'),
             claimCloseBtn:    document.getElementById('claim-close-btn'),
             claimSearch:      document.getElementById('claim-search'),
-            claimList:        document.getElementById('claim-list'),
-    // ===== 本人登録モーダル用関数 =====
-    function openClaimModal(){
-        elements.claimModal.classList.add('active');
-        elements.claimSearch.value='';
-        renderClaimList('');
-        elements.claimSearch.focus();
-    }
-    function closeClaimModal(){
-        elements.claimModal.classList.remove('active');
-    }
-    function renderClaimList(keyword){
-        elements.claimList.innerHTML='';
-        const kw = (keyword || '').toLowerCase();
-        allResidents
-          .filter(r=> !r.uid)  // 未リンクのみ
-          .filter(r=>{
-              if(!kw) return true;
-              return (r.name && r.name.includes(kw)) ||
-                     (r.roomNumber && r.roomNumber.includes(kw));
-          })
-          .slice(0,50)
-          .forEach(r=>{
-              const li = document.createElement('li');
-              li.style.padding='6px 0';
-              li.style.cursor='pointer';
-              li.textContent = `${r.roomNumber || '--'}  ${r.name}`;
-              li.addEventListener('click', ()=>confirmClaim(r));
-              elements.claimList.appendChild(li);
-          });
-    }
-    function confirmClaim(resident){
-        if(!auth.currentUser){ alert('ログインが切れています'); return; }
-        if(!confirm(`「${resident.name}」さんで登録しますか？`)) return;
-        db.collection(currentCollectionName).doc(resident.id)
-          .update({ uid: auth.currentUser.uid })
-          .then(()=>{ alert('登録しました！'); closeClaimModal(); })
-          .catch(e=> alert('登録失敗: '+e.message));
-    }
-            selectAllCheckbox: document.getElementById('select-all-checkbox'),
-            modeSelectors: document.querySelectorAll('input[name="mode"]'),
-            loginLogoutBtn: document.getElementById('login-logout-btn'),
-            resetAllBtn: document.getElementById('reset-all-btn'),
-            themeSelector: document.getElementById('theme-selector'),
-            toggleFurigana: document.getElementById('toggle-furigana'),
-            toggleCircle: document.getElementById('toggle-circle'),
-            dormSelector: document.getElementById('dorm-selector'),
-            addResidentModal: document.getElementById('add-resident-modal'),
-            addModalCloseBtn: document.getElementById('add-modal-close-btn'),
-            addResidentForm: document.getElementById('add-resident-form'),
-            addBulkModal: document.getElementById('add-bulk-modal'),
-            addBulkModalCloseBtn: document.getElementById('add-bulk-modal-close-btn'),
-            addBulkForm: document.getElementById('add-bulk-form'),
-            addFormEntryBtn: document.getElementById('add-form-entry-btn'),
-            bulkFormEntries: document.getElementById('bulk-form-entries'),
-            logViewBtn: document.getElementById('log-view-btn'),
-            logModal: document.getElementById('log-modal'),
-            modalCloseBtn: document.getElementById('modal-close-btn'),
-        };
+            claimList:        document.getElementById('claim-list')
+        };   // ← elements object 終了
+
+        // ===== 本人登録モーダル用関数 =====
+        function openClaimModal(){
+            elements.claimModal.classList.add('active');
+            elements.claimSearch.value='';
+            renderClaimList('');
+            elements.claimSearch.focus();
+        }
+        function closeClaimModal(){
+            elements.claimModal.classList.remove('active');
+        }
+        function renderClaimList(keyword){
+            elements.claimList.innerHTML='';
+            const kw = (keyword || '').toLowerCase();
+            allResidents
+              .filter(r=> !r.uid)  // 未リンクのみ
+              .filter(r=>{
+                  if(!kw) return true;
+                  return (r.name && r.name.includes(kw)) ||
+                         (r.roomNumber && r.roomNumber.includes(kw));
+              })
+              .slice(0,50)
+              .forEach(r=>{
+                  const li = document.createElement('li');
+                  li.style.padding='6px 0';
+                  li.style.cursor='pointer';
+                  li.textContent = `${r.roomNumber || '--'}  ${r.name}`;
+                  li.addEventListener('click', ()=>confirmClaim(r));
+                  elements.claimList.appendChild(li);
+              });
+        }
+        function confirmClaim(resident){
+            if(!auth.currentUser){ alert('ログインが切れています'); return; }
+            if(!confirm(`「${resident.name}」さんで登録しますか？`)) return;
+            db.collection(currentCollectionName).doc(resident.id)
+              .update({ uid: auth.currentUser.uid })
+              .then(()=>{ alert('登録しました！'); closeClaimModal(); })
+              .catch(e=> alert('登録失敗: '+e.message));
+        }
+
+        const selectAllCheckbox = document.getElementById('select-all-checkbox');
+        elements.modeSelectors = document.querySelectorAll('input[name="mode"]');
+        elements.loginLogoutBtn = document.getElementById('login-logout-btn');
+        elements.resetAllBtn = document.getElementById('reset-all-btn');
+        elements.themeSelector = document.getElementById('theme-selector');
+        elements.toggleFurigana = document.getElementById('toggle-furigana');
+        elements.toggleCircle = document.getElementById('toggle-circle');
+        elements.dormSelector = document.getElementById('dorm-selector');
+        elements.addResidentModal = document.getElementById('add-resident-modal');
+        elements.addModalCloseBtn = document.getElementById('add-modal-close-btn');
+        elements.addResidentForm = document.getElementById('add-resident-form');
+        elements.addBulkModal = document.getElementById('add-bulk-modal');
+        elements.addBulkModalCloseBtn = document.getElementById('add-bulk-modal-close-btn');
+        elements.addBulkForm = document.getElementById('add-bulk-form');
+        elements.addFormEntryBtn = document.getElementById('add-form-entry-btn');
+        elements.bulkFormEntries = document.getElementById('bulk-form-entries');
+        elements.logViewBtn = document.getElementById('log-view-btn');
+        elements.logModal = document.getElementById('log-modal');
+        elements.modalCloseBtn = document.getElementById('modal-close-btn');
     
         function listenToCollection(collectionName) {
             if (unsubscribe) unsubscribe();
