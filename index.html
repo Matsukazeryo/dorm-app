@@ -538,7 +538,6 @@
                   return (r.name && r.name.includes(kw)) ||
                          (r.roomNumber && r.roomNumber.includes(kw));
               })
-              .slice(0,50)
               .forEach(r=>{
                   const li = document.createElement('li');
                   li.style.padding='6px 0';
