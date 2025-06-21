@@ -98,21 +98,21 @@
         body.resident-edit-mode th.checkbox-col,
         body.resident-edit-mode td.checkbox-col { display: table-cell; }
         
-        th { background-color: var(--mode-label-checked-bg); color: var(--mode-label-checked-text); font-weight: bold; padding: 8px 12px; }
-        .cell-content { min-height: 42px; display:flex; align-items:center; justify-content:center; padding: 8px 12px; }
-        .name-cell { justify-content: flex-start; text-align: left; font-weight: 500; }
-
+        th { background-color: var(--mode-label-checked-bg); color: var(--mode-label-checked-text); font-weight: bold; padding: 6px 10px; }
+        .cell-content { min-height: 42px; display:flex; align-items:center; justify-content:center; padding: 6px 10px; }
+        .name-cell { justify-content: flex-start; text-align: left; font-weight: 500; min-width: 180px; white-space: nowrap; }
+        .furigana-col .cell-content, .circle-col .cell-content { min-width: 100px; }
         .room-number { font-size: 0.9em; color: #7f8c8d; margin-right: 8px; min-width: 35px; text-align: right; }
         body.dark-theme .room-number { color: #bdc3c7; }
-        .favorite-star { cursor: pointer; font-size: 22px; margin-right: 10px; color: #bdc3c7; }
+        .favorite-star { cursor: pointer; font-size: 20px; margin-right: 8px; color: #bdc3c7; }
         .favorite-star.favorited { color: #f1c40f; }
-        .count-cell { gap: 10px; }
-        .count-span { min-width: 25px; font-weight: bold; font-size: 1.2em; }
+        .count-cell { gap: 8px; }
+        .count-span { min-width: 20px; font-weight: bold; font-size: 1.1em; }
         
         .count-cell button {
             background-color: transparent; border: 1.5px solid var(--mode-selector-border); color: var(--text-color);
-            width: 28px; height: 28px; padding: 0; border-radius: 50%;
-            cursor: pointer; font-size: 18px; font-weight: 600;
+            width: 26px; height: 26px; padding: 0; border-radius: 50%;
+            cursor: pointer; font-size: 16px; font-weight: 600;
             display: flex; align-items: center; justify-content: center; line-height: 1;
             visibility: hidden;
         }
@@ -201,7 +201,7 @@
         <table id="resident-table">
             <thead>
                 <tr>
-                    <th class="checkbox-col"><input type="checkbox" id="select-all-checkbox"></th>
+                    <th class="checkbox-col"><div class="cell-content"><input type="checkbox" id="select-all-checkbox"></div></th>
                     <th><div class="cell-content">名前</div></th>
                     <th class="furigana-col"><div class="cell-content">ふりがな</div></th>
                     <th class="circle-col"><div class="cell-content">サークル</div></th>
@@ -240,7 +240,7 @@
             <div class="form-group"><label for="form-name">名前 (必須)</label><input type="text" id="form-name" required></div>
             <div class="form-group"><label for="form-room">部屋番号</label><input type="text" id="form-room"></div>
             <div class="form-group"><label for="form-furigana">ふりがな</label><input type="text" id="form-furigana"></div>
-            <div class="form-group"><label for="form-circle">サークル</label><input type="text" id="form-circle"></div>
+             <div class="form-group"><label for="form-circle">サークル</label><input type="text" id="form-circle"></div>
             <div class="form-group">
                 <label>初期の荷物/郵便 (任意)</label>
                 <div style="display: flex; gap: 10px;">
@@ -264,7 +264,6 @@
                 <select id="bulk-form-dorm" required><option value="shofu">松風寮</option><option value="meizen">明善寮</option></select>
             </div>
             <div id="bulk-form-entries">
-                <!-- 寮生入力フォームがここに追加されます -->
             </div>
             <div class="bulk-add-controls">
                 <button type="button" id="add-form-entry-btn">+ 寮生を追加</button>
@@ -273,6 +272,7 @@
         </form>
     </div>
 </div>
+
 
 <footer class="footer">
     <span>表示テーマ:</span>
@@ -287,6 +287,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore-compat.js"></script>
 
 <script>
+    // ===== ↓↓↓ JavaScriptの完全版 ↓↓↓ =====
     const ADMIN_PASSWORD = "password";
     const firebaseConfig = {
       apiKey: "AIzaSyDUevNVtZEycMZ7jl9xSimUqg0PB5SbheY",
@@ -305,6 +306,32 @@
     let allResidents = []; 
     let unsubscribe; 
 
+    function toggleFavorite(residentId) {
+        const favKey = `dormAppFavoriteId_${currentCollectionName}`;
+        const currentFavorite = localStorage.getItem(favKey);
+        localStorage.setItem(favKey, currentFavorite === residentId ? '' : residentId);
+        renderTable();
+    }
+
+    function updateCount(residentId, residentName, type, value) {
+        const docRef = db.collection(currentCollectionName).doc(residentId);
+        const increment = firebase.firestore.FieldValue.increment(value);
+        docRef.get().then(doc => {
+            if (doc.exists && (doc.data()[type] > 0 || value > 0)) {
+                docRef.update({ [type]: increment });
+                addLog('個数変更', `[${currentCollectionName.split('_')[1]}] ${residentName} の${type}を ${value > 0 ? '+1' : '-1'}`);
+            }
+        });
+    }
+
+    function deleteResident(residentId, residentName) {
+        if (confirm(`本当に「${residentName}」さんをリストから削除しますか？`)) {
+            db.collection(currentCollectionName).doc(residentId).delete().then(() => {
+                addLog('寮生削除', `[${currentCollectionName.split('_')[1]}] ${residentName} を削除`);
+            });
+        }
+    }
+    
     document.addEventListener('DOMContentLoaded', () => {
         const elements = {
             tableBody: document.querySelector("#resident-table tbody"),
@@ -333,7 +360,7 @@
             bulkFormEntries: document.getElementById('bulk-form-entries'),
         };
     
-        function listenToCollection(collectionName) {
+        const listenToCollection = (collectionName) => {
             if (unsubscribe) unsubscribe();
             unsubscribe = db.collection(collectionName).onSnapshot(snapshot => {
                 allResidents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -341,7 +368,7 @@
             }, error => console.error("データの読み込みに失敗しました:", error));
         }
         
-        function switchDorm(dorm) {
+        const switchDorm = (dorm) => {
             currentCollectionName = `residents_${dorm}`;
             localStorage.setItem('currentDorm', currentCollectionName);
             document.querySelectorAll('#dorm-selector button').forEach(btn => {
@@ -350,7 +377,7 @@
             listenToCollection(currentCollectionName);
         }
 
-        function renderTable() {
+        const renderTable = () => {
             const searchTerm = elements.searchInput.value.toLowerCase();
             const favoriteId = localStorage.getItem(`dormAppFavoriteId_${currentCollectionName}`);
             allResidents.sort((a, b) => {
@@ -359,8 +386,8 @@
                 return parseInt(a.roomNumber, 10) - parseInt(b.roomNumber, 10);
             });
             const filteredResidents = allResidents.filter(r => 
-                r.name.toLowerCase().includes(searchTerm) || 
-                r.roomNumber.includes(searchTerm) ||
+                (r.name && r.name.toLowerCase().includes(searchTerm)) || 
+                (r.roomNumber && r.roomNumber.includes(searchTerm)) ||
                 (r.furigana && r.furigana.toLowerCase().includes(searchTerm))
             );
             elements.tableBody.innerHTML = ''; 
@@ -372,42 +399,35 @@
                     const row = document.createElement('tr');
                     row.innerHTML = `
                         <td class="checkbox-col"><div class="cell-content"><input type="checkbox" class="resident-checkbox" data-id="${resident.id}"></div></td>
-                        <td><div class="cell-content name-cell"><span class="favorite-star ${isFavorited ? 'favorited' : ''}">★</span><span class="room-number">${resident.roomNumber}</span><span>${resident.name}</span></div></td>
+                        <td><div class="cell-content name-cell"><span class="favorite-star ${isFavorited ? 'favorited' : ''}" onclick="toggleFavorite('${resident.id}')">★</span><span class="room-number">${resident.roomNumber}</span><span>${resident.name}</span></div></td>
                         <td class="furigana-col"><div class="cell-content"><span class="furigana">${resident.furigana || ''}</span></div></td>
                         <td class="circle-col"><div class="cell-content">${resident.circle || ''}</div></td>
-                        <td><div class="count-cell"><button class="minus">-</button><span class="count-span">${resident.luggage}</span><button class="plus">+</button></div></td>
-                        <td><div class="count-cell"><button class="minus">-</button><span class="count-span">${resident.mail}</span><button class="plus">+</button></div></td>
-                        <td class="edit-op-cell"><div class="cell-content"><button class="delete-btn">削除</button></div></td>
+                        <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1)">-</button><span class="count-span">${resident.luggage}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1)">+</button></div></td>
+                        <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', -1)">-</button><span class="count-span">${resident.mail}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', 1)">+</button></div></td>
+                        <td class="edit-op-cell"><div class="cell-content"><button class="delete-btn" onclick="deleteResident('${resident.id}', '${resident.name}')">削除</button></div></td>
                     `;
-                    row.querySelector('.favorite-star').addEventListener('click', () => toggleFavorite(resident.id));
-                    row.querySelector('.delete-btn')?.addEventListener('click', () => deleteResident(resident.id, resident.name));
-                    const countCells = row.querySelectorAll('.count-cell');
-                    countCells[0].querySelector('.minus').addEventListener('click', () => updateCount(resident.id, resident.name, 'luggage', -1));
-                    countCells[0].querySelector('.plus').addEventListener('click', () => updateCount(resident.id, resident.name, 'luggage', 1));
-                    countCells[1].querySelector('.minus').addEventListener('click', () => updateCount(resident.id, resident.name, 'mail', -1));
-                    countCells[1].querySelector('.plus').addEventListener('click', () => updateCount(resident.id, resident.name, 'mail', 1));
                     elements.tableBody.appendChild(row);
                 });
             }
             updateDeleteButtonState();
         }
         
-        async function addLog(action, details) {
+        const addLog = async (action, details) => {
             try {
                 await db.collection("logs").add({ action, details, isAdmin: sessionStorage.getItem('isAdminLoggedIn') === 'true', timestamp: firebase.firestore.FieldValue.serverTimestamp() });
             } catch (error) { console.error("ログの追加に失敗しました:", error); }
         }
         
-        function showLogModal() {
+        const showLogModal = () => {
             elements.logModal.classList.add('active');
             fetchLogs();
         }
 
-        function hideLogModal() {
+        const hideLogModal = () => {
             elements.logModal.classList.remove('active');
         }
 
-        async function fetchLogs() {
+        const fetchLogs = async () => {
             const logList = document.getElementById('log-list');
             logList.innerHTML = '<li>読み込み中...</li>';
             try {
@@ -426,36 +446,18 @@
                 logList.innerHTML = '<li>履歴の読み込みに失敗しました。</li>';
             }
         }
-
-        function toggleFavorite(residentId) {
-            const favKey = `dormAppFavoriteId_${currentCollectionName}`;
-            const currentFavorite = localStorage.getItem(favKey);
-            localStorage.setItem(favKey, currentFavorite === residentId ? '' : residentId);
-            renderTable();
-        }
-
-        function updateCount(residentId, residentName, type, value) {
-            const docRef = db.collection(currentCollectionName).doc(residentId);
-            const increment = firebase.firestore.FieldValue.increment(value);
-            docRef.get().then(doc => {
-                if (doc.exists && (doc.data()[type] > 0 || value > 0)) {
-                    docRef.update({ [type]: increment });
-                    addLog('個数変更', `[${currentCollectionName.split('_')[1]}] ${residentName} の${type}を ${value > 0 ? '+1' : '-1'}`);
-                }
-            });
-        }
-
-        function showAddResidentModal() {
+        
+        const showAddResidentModal = () => {
             elements.addResidentForm.reset();
             document.getElementById('form-dorm').value = currentCollectionName.split('_')[1];
             elements.addResidentModal.classList.add('active');
         }
         
-        function hideAddResidentModal() {
+        const hideAddResidentModal = () => {
             elements.addResidentModal.classList.remove('active');
         }
 
-        function saveNewResident(event) {
+        const saveNewResident = (event) => {
             event.preventDefault();
             const dorm = document.getElementById('form-dorm').value;
             const collection = `residents_${dorm}`;
@@ -475,7 +477,7 @@
             });
         }
         
-        function createBulkFormEntry() {
+        const createBulkFormEntry = () => {
             const entryDiv = document.createElement('div');
             entryDiv.className = 'bulk-add-entry';
             entryDiv.innerHTML = `
@@ -487,18 +489,18 @@
             return entryDiv;
         }
         
-        function showBulkAddModal() {
+        const showBulkAddModal = () => {
             elements.bulkFormEntries.innerHTML = '';
             elements.bulkFormEntries.appendChild(createBulkFormEntry());
             document.getElementById('bulk-form-dorm').value = currentCollectionName.split('_')[1];
             elements.addBulkModal.classList.add('active');
         }
         
-        function hideBulkAddModal() {
+        const hideBulkAddModal = () => {
             elements.addBulkModal.classList.remove('active');
         }
 
-        function handleBulkAddSubmit(event) {
+        const handleBulkAddSubmit = (event) => {
             event.preventDefault();
             const dorm = document.getElementById('bulk-form-dorm').value;
             const collection = `residents_${dorm}`;
@@ -529,16 +531,8 @@
                 });
             }
         }
-
-        function deleteResident(residentId, residentName) {
-            if (confirm(`本当に「${residentName}」さんをリストから削除しますか？`)) {
-                db.collection(currentCollectionName).doc(residentId).delete().then(() => {
-                    addLog('寮生削除', `[${currentCollectionName}] ${residentName} を削除`);
-                });
-            }
-        }
         
-        function deleteSelectedResidents() {
+        const deleteSelectedResidents = () => {
             const selectedCheckboxes = document.querySelectorAll('.resident-checkbox:checked');
             if (selectedCheckboxes.length === 0) return;
             if (confirm(`選択した ${selectedCheckboxes.length} 人の寮生を本当に削除しますか？`)) {
@@ -551,7 +545,7 @@
             }
         }
 
-        function resetAllCounts() {
+        const resetAllCounts = () => {
             if (confirm(`本当に${currentCollectionName === 'residents_shofu' ? '松風寮' : '明善寮'}の全ての荷物と郵便の数を0にしますか？`)) {
                 const batch = db.batch();
                 allResidents.forEach(r => batch.update(db.collection(currentCollectionName).doc(r.id), { luggage: 0, mail: 0 }));
@@ -562,17 +556,17 @@
             }
         }
         
-        function updateDeleteButtonState() {
+        const updateDeleteButtonState = () => {
             const selectedCheckboxes = document.querySelectorAll('.resident-checkbox:checked');
             elements.deleteSelectedBtn.disabled = selectedCheckboxes.length === 0;
         }
 
-        function handleLoginLogout() {
+        const handleLoginLogout = () => {
             if (sessionStorage.getItem('isAdminLoggedIn') === 'true') logout();
             else login();
         }
 
-        function login() {
+        const login = () => {
             const password = prompt('管理者パスワードを入力してください:');
             if (password === ADMIN_PASSWORD) {
                 sessionStorage.setItem('isAdminLoggedIn', 'true');
@@ -581,7 +575,7 @@
             } else if (password) alert('パスワードが違います。');
         }
 
-        function logout() {
+        const logout = () => {
             sessionStorage.removeItem('isAdminLoggedIn');
             alert('ログアウトしました。');
             document.getElementById('view-mode').checked = true;
@@ -589,7 +583,7 @@
             updateLoginStatus();
         }
 
-        function updateLoginStatus() {
+        const updateLoginStatus = () => {
             const isLoggedIn = sessionStorage.getItem('isAdminLoggedIn') === 'true';
             document.body.classList.toggle('admin-logged-in', isLoggedIn);
             if (isLoggedIn) {
@@ -601,7 +595,7 @@
             }
         }
 
-        function setMode(mode) { 
+        const setMode = (mode) => { 
             document.body.className = sessionStorage.getItem('isAdminLoggedIn') === 'true' ? 'admin-logged-in' : '';
             document.body.classList.add(mode);
             const currentTheme = localStorage.getItem('theme') || 'system';
@@ -612,17 +606,17 @@
 
         const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
 
-        function applyTheme(theme) {
+        const applyTheme = (theme) => {
             if (theme === 'dark') document.body.classList.add('dark-theme');
             else document.body.classList.remove('dark-theme');
         }
 
-        function handleThemeChange(selectedTheme) {
+        const handleThemeChange = (selectedTheme) => {
             if (selectedTheme === 'system') applyTheme(prefersDark.matches ? 'dark' : 'light');
             else applyTheme(selectedTheme);
         }
 
-        function initializeTheme() {
+        const initializeTheme = () => {
             const savedTheme = localStorage.getItem('theme') || 'system';
             elements.themeSelector.value = savedTheme;
             handleThemeChange(savedTheme);
