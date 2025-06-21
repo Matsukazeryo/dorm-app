@@ -8,12 +8,23 @@
     <link rel="apple-touch-icon" sizes="180x180" href="https://placehold.co/180x180/3498db/ffffff?text=寮">
     <link rel="icon" type="image/png" sizes="32x32" href="https://placehold.co/32x32/3498db/ffffff?text=寮">
     <link rel="icon" type="image/png" sizes="16x16" href="https://placehold.co/16x16/3498db/ffffff?text=寮">
+    <!-- pop & modern font -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
+            /* --- blue palette --- */
+            --primary:   #2196f3;  /* main blue */
+            --secondary: #03a9f4;  /* lighter blue */
+            --accent:    #00bcd4;  /* cyan accent */
+            --surface:   #ffffff;
+            --shadow:    rgba(0,0,0,.12);
             --bg-color: #f4f7f9; --container-bg: #ffffff; --text-color: #333;
-            --border-color: #ddd; --header-border: #3498db; --header-text: #2c3e50;
+            --border-color: #ddd;
+            --header-border: var(--primary);
+            --header-text: #2d3436;
             --controls-bg: #ecf0f1; --mode-selector-border: #bdc3c7; --mode-label-bg: #fff;
-            --mode-label-text: #34495e; --mode-label-checked-bg: #3498db;
+            --mode-label-text: #34495e;
+            --mode-label-checked-bg: var(--primary);
             --mode-label-checked-text: white; --admin-mode-bg: #e74c3c;
         }
         body.dark-theme {
@@ -22,15 +33,18 @@
             --controls-bg: #2c3e50; --mode-selector-border: #95a5a6;
             --mode-label-bg: #7f8c8d; --mode-label-text: #ecf0f1;
         }
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
-            margin: 0; padding: 20px; background-color: var(--bg-color); color: var(--text-color);
+        body{
+            font-family:"Poppins","Noto Sans JP",sans-serif;
+            background:linear-gradient(135deg,#e3f2fd 0%,#bbdefb 100%);
         }
-        .container { max-width: 800px; margin: 0 auto; background-color: var(--container-bg); padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .container { max-width: 900px; margin: 0 auto; background-color: var(--container-bg); padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         .header-area { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 10px; flex-wrap: wrap; }
         h1 { text-align: center; color: var(--header-text); border-bottom: 2px solid var(--header-border); padding-bottom: 10px; margin: 0; flex-grow: 1; }
         .header-buttons { display: flex; gap: 8px; align-items: center; }
         .header-btn { padding: 6px 12px; font-size: 12px; font-weight: bold; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        /* 管理者以外には操作履歴ボタンを非表示 */
+        #log-view-btn{ display:none; }
+        body.admin-logged-in #log-view-btn{ display:inline-block; }
         #login-logout-btn { background-color: #3498db; }
         #login-logout-btn.logout { background-color: #e74c3c; }
 
@@ -75,7 +89,7 @@
         
         .top-controls { display: flex; align-items: center; width: 100%; gap: 15px; flex-wrap: wrap;}
         #search-input { flex-grow: 1; min-width: 150px; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 16px; background-color: var(--mode-label-bg); color: var(--text-color); }
-        .mode-selector { display: flex; border-radius: 6px; overflow: hidden; border: 1px solid var(--mode-selector-border); flex-shrink: 0; }
+        .mode-selector { display: none; border-radius: 6px; overflow: hidden; border: 1px solid var(--mode-selector-border); flex-shrink: 0; }
         .mode-selector input { display: none; }
         .mode-selector label { padding: 10px 12px; cursor: pointer; background-color: var(--mode-label-bg); color: var(--mode-label-text); transition: background-color 0.2s; border-left: 1px solid var(--mode-selector-border); white-space: nowrap; }
         .mode-selector label:first-child { border-left: none; }
@@ -106,7 +120,7 @@
         
         .table-container { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
         table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0; border: 1px solid var(--border-color); text-align: center; vertical-align: middle; }
+        th, td { padding: 0; border: none; text-align: center; vertical-align: middle; }
         
         .furigana-col, .circle-col { display: none; }
         body.show-furigana .furigana-col { display: table-cell; }
@@ -215,35 +229,176 @@
             th, td{
               padding: 0;          /* パディングをゼロに */
             }
+        }
+        /* ===== Pop Modern Theme Overrides ===== */
+        body{
+            font-family:"Poppins","Noto Sans JP",sans-serif;
+            background:linear-gradient(135deg,#e3f2fd 0%,#bbdefb 100%);
+        }
+        .container{
+            box-shadow:0 8px 20px var(--shadow);
+            border-radius:16px;
+        }
+        .header-area{
+            background:linear-gradient(90deg,var(--primary),var(--accent));
+            padding:14px 20px;
+            border-radius:12px;
+        }
+        h1{
+            border:none;
+            color:#fff;
+            font-size:1.8rem;
+        }
+        .header-btn{
+            background:var(--primary);
+            color:#fff;
+            transition:transform .15s ease,box-shadow .15s ease;
+        }
+        .header-btn:hover{
+            transform:translateY(-2px);
+            box-shadow:0 4px 10px var(--shadow);
+        }
+        .header-btn.alt{
+            background:var(--secondary);
+            color:#fff;
+        }
+        #log-view-btn{
+            background:var(--accent);
+            color:#fff;
+        }
+        .mode-selector label{
+            border:none;
+            border-radius:20px 0 0 20px;
+            padding:10px 20px;
+            background:rgba(255,255,255,.6);
+        }
+        .mode-selector label:first-child{
+            border-left:none;
+        }
+        .mode-selector input:checked+label{
+            background:var(--primary);
+            color:#fff;
+        }
+        .mode-selector input:nth-of-type(3):checked+label{
+            border-radius:0 20px 20px 0;
+        }
+        .table-container table tr:nth-child(even){
+            background-color:#fafafa;
+        }
+        .table-container table tr:hover{
+            background-color:#e3f2fd;
+            transition:background .2s;
+        }
+        .count-cell button{
+            border:none;
+            background:var(--primary);
+            color:#fff;
+            transition:transform .1s;
+            box-shadow:0 2px 5px var(--shadow);
+        }
+        .count-cell button:hover{
+            transform:scale(1.1);
+        }
+        .delete-btn{
+            background:#ff4757;
+        }
+        #reset-all-btn{
+            background:var(--secondary);
+            color:#fff;
+        }
+        #reset-all-btn:hover{
+            transform:translateY(-1px);
+            box-shadow:0 3px 8px var(--shadow);
+        }
+        .count-span{
+            text-shadow:0 1px 2px var(--shadow);
+        }
+        /* 名前セルの余白・最小幅を縮める */
+        .name-cell{
+         padding-left: 4px;   /* 左余白ちょっとだけ残す */
+          min-width: 120px;    /* ← 元が 180px なので 120px に短縮 */
+           font-size: 0.9rem;   /* 文字も気持ち小さく */
+         }
 
-            /* 名前セルの余白・最小幅を縮める */
-            .name-cell{
-             padding-left: 4px;   /* 左余白ちょっとだけ残す */
-              min-width: 120px;    /* ← 元が 180px なので 120px に短縮 */
-               font-size: 0.9rem;   /* 文字も気持ち小さく */
-             }
+         /* 部屋番号の文字サイズをさらに小さく */
+         .room-number{
+           font-size: 0.75rem;
+           margin-right: 4px;
+         }
 
-             /* 部屋番号の文字サイズをさらに小さく */
-             .room-number{
-               font-size: 0.75rem;
-               margin-right: 4px;
-             }
+         /* カウント部分もコンパクトに */
+         .count-cell{
+           gap: 4px;            /* ボタンと数字の間隔を半分に */
+         }
+         .count-span{
+           min-width: 18px;     /* 幅を少し縮める */
+           font-size: 1rem;
+         }
+         .count-cell button{
+           width: 22px;         /* ボタンを少しだけ小さく */
+           height: 22px;
+           font-size: 14px;
+         }
 
-             /* カウント部分もコンパクトに */
-             .count-cell{
-               gap: 4px;            /* ボタンと数字の間隔を半分に */
-             }
-             .count-span{
-               min-width: 18px;     /* 幅を少し縮める */
-               font-size: 1rem;
-             }
-             .count-cell button{
-               width: 22px;         /* ボタンを少しだけ小さく */
-               height: 22px;
-               font-size: 14px;
-             }
-
-            }
+        /* === Card‑style table rows & vivid header === */
+        .table-container table{
+            border-collapse:separate;
+            border-spacing:0 14px;        /* row gap */
+            width:100%;
+        }
+        /* colorful sticky header */
+        thead tr{
+            background:linear-gradient(90deg,var(--primary),var(--accent));
+            color:#fff;
+            box-shadow:0 2px 6px var(--shadow);
+        }
+        thead th{
+            border:none;
+            padding:12px 16px;
+            font-size:0.9rem;
+            letter-spacing:0.5px;
+        }
+        tbody tr{
+            background:var(--surface);
+            border-radius:12px;
+            box-shadow:0 3px 8px var(--shadow);
+            transition:transform .18s ease, box-shadow .18s ease;
+        }
+        tbody tr:hover{
+            transform:translateY(-4px);
+            box-shadow:0 6px 18px var(--shadow);
+        }
+        tbody td{
+            border:none;
+        }
+        .cell-content{
+            padding:14px 18px;            /* roomier cells */
+        }
+        /* ==== fancy iOS‑like toggle for view / count ==== */
+        .mode-switch{
+            display:flex; align-items:center; gap:10px;
+        }
+        .switch-label{
+            font-size:.9rem; color:var(--text-color); user-select:none;
+        }
+        .switch{
+            position:relative; display:inline-block; width:54px; height:28px;
+        }
+        .switch input{ opacity:0; width:0; height:0; }
+        .slider{
+            position:absolute; cursor:pointer; inset:0;
+            background:#ccc; transition:.4s; border-radius:34px;
+        }
+        .slider:before{
+            position:absolute; content:""; height:22px; width:22px;
+            left:3px; bottom:3px; background:#fff; transition:.4s; border-radius:50%;
+        }
+        .switch input:checked + .slider{
+            background:var(--primary);
+        }
+        .switch input:checked + .slider:before{
+            transform:translateX(26px);
+        }
    </style>
 </head>
 <body>
@@ -264,20 +419,25 @@
         </div>
         <div class="top-controls">
             <input type="search" id="search-input" placeholder="部屋番号, 名前, ふりがなで検索...">
-            <div class="mode-selector">
-                <input type="radio" id="view-mode" name="mode" checked>
-                <label for="view-mode">閲覧</label>
-                <input type="radio" id="count-edit-mode" name="mode">
-                <label for="count-edit-mode">個数変更</label>
-                <input type="radio" id="resident-edit-mode" name="mode">
-                <label for="resident-edit-mode" id="resident-edit-mode-label">寮生編集</label>
-            </div>
+        <div class="mode-switch">
+            <span class="switch-label">閲覧</span>
+            <label class="switch">
+                <input type="checkbox" id="count-toggle">
+                <span class="slider"></span>
+            </label>
+            <span class="switch-label">個数変更</span>
+            <!-- 既存 resident-edit 用ラジオ (hidden) -->
+            <input type="radio" id="view-mode"          name="mode" checked style="display:none;">
+            <input type="radio" id="count-edit-mode"    name="mode" style="display:none;">
+            <input type="radio" id="resident-edit-mode" name="mode">
+            <label for="resident-edit-mode" id="resident-edit-mode-label" style="margin-left:12px;">寮生編集</label>
+        </div>
         </div>
         <div class="ops-container">
              <button id="reset-all-btn">全ての荷物/郵便を０にする</button>
              <div class="bulk-ops-container">
-                <button id="add-resident-btn">新しい寮生を追加</button>
-                <button id="add-bulk-btn">寮生を一括追加</button>
+                <button id="add-resident-btn" class="alt">新しい寮生を追加</button>
+                <button id="add-bulk-btn" class="alt">寮生を一括追加</button>
                 <button id="delete-selected-btn" disabled>選択した寮生を削除</button>
             </div>
         </div>
@@ -477,6 +637,8 @@
             logViewBtn: document.getElementById('log-view-btn'),
             logModal: document.getElementById('log-modal'),
             modalCloseBtn: document.getElementById('modal-close-btn'),
+            countToggle: document.getElementById('count-toggle'),
+            residentToggle: document.getElementById('resident-toggle'),
         };
     
         function listenToCollection(collectionName) {
@@ -784,6 +946,15 @@
         });
         
         elements.modeSelectors.forEach(input => input.addEventListener('change', () => { if(input.checked) setMode(input.id); }));
+        elements.countToggle.addEventListener('change', e=>{
+            if(e.target.checked){
+                document.getElementById('count-edit-mode').checked = true;
+                setMode('count-edit-mode');
+            }else{
+                document.getElementById('view-mode').checked = true;
+                setMode('view-mode');
+            }
+        });
         elements.tableBody.addEventListener('change', e => { if (e.target.classList.contains('resident-checkbox')) updateDeleteButtonState(); });
         setMode('view-mode');
         updateLoginStatus();
