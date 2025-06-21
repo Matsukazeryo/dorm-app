@@ -399,9 +399,10 @@
         const docRef = db.collection(currentCollectionName).doc(residentId);
         const increment = firebase.firestore.FieldValue.increment(value);
         docRef.get().then(doc => {
+                const typeJa = (type === 'luggage') ? '荷物' : '郵便';
+                addLog('個数変更', `[${currentCollectionName.split('_')[1]}] ${residentName} の${typeJa}を ${value > 0 ? '+1' : '-1'}`);
             if (doc.exists && (doc.data()[type] > 0 || value > 0)) {
                 docRef.update({ [type]: increment });
-                addLog('個数変更', `[${currentCollectionName.split('_')[1]}] ${residentName} の${type}を ${value > 0 ? '+1' : '-1'}`);
             }
         });
     }
