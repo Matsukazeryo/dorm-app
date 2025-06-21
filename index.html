@@ -33,8 +33,29 @@
         .header-btn { padding: 6px 12px; font-size: 12px; font-weight: bold; color: white; border: none; border-radius: 5px; cursor: pointer; }
         #login-logout-btn { background-color: #3498db; }
         #login-logout-btn.logout { background-color: #e74c3c; }
-        #log-view-btn { background-color: #8e44ad; display: none; }
-        body.admin-logged-in #log-view-btn { display: inline-block; }
+
+        /* ==== 操作履歴モーダル ==== */
+        .modal-overlay{
+            position:fixed; inset:0;
+            background:rgba(0,0,0,.5);
+            display:none; align-items:center; justify-content:center;
+            z-index:2000;
+        }
+        .modal-overlay.active{ display:flex; }
+        .modal-content{
+            background:var(--container-bg);
+            max-width:480px; width:90%; max-height:80vh;
+            border-radius:8px; padding:20px; overflow-y:auto;
+            box-shadow:0 4px 14px rgba(0,0,0,.2);
+            color:var(--text-color);
+        }
+        .modal-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+        .modal-close-btn{
+            background:none; border:none; font-size:24px; cursor:pointer; color:var(--text-color);
+        }
+        #log-list{ list-style:none; padding:0; margin:0; }
+        #log-list li{ padding:6px 0; border-bottom:1px solid var(--border-color); font-size:.9rem; }
+        #log-list .log-time{ display:block; font-size:.75rem; color:#7f8c8d; }
         
         .controls-container {
             display: flex; flex-direction: column; gap: 15px; padding: 15px; margin: 20px 0 10px 0;
@@ -172,25 +193,14 @@
         body.resident-edit-mode .edit-op-header,
         body.resident-edit-mode .edit-op-cell { display: table-cell; }
 
-        .modal-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6);
-            display: flex; justify-content: center; align-items: center; z-index: 2000;
-            opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s;
-        }
-        .modal-overlay.active { opacity: 1; visibility: visible; }
-        .modal-content { background-color: var(--container-bg); padding: 20px; border-radius: 8px; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 20px;}
-        .modal-close-btn { font-size: 24px; cursor: pointer; border: none; background: none; color: var(--text-color); }
+        /* .modal-overlay, .modal-content, .modal-header, .modal-close-btn, #log-list: ログモーダル関連CSSは削除 */
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
         .form-group input, .form-group select, .form-group textarea { width: 95%; padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; background-color: var(--mode-label-bg); color: var(--text-color); font-family: inherit; }
         .form-group textarea { resize: vertical; min-height: 100px; }
         .form-actions { text-align: right; margin-top: 20px; }
         .form-actions button { padding: 10px 20px; }
-        #log-list { list-style: none; padding: 0; margin-top: 15px; }
-        #log-list li { padding: 8px 0; border-bottom: 1px solid var(--border-color); font-size: 14px; }
-        #log-list li:last-child { border-bottom: none; }
-        #log-list .log-time { font-size: 12px; color: #7f8c8d; display: block; }
+        /* #log-list: ログモーダル関連CSSは削除 */
         
         .bulk-add-entry { border-bottom: 1px solid var(--border-color); padding-bottom: 15px; margin-bottom: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .bulk-add-entry:last-child { border-bottom: none; }
@@ -242,8 +252,8 @@
     <div class="header-area">
         <h1>荷物管理アプリ</h1>
         <div class="header-buttons">
-            <button id="log-view-btn" class="header-btn">操作履歴</button>
             <button id="login-logout-btn" class="header-btn">管理者ログイン</button>
+            <button id="log-view-btn" class="header-btn" style="background:#8e44ad;">操作履歴</button>
         </div>
     </div>
     
@@ -299,15 +309,17 @@
     </div>
 </div>
 
+<!-- ==== 操作履歴モーダル ==== -->
 <div id="log-modal" class="modal-overlay">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>操作履歴</h2>
-            <button id="modal-close-btn" class="modal-close-btn">&times;</button>
-        </div>
-        <ul id="log-list"></ul>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>操作履歴</h2>
+      <button id="modal-close-btn" class="modal-close-btn">&times;</button>
     </div>
+    <ul id="log-list"></ul>
+  </div>
 </div>
+
 <div id="add-resident-modal" class="modal-overlay">
     <div class="modal-content">
         <div class="modal-header">
@@ -386,9 +398,20 @@
     let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_shofu';
     let allResidents = []; 
     let unsubscribe; 
-    let logUnsubscribe = null;   // 操作履歴のリアルタイム listener
+    let logUnsubscribe = null;  // 操作履歴 listener
 
     // 全ての関数をグローバルスコープに配置
+    async function addLog(action, details){
+        try{
+            await db.collection("logs").add({
+                action, details,
+                isAdmin: sessionStorage.getItem('isAdminLoggedIn')==='true',
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }catch(e){
+            console.error('addLog error',e);
+        }
+    }
     function toggleFavorite(residentId) {
         const favKey = `dormAppFavoriteId_${currentCollectionName}`;
         const currentFavorite = localStorage.getItem(favKey);
@@ -396,18 +419,28 @@
         renderTable();
     }
 
-    // 荷物/郵便の個数を ±1 する
+    // 荷物/郵便の個数を ±1 する（0 未満にならないように制御）
     function updateCount(residentId, residentName, type, value) {
-        const docRef   = db.collection(currentCollectionName).doc(residentId);
-        const increment = firebase.firestore.FieldValue.increment(value);
+        const docRef = db.collection(currentCollectionName).doc(residentId);
 
-        docRef.update({ [type]: increment })
-              .then(() => {
-                  const typeJa = (type === 'luggage') ? '荷物' : '郵便';
-                  addLog('個数変更',
-                         `[${currentCollectionName.split('_')[1]}] ${residentName} の${typeJa}を ${value > 0 ? '+1' : '-1'}`);
-              })
-              .catch((e) => console.error('updateCount error', e));
+        db.runTransaction(async (t) => {
+            const snap = await t.get(docRef);
+            if (!snap.exists) return;
+
+            const current = snap.data()[type] ?? 0;
+            let next      = current + value;
+            if (next < 0) next = 0;          // 0 未満は禁止
+
+            // 変化がなければ書き込まない
+            if (next === current) return;
+
+            t.update(docRef, { [type]: next });
+
+            // ログ（日本語）を残す
+            const typeJa = (type === 'luggage') ? '荷物' : '郵便';
+            addLog('個数変更',
+                   `[${currentCollectionName.split('_')[1]}] ${residentName} の${typeJa}を ${value > 0 ? '+1' : '-1'}`);
+        }).catch(e => console.error('updateCount transaction error', e));
     }
 
     function deleteResident(residentId, residentName) {
@@ -430,9 +463,6 @@
             loginLogoutBtn: document.getElementById('login-logout-btn'),
             resetAllBtn: document.getElementById('reset-all-btn'),
             themeSelector: document.getElementById('theme-selector'),
-            logViewBtn: document.getElementById('log-view-btn'),
-            logModal: document.getElementById('log-modal'),
-            modalCloseBtn: document.getElementById('modal-close-btn'),
             toggleFurigana: document.getElementById('toggle-furigana'),
             toggleCircle: document.getElementById('toggle-circle'),
             dormSelector: document.getElementById('dorm-selector'),
@@ -444,6 +474,9 @@
             addBulkForm: document.getElementById('add-bulk-form'),
             addFormEntryBtn: document.getElementById('add-form-entry-btn'),
             bulkFormEntries: document.getElementById('bulk-form-entries'),
+            logViewBtn: document.getElementById('log-view-btn'),
+            logModal: document.getElementById('log-modal'),
+            modalCloseBtn: document.getElementById('modal-close-btn'),
         };
     
         function listenToCollection(collectionName) {
@@ -508,56 +541,41 @@
             updateDeleteButtonState();
         }
         
-        async function addLog(action, details) {
-            try {
-                await db.collection("logs").add({
-                    action,
-                    details,
-                    isAdmin: sessionStorage.getItem('isAdminLoggedIn') === 'true',
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp() // サーバー時刻
-                });
-            } catch (error) {
-                console.error("ログの追加に失敗しました:", error);
+
+        function renderLogs(snapshot){
+            const list = document.getElementById('log-list');
+            if(snapshot.empty){
+                list.innerHTML = '<li>履歴はありません。</li>';
+                return;
             }
+            list.innerHTML = '';
+            snapshot.forEach(doc=>{
+                const d = doc.data();
+                const date = d.timestamp ? d.timestamp.toDate().toLocaleString('ja-JP') : '日時不明';
+                const admin = d.isAdmin ? ' (管理者)' : '';
+                const li = document.createElement('li');
+                li.innerHTML = `${d.details}${admin}<span class="log-time">${date}</span>`;
+                list.appendChild(li);
+            });
         }
 
         function showLogModal(){
             elements.logModal.classList.add('active');
-            // 既に listener があれば一度解除
             if(logUnsubscribe) logUnsubscribe();
-            logUnsubscribe = db.collection("logs")
-              .orderBy("timestamp", "desc")
-              .limit(50)
-              .onSnapshot(renderLogs, (e) => {
-                  console.error("logs onSnapshot error", e);
-                  document.getElementById('log-list').innerHTML = '<li>履歴の読み込みに失敗しました。</li>';
-              });
+            logUnsubscribe = db.collection('logs')
+                  .orderBy('timestamp','desc')
+                  .limit(50)
+                  .onSnapshot(renderLogs, err=>{
+                     console.error('logs listener',err);
+                     document.getElementById('log-list').innerHTML='<li>履歴の読み込みに失敗しました。</li>';
+                  });
         }
 
         function hideLogModal(){
             elements.logModal.classList.remove('active');
-            if(logUnsubscribe){
-                logUnsubscribe();
-                logUnsubscribe = null;
-            }
+            if(logUnsubscribe){ logUnsubscribe(); logUnsubscribe=null; }
         }
 
-        function renderLogs(snapshot){
-            const logList = document.getElementById('log-list');
-            if(snapshot.empty){
-                logList.innerHTML = '<li>履歴はありません。</li>';
-                return;
-            }
-            logList.innerHTML = '';
-            snapshot.forEach(doc=>{
-                const log = doc.data();
-                const date = log.timestamp ? log.timestamp.toDate().toLocaleString('ja-JP') : '日時不明';
-                const adminBadge = log.isAdmin ? ' (管理者)' : '';
-                const li = document.createElement('li');
-                li.innerHTML = `${log.details}${adminBadge}<span class="log-time">${date}</span>`;
-                logList.appendChild(li);
-            });
-        }
 
         // async function fetchLogs() {
         //     const logList = document.getElementById('log-list');
@@ -788,9 +806,6 @@
             if (savedTheme === 'system') handleThemeChange('system');
         });
         initializeTheme();
-        elements.logViewBtn.addEventListener('click', showLogModal);
-        elements.modalCloseBtn.addEventListener('click', hideLogModal);
-        elements.logModal.addEventListener('click', e => { if (e.target === elements.logModal) hideLogModal(); });
         elements.addModalCloseBtn.addEventListener('click', hideAddResidentModal);
         elements.addResidentModal.addEventListener('click', e => { if(e.target === elements.addResidentModal) hideAddResidentModal(); });
         elements.addResidentForm.addEventListener('submit', saveNewResident);
@@ -802,6 +817,9 @@
         });
         elements.toggleFurigana.addEventListener('change', e => document.body.classList.toggle('show-furigana', e.target.checked));
         elements.toggleCircle.addEventListener('change', e => document.body.classList.toggle('show-circle', e.target.checked));
+        elements.logViewBtn.addEventListener('click', showLogModal);
+        elements.modalCloseBtn.addEventListener('click', hideLogModal);
+        elements.logModal.addEventListener('click', e=>{ if(e.target===elements.logModal) hideLogModal(); });
     });
 
 // --- 削除CSSブロック: .name-stack{ ... } ---
