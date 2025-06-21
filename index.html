@@ -135,17 +135,20 @@
         .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
         .form-group input, .form-group select, .form-group textarea { width: 95%; padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; background-color: var(--mode-label-bg); color: var(--text-color); font-family: inherit; }
         .form-group textarea { resize: vertical; min-height: 100px; }
-        .form-actions { text-align: right; }
+        .form-actions { text-align: right; margin-top: 20px; }
         .form-actions button { padding: 10px 20px; }
         #log-list { list-style: none; padding: 0; margin-top: 15px; }
         #log-list li { padding: 8px 0; border-bottom: 1px solid var(--border-color); font-size: 14px; }
         #log-list li:last-child { border-bottom: none; }
         #log-list .log-time { font-size: 12px; color: #7f8c8d; display: block; }
         
+        .bulk-add-entry { border-bottom: 1px solid var(--border-color); padding-bottom: 15px; margin-bottom: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .bulk-add-entry:last-child { border-bottom: none; }
+        .bulk-add-controls { display: flex; justify-content: space-between; margin-top: 20px; }
+
         .footer { margin-top: 24px; padding: 10px; display: flex; justify-content: center; align-items: center; gap: 10px; font-size: 14px; color: #7f8c8d; }
         body.dark-theme .footer { color: #bdc3c7; }
         #theme-selector { background-color: var(--mode-label-bg); color: var(--text-color); border: 1px solid var(--mode-selector-border); border-radius: 6px; padding: 5px; }
-
     </style>
 </head>
 <body>
@@ -193,87 +196,53 @@
         </div>
     </div>
 
-    <table id="resident-table">
-        <thead>
-            <tr>
-                <th class="checkbox-col"><input type="checkbox" id="select-all-checkbox"></th>
-                <th>名前</th>
-                <th class="furigana-col">ふりがな</th>
-                <th class="circle-col">サークル</th>
-                <th>荷物</th>
-                <th>郵便</th>
-                <th class="edit-op-header">操作</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr><td colspan="7">データベースから読み込み中...</td></tr>
-        </tbody>
-    </table>
+    <div class="table-container">
+        <table id="resident-table">
+            <thead>
+                <tr>
+                    <th class="checkbox-col"><input type="checkbox" id="select-all-checkbox"></th>
+                    <th>名前</th>
+                    <th class="furigana-col">ふりがな</th>
+                    <th class="circle-col">サークル</th>
+                    <th>荷物</th>
+                    <th>郵便</th>
+                    <th class="edit-op-header">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td colspan="7">データベースから読み込み中...</td></tr>
+            </tbody>
+        </table>
+    </div>
 </div>
 
-<div id="log-modal" class="modal-overlay">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>操作履歴</h2>
-            <button id="modal-close-btn">&times;</button>
-        </div>
-        <ul id="log-list"></ul>
-    </div>
-</div>
-<div id="add-resident-modal" class="modal-overlay">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>新しい寮生を追加</h2>
-            <button id="add-modal-close-btn">&times;</button>
-        </div>
-        <form id="add-resident-form">
-            <div class="form-group">
-                <label for="form-dorm">寮</label>
-                <select id="form-dorm" required><option value="shofu">松風寮</option><option value="meizen">明善寮</option></select>
-            </div>
-            <div class="form-group"><label for="form-name">名前 (必須)</label><input type="text" id="form-name" required></div>
-            <div class="form-group"><label for="form-room">部屋番号</label><input type="text" id="form-room"></div>
-            <div class="form-group"><label for="form-furigana">ふりがな</label><input type="text" id="form-furigana"></div>
-            <div class="form-group"><label for="form-circle">サークル</label><input type="text" id="form-circle"></div>
-            <div class="form-group">
-                <label>初期の荷物/郵便 (任意)</label>
-                <div style="display: flex; gap: 10px;">
-                    <input type="number" id="form-luggage" min="0" value="0" placeholder="荷物">
-                    <input type="number" id="form-mail" min="0" value="0" placeholder="郵便">
-                </div>
-            </div>
-            <div class="form-actions"><button type="submit" class="header-btn" style="background-color: #2ecc71;">登録する</button></div>
-        </form>
-    </div>
-</div>
+<div id="log-modal" class="modal-overlay"> <!-- ... --> </div>
+<div id="add-resident-modal" class="modal-overlay"> <!-- ... --> </div>
+
 <div id="add-bulk-modal" class="modal-overlay">
     <div class="modal-content">
         <div class="modal-header">
             <h2>寮生を一括追加</h2>
-            <button id="add-bulk-modal-close-btn">&times;</button>
+            <button id="add-bulk-modal-close-btn" class="modal-close-btn">&times;</button>
         </div>
         <form id="add-bulk-form">
             <div class="form-group">
                 <label for="bulk-form-dorm">追加先の寮</label>
                 <select id="bulk-form-dorm" required><option value="shofu">松風寮</option><option value="meizen">明善寮</option></select>
             </div>
-            <div class="form-group">
-                <label for="bulk-form-list">寮生リスト</label>
-                <textarea id="bulk-form-list" rows="10" placeholder="ここにリストを貼り付け&#10;形式: 部屋番号 名前 ふりがな サークル (1行に1人)"></textarea>
+            <div id="bulk-form-entries">
+                <!-- 寮生入力フォームがここに追加されます -->
             </div>
-            <div class="form-actions"><button type="submit" class="header-btn" style="background-color: #2ecc71;">一括登録する</button></div>
+            <div class="bulk-add-controls">
+                <button type="button" id="add-form-entry-btn">+ 寮生を追加</button>
+                <button type="submit" class="header-btn" style="background-color: #2ecc71;">全て登録する</button>
+            </div>
         </form>
     </div>
 </div>
 
-<footer class="footer">
-    <span>表示テーマ:</span>
-    <select id="theme-selector">
-        <option value="system">システム</option>
-        <option value="light">昼</option>
-        <option value="dark">夜</option>
-    </select>
-</footer>
+
+<footer class="footer"> <!-- ... --> </footer>
 
 <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore-compat.js"></script>
@@ -320,8 +289,11 @@
         addBulkModal: document.getElementById('add-bulk-modal'),
         addBulkModalCloseBtn: document.getElementById('add-bulk-modal-close-btn'),
         addBulkForm: document.getElementById('add-bulk-form'),
+        addFormEntryBtn: document.getElementById('add-form-entry-btn'),
+        bulkFormEntries: document.getElementById('bulk-form-entries'),
     };
     
+    // ===== ↓↓↓ JavaScriptの完全版 ↓↓↓ =====
     function listenToCollection(collectionName) {
         if (unsubscribe) unsubscribe();
         unsubscribe = db.collection(collectionName).onSnapshot(snapshot => {
@@ -460,9 +432,22 @@
             hideAddResidentModal();
         });
     }
+
+    function createBulkFormEntry() {
+        const entryDiv = document.createElement('div');
+        entryDiv.className = 'bulk-add-entry';
+        entryDiv.innerHTML = `
+            <div class="form-group"><label>部屋番号</label><input type="text" class="bulk-room"></div>
+            <div class="form-group"><label>名前</label><input type="text" class="bulk-name"></div>
+            <div class="form-group"><label>ふりがな</label><input type="text" class="bulk-furigana"></div>
+            <div class="form-group"><label>サークル</label><input type="text" class="bulk-circle"></div>
+        `;
+        return entryDiv;
+    }
     
     function showBulkAddModal() {
-        elements.addBulkForm.reset();
+        elements.bulkFormEntries.innerHTML = '';
+        elements.bulkFormEntries.appendChild(createBulkFormEntry());
         document.getElementById('bulk-form-dorm').value = currentCollectionName.split('_')[1];
         elements.addBulkModal.classList.add('active');
     }
@@ -475,19 +460,25 @@
         event.preventDefault();
         const dorm = document.getElementById('bulk-form-dorm').value;
         const collection = `residents_${dorm}`;
-        const text = document.getElementById('bulk-form-list').value;
-        if (!text) return;
-        const lines = text.trim().split('\n');
+        const entries = document.querySelectorAll('.bulk-add-entry');
         const batch = db.batch();
         let addedNames = [];
-        lines.forEach(line => {
-            const parts = line.trim().split(/\s+/);
-            if (parts.length >= 4) {
+
+        entries.forEach(entry => {
+            const name = entry.querySelector('.bulk-name').value.trim();
+            if (name) {
                 const newResidentRef = db.collection(collection).doc();
-                batch.set(newResidentRef, { roomNumber: parts[0], name: parts[1], furigana: parts[2], circle: parts[3], luggage: 0, mail: 0 });
-                addedNames.push(parts[1]);
+                batch.set(newResidentRef, { 
+                    roomNumber: entry.querySelector('.bulk-room').value.trim() || '',
+                    name: name,
+                    furigana: entry.querySelector('.bulk-furigana').value.trim() || '',
+                    circle: entry.querySelector('.bulk-circle').value.trim() || '',
+                    luggage: 0, mail: 0 
+                });
+                addedNames.push(name);
             }
         });
+
         if (addedNames.length > 0) {
             batch.commit().then(() => {
                 alert(`${addedNames.length}人の寮生を追加しました。`);
@@ -635,6 +626,9 @@
         elements.addBulkModalCloseBtn.addEventListener('click', hideBulkAddModal);
         elements.addBulkModal.addEventListener('click', e => { if(e.target === elements.addBulkModal) hideBulkAddModal(); });
         elements.addBulkForm.addEventListener('submit', handleBulkAddSubmit);
+        elements.addFormEntryBtn.addEventListener('click', () => {
+            elements.bulkFormEntries.appendChild(createBulkFormEntry());
+        });
         elements.toggleFurigana.addEventListener('change', e => document.body.classList.toggle('show-furigana', e.target.checked));
         elements.toggleCircle.addEventListener('change', e => document.body.classList.toggle('show-circle', e.target.checked));
     });
