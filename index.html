@@ -259,6 +259,7 @@
             <button id="log-view-btn" class="header-btn" style="background:#8e44ad;">操作履歴</button>
             <button id="resident-login-btn" class="header-btn" style="background:#2ecc71;">住人ログイン</button>
             <button id="resident-logout-btn" class="header-btn" style="background:#e67e22; display:none;">ログアウト</button>
+            <button id="link-resident-btn" class="header-btn" style="background:#3498db; display:none;">本人登録</button>
         </div>
     </div>
     
@@ -314,6 +315,17 @@
     </div>
 </div>
 
+<!-- ===== 本人登録モーダル ===== -->
+<div id="claim-modal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>自分の名前を選んでください</h2>
+      <button id="claim-close-btn" class="modal-close-btn">&times;</button>
+    </div>
+    <input type="search" id="claim-search" placeholder="名前 / 部屋番号 で検索" style="width:100%;padding:8px;">
+    <ul id="claim-list" style="list-style:none;padding:0;margin:10px 0;max-height:50vh;overflow-y:auto;"></ul>
+  </div>
+</div>
 <!-- ==== 操作履歴モーダル ==== -->
 <div id="log-modal" class="modal-overlay">
   <div class="modal-content">
@@ -496,6 +508,49 @@
             deleteSelectedBtn: document.getElementById('delete-selected-btn'),
             residentLoginBtn:  document.getElementById('resident-login-btn'),
             residentLogoutBtn: document.getElementById('resident-logout-btn'),
+            linkResidentBtn:  document.getElementById('link-resident-btn'),
+            claimModal:       document.getElementById('claim-modal'),
+            claimCloseBtn:    document.getElementById('claim-close-btn'),
+            claimSearch:      document.getElementById('claim-search'),
+            claimList:        document.getElementById('claim-list'),
+    // ===== 本人登録モーダル用関数 =====
+    function openClaimModal(){
+        elements.claimModal.classList.add('active');
+        elements.claimSearch.value='';
+        renderClaimList('');
+        elements.claimSearch.focus();
+    }
+    function closeClaimModal(){
+        elements.claimModal.classList.remove('active');
+    }
+    function renderClaimList(keyword){
+        elements.claimList.innerHTML='';
+        const kw = (keyword || '').toLowerCase();
+        allResidents
+          .filter(r=> !r.uid)  // 未リンクのみ
+          .filter(r=>{
+              if(!kw) return true;
+              return (r.name && r.name.includes(kw)) ||
+                     (r.roomNumber && r.roomNumber.includes(kw));
+          })
+          .slice(0,50)
+          .forEach(r=>{
+              const li = document.createElement('li');
+              li.style.padding='6px 0';
+              li.style.cursor='pointer';
+              li.textContent = `${r.roomNumber || '--'}  ${r.name}`;
+              li.addEventListener('click', ()=>confirmClaim(r));
+              elements.claimList.appendChild(li);
+          });
+    }
+    function confirmClaim(resident){
+        if(!auth.currentUser){ alert('ログインが切れています'); return; }
+        if(!confirm(`「${resident.name}」さんで登録しますか？`)) return;
+        db.collection(currentCollectionName).doc(resident.id)
+          .update({ uid: auth.currentUser.uid })
+          .then(()=>{ alert('登録しました！'); closeClaimModal(); })
+          .catch(e=> alert('登録失敗: '+e.message));
+    }
             selectAllCheckbox: document.getElementById('select-all-checkbox'),
             modeSelectors: document.querySelectorAll('input[name="mode"]'),
             loginLogoutBtn: document.getElementById('login-logout-btn'),
@@ -871,6 +926,12 @@
         elements.logViewBtn.addEventListener('click', showLogModal);
         elements.modalCloseBtn.addEventListener('click', hideLogModal);
 
+        // ===== 本人登録モーダル リスナー =====
+        elements.linkResidentBtn.addEventListener('click', openClaimModal);
+        elements.claimCloseBtn.addEventListener('click', closeClaimModal);
+        elements.claimModal.addEventListener('click', e=>{ if(e.target===elements.claimModal) closeClaimModal(); });
+        elements.claimSearch.addEventListener('input', e=> renderClaimList(e.target.value));
+
         // ---- Undo ボタン ----
         document.getElementById('undo-btn').addEventListener('click', () => {
             if (!lastAction) return;
@@ -899,6 +960,7 @@
             const loggedIn = !!user;
             elements.residentLoginBtn.style.display  = loggedIn ? 'none' : 'inline-block';
             elements.residentLogoutBtn.style.display = loggedIn ? 'inline-block' : 'none';
+            elements.linkResidentBtn.style.display = loggedIn ? 'inline-block' : 'none';
             if (loggedIn) {
                 console.log('UID=', user.uid);
             }
