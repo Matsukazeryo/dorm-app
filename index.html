@@ -530,6 +530,17 @@
         }
         function renderClaimList(keyword){
             elements.claimList.innerHTML='';
+            // すでに本人登録済みならメッセージ表示してリストを作らない
+            if (auth.currentUser) {
+                const claimed = allResidents.find(r => r.uid === auth.currentUser.uid);
+                if (claimed) {
+                    const li = document.createElement('li');
+                    li.style.padding = '6px';
+                    li.textContent = `✅ 既に「${claimed.roomNumber || '--'} ${claimed.name}」で登録済みです`;
+                    elements.claimList.appendChild(li);
+                    return;
+                }
+            }
             const kw = (keyword || '').toLowerCase();
             allResidents
               .filter(r=> !r.uid)  // 未リンクのみ
