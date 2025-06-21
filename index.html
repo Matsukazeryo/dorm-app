@@ -106,7 +106,12 @@
         body.dark-theme .room-number { color: #bdc3c7; }
         .favorite-star { cursor: pointer; font-size: 20px; margin-right: 8px; color: #bdc3c7; }
         .favorite-star.favorited { color: #f1c40f; }
-        .count-cell { gap: 8px; }
+        .count-cell {
+            display: inline-flex;   /* 横並びにする */
+            align-items: center;    /* 縦方向を中央揃え */
+            gap: 8px;               /* ボタンと数字の間隔 */
+            flex-wrap: nowrap;
+        }
         .count-span { min-width: 20px; font-weight: bold; font-size: 1.1em; }
         
         .count-cell button {
@@ -114,6 +119,7 @@
             width: 26px; height: 26px; padding: 0; border-radius: 50%;
             cursor: pointer; font-size: 16px; font-weight: 600;
             display: flex; align-items: center; justify-content: center; line-height: 1;
+            flex-shrink: 0;
             visibility: hidden;
         }
         body.count-edit-mode .count-cell button { visibility: visible; }
@@ -287,7 +293,6 @@
 <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore-compat.js"></script>
 
 <script>
-    // ===== ↓↓↓ JavaScriptの完全版 ↓↓↓ =====
     const ADMIN_PASSWORD = "password";
     const firebaseConfig = {
       apiKey: "AIzaSyDUevNVtZEycMZ7jl9xSimUqg0PB5SbheY",
@@ -306,6 +311,7 @@
     let allResidents = []; 
     let unsubscribe; 
 
+    // 全ての関数をグローバルスコープに配置
     function toggleFavorite(residentId) {
         const favKey = `dormAppFavoriteId_${currentCollectionName}`;
         const currentFavorite = localStorage.getItem(favKey);
@@ -360,7 +366,7 @@
             bulkFormEntries: document.getElementById('bulk-form-entries'),
         };
     
-        const listenToCollection = (collectionName) => {
+        function listenToCollection(collectionName) {
             if (unsubscribe) unsubscribe();
             unsubscribe = db.collection(collectionName).onSnapshot(snapshot => {
                 allResidents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -368,7 +374,7 @@
             }, error => console.error("データの読み込みに失敗しました:", error));
         }
         
-        const switchDorm = (dorm) => {
+        function switchDorm(dorm) {
             currentCollectionName = `residents_${dorm}`;
             localStorage.setItem('currentDorm', currentCollectionName);
             document.querySelectorAll('#dorm-selector button').forEach(btn => {
@@ -377,13 +383,13 @@
             listenToCollection(currentCollectionName);
         }
 
-        const renderTable = () => {
+        window.renderTable = () => {
             const searchTerm = elements.searchInput.value.toLowerCase();
             const favoriteId = localStorage.getItem(`dormAppFavoriteId_${currentCollectionName}`);
             allResidents.sort((a, b) => {
                 if (a.id === favoriteId) return -1;
                 if (b.id === favoriteId) return 1;
-                return parseInt(a.roomNumber, 10) - parseInt(b.roomNumber, 10);
+                return (parseInt(a.roomNumber) || 0) - (parseInt(b.roomNumber) || 0);
             });
             const filteredResidents = allResidents.filter(r => 
                 (r.name && r.name.toLowerCase().includes(searchTerm)) || 
@@ -400,7 +406,7 @@
                     row.innerHTML = `
                         <td class="checkbox-col"><div class="cell-content"><input type="checkbox" class="resident-checkbox" data-id="${resident.id}"></div></td>
                         <td><div class="cell-content name-cell"><span class="favorite-star ${isFavorited ? 'favorited' : ''}" onclick="toggleFavorite('${resident.id}')">★</span><span class="room-number">${resident.roomNumber}</span><span>${resident.name}</span></div></td>
-                        <td class="furigana-col"><div class="cell-content"><span class="furigana">${resident.furigana || ''}</span></div></td>
+                        <td class="furigana-col"><div class="cell-content">${resident.furigana || ''}</div></td>
                         <td class="circle-col"><div class="cell-content">${resident.circle || ''}</div></td>
                         <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1)">-</button><span class="count-span">${resident.luggage}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1)">+</button></div></td>
                         <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', -1)">-</button><span class="count-span">${resident.mail}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', 1)">+</button></div></td>
@@ -412,22 +418,22 @@
             updateDeleteButtonState();
         }
         
-        const addLog = async (action, details) => {
+        async function addLog(action, details) {
             try {
                 await db.collection("logs").add({ action, details, isAdmin: sessionStorage.getItem('isAdminLoggedIn') === 'true', timestamp: firebase.firestore.FieldValue.serverTimestamp() });
             } catch (error) { console.error("ログの追加に失敗しました:", error); }
         }
         
-        const showLogModal = () => {
+        function showLogModal() {
             elements.logModal.classList.add('active');
             fetchLogs();
         }
 
-        const hideLogModal = () => {
+        function hideLogModal() {
             elements.logModal.classList.remove('active');
         }
 
-        const fetchLogs = async () => {
+        async function fetchLogs() {
             const logList = document.getElementById('log-list');
             logList.innerHTML = '<li>読み込み中...</li>';
             try {
@@ -447,17 +453,17 @@
             }
         }
         
-        const showAddResidentModal = () => {
+        function showAddResidentModal() {
             elements.addResidentForm.reset();
             document.getElementById('form-dorm').value = currentCollectionName.split('_')[1];
             elements.addResidentModal.classList.add('active');
         }
         
-        const hideAddResidentModal = () => {
+        function hideAddResidentModal() {
             elements.addResidentModal.classList.remove('active');
         }
 
-        const saveNewResident = (event) => {
+        function saveNewResident(event) {
             event.preventDefault();
             const dorm = document.getElementById('form-dorm').value;
             const collection = `residents_${dorm}`;
@@ -477,7 +483,7 @@
             });
         }
         
-        const createBulkFormEntry = () => {
+        function createBulkFormEntry() {
             const entryDiv = document.createElement('div');
             entryDiv.className = 'bulk-add-entry';
             entryDiv.innerHTML = `
@@ -489,18 +495,18 @@
             return entryDiv;
         }
         
-        const showBulkAddModal = () => {
+        function showBulkAddModal() {
             elements.bulkFormEntries.innerHTML = '';
             elements.bulkFormEntries.appendChild(createBulkFormEntry());
             document.getElementById('bulk-form-dorm').value = currentCollectionName.split('_')[1];
             elements.addBulkModal.classList.add('active');
         }
         
-        const hideBulkAddModal = () => {
+        function hideBulkAddModal() {
             elements.addBulkModal.classList.remove('active');
         }
 
-        const handleBulkAddSubmit = (event) => {
+        function handleBulkAddSubmit(event) {
             event.preventDefault();
             const dorm = document.getElementById('bulk-form-dorm').value;
             const collection = `residents_${dorm}`;
@@ -532,7 +538,7 @@
             }
         }
         
-        const deleteSelectedResidents = () => {
+        function deleteSelectedResidents() {
             const selectedCheckboxes = document.querySelectorAll('.resident-checkbox:checked');
             if (selectedCheckboxes.length === 0) return;
             if (confirm(`選択した ${selectedCheckboxes.length} 人の寮生を本当に削除しますか？`)) {
@@ -545,7 +551,7 @@
             }
         }
 
-        const resetAllCounts = () => {
+        function resetAllCounts() {
             if (confirm(`本当に${currentCollectionName === 'residents_shofu' ? '松風寮' : '明善寮'}の全ての荷物と郵便の数を0にしますか？`)) {
                 const batch = db.batch();
                 allResidents.forEach(r => batch.update(db.collection(currentCollectionName).doc(r.id), { luggage: 0, mail: 0 }));
@@ -556,17 +562,17 @@
             }
         }
         
-        const updateDeleteButtonState = () => {
+        function updateDeleteButtonState() {
             const selectedCheckboxes = document.querySelectorAll('.resident-checkbox:checked');
             elements.deleteSelectedBtn.disabled = selectedCheckboxes.length === 0;
         }
 
-        const handleLoginLogout = () => {
+        function handleLoginLogout() {
             if (sessionStorage.getItem('isAdminLoggedIn') === 'true') logout();
             else login();
         }
 
-        const login = () => {
+        function login() {
             const password = prompt('管理者パスワードを入力してください:');
             if (password === ADMIN_PASSWORD) {
                 sessionStorage.setItem('isAdminLoggedIn', 'true');
@@ -575,7 +581,7 @@
             } else if (password) alert('パスワードが違います。');
         }
 
-        const logout = () => {
+        function logout() {
             sessionStorage.removeItem('isAdminLoggedIn');
             alert('ログアウトしました。');
             document.getElementById('view-mode').checked = true;
@@ -583,7 +589,7 @@
             updateLoginStatus();
         }
 
-        const updateLoginStatus = () => {
+        function updateLoginStatus() {
             const isLoggedIn = sessionStorage.getItem('isAdminLoggedIn') === 'true';
             document.body.classList.toggle('admin-logged-in', isLoggedIn);
             if (isLoggedIn) {
@@ -595,7 +601,7 @@
             }
         }
 
-        const setMode = (mode) => { 
+        function setMode(mode) { 
             document.body.className = sessionStorage.getItem('isAdminLoggedIn') === 'true' ? 'admin-logged-in' : '';
             document.body.classList.add(mode);
             const currentTheme = localStorage.getItem('theme') || 'system';
@@ -606,17 +612,17 @@
 
         const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
 
-        const applyTheme = (theme) => {
+        function applyTheme(theme) {
             if (theme === 'dark') document.body.classList.add('dark-theme');
             else document.body.classList.remove('dark-theme');
         }
 
-        const handleThemeChange = (selectedTheme) => {
+        function handleThemeChange(selectedTheme) {
             if (selectedTheme === 'system') applyTheme(prefersDark.matches ? 'dark' : 'light');
             else applyTheme(selectedTheme);
         }
 
-        const initializeTheme = () => {
+        function initializeTheme() {
             const savedTheme = localStorage.getItem('theme') || 'system';
             elements.themeSelector.value = savedTheme;
             handleThemeChange(savedTheme);
