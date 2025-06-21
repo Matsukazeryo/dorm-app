@@ -323,6 +323,10 @@
       <button id="claim-close-btn" class="modal-close-btn">&times;</button>
     </div>
     <input type="search" id="claim-search" placeholder="名前 / 部屋番号 で検索" style="width:100%;padding:8px;">
+    <button id="claim-unlink-btn" class="header-btn"
+            style="margin-top:8px;background:#e67e22;display:none;width:100%;">
+      登録解除
+    </button>
     <ul id="claim-list" style="list-style:none;padding:0;margin:10px 0;max-height:50vh;overflow-y:auto;"></ul>
   </div>
 </div>
@@ -514,8 +518,9 @@
             claimModal:       document.getElementById('claim-modal'),
             claimCloseBtn:    document.getElementById('claim-close-btn'),
             claimSearch:      document.getElementById('claim-search'),
-            claimList:        document.getElementById('claim-list')
-            ,selectAllCheckbox: document.getElementById('select-all-checkbox')
+            claimList:        document.getElementById('claim-list'),
+            claimUnlinkBtn:   document.getElementById('claim-unlink-btn'),
+            selectAllCheckbox: document.getElementById('select-all-checkbox')
         };   // ← elements object 終了
 
         // ===== 本人登録モーダル用関数 =====
@@ -529,17 +534,20 @@
             elements.claimModal.classList.remove('active');
         }
         function renderClaimList(keyword){
-            elements.claimList.innerHTML='';
-            // すでに本人登録済みならメッセージ表示してリストを作らない
+            let claimed = null;
             if (auth.currentUser) {
-                const claimed = allResidents.find(r => r.uid === auth.currentUser.uid);
-                if (claimed) {
-                    const li = document.createElement('li');
-                    li.style.padding = '6px';
-                    li.textContent = `✅ 既に「${claimed.roomNumber || '--'} ${claimed.name}」で登録済みです`;
-                    elements.claimList.appendChild(li);
-                    return;
-                }
+                claimed = allResidents.find(r => r.uid === auth.currentUser.uid);
+            }
+            // 解除ボタン制御
+            elements.claimUnlinkBtn.style.display = claimed ? 'inline-block' : 'none';
+
+            elements.claimList.innerHTML='';
+
+            if (claimed){
+                const liMsg = document.createElement('li');
+                liMsg.style.padding='6px';
+                liMsg.textContent = `✅ 現在「${claimed.roomNumber || '--'} ${claimed.name}」で登録済みです`;
+                elements.claimList.appendChild(liMsg);
             }
             const kw = (keyword || '').toLowerCase();
             allResidents
@@ -565,6 +573,17 @@
               .update({ uid: auth.currentUser.uid })
               .then(()=>{ alert('登録しました！'); closeClaimModal(); })
               .catch(e=> alert('登録失敗: '+e.message));
+        }
+
+        function unlinkClaim(){
+            if(!auth.currentUser){ alert('ログインが切れています'); return; }
+            const claimed = allResidents.find(r => r.uid === auth.currentUser.uid);
+            if(!claimed){ return; }
+            if(!confirm(`「${claimed.name}」さんの登録を解除しますか？`)) return;
+            db.collection(currentCollectionName).doc(claimed.id)
+              .update({ uid: firebase.firestore.FieldValue.delete() })
+              .then(()=>{ alert('登録を解除しました'); renderClaimList(elements.claimSearch.value); })
+              .catch(e => alert('解除失敗: '+e.message));
         }
 
         elements.resetAllBtn = document.getElementById('reset-all-btn');
@@ -943,6 +962,7 @@
         elements.claimCloseBtn.addEventListener('click', closeClaimModal);
         elements.claimModal.addEventListener('click', e=>{ if(e.target===elements.claimModal) closeClaimModal(); });
         elements.claimSearch.addEventListener('input', e=> renderClaimList(e.target.value));
+        elements.claimUnlinkBtn.addEventListener('click', unlinkClaim);
 
         // ---- Undo ボタン ----
         document.getElementById('undo-btn').addEventListener('click', () => {
