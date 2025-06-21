@@ -130,10 +130,11 @@
         .modal-overlay.active { opacity: 1; visibility: visible; }
         .modal-content { background-color: var(--container-bg); padding: 20px; border-radius: 8px; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
         .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 20px;}
-        #modal-close-btn, #add-modal-close-btn { font-size: 24px; cursor: pointer; border: none; background: none; color: var(--text-color); }
+        #modal-close-btn, #add-modal-close-btn, #add-bulk-modal-close-btn { font-size: 24px; cursor: pointer; border: none; background: none; color: var(--text-color); }
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
-        .form-group input, .form-group select { width: 95%; padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; background-color: var(--mode-label-bg); color: var(--text-color); }
+        .form-group input, .form-group select, .form-group textarea { width: 95%; padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; background-color: var(--mode-label-bg); color: var(--text-color); font-family: inherit; }
+        .form-group textarea { resize: vertical; min-height: 100px; }
         .form-actions { text-align: right; }
         .form-actions button { padding: 10px 20px; }
         #log-list { list-style: none; padding: 0; margin-top: 15px; }
@@ -210,8 +211,15 @@
     </table>
 </div>
 
-<div id="log-modal" class="modal-overlay"> <!-- ... --> </div>
-
+<div id="log-modal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>操作履歴</h2>
+            <button id="modal-close-btn">&times;</button>
+        </div>
+        <ul id="log-list"></ul>
+    </div>
+</div>
 <div id="add-resident-modal" class="modal-overlay">
     <div class="modal-content">
         <div class="modal-header">
@@ -221,27 +229,12 @@
         <form id="add-resident-form">
             <div class="form-group">
                 <label for="form-dorm">寮</label>
-                <select id="form-dorm" required>
-                    <option value="shofu">松風寮</option>
-                    <option value="meizen">明善寮</option>
-                </select>
+                <select id="form-dorm" required><option value="shofu">松風寮</option><option value="meizen">明善寮</option></select>
             </div>
-            <div class="form-group">
-                <label for="form-name">名前 (必須)</label>
-                <input type="text" id="form-name" required>
-            </div>
-            <div class="form-group">
-                <label for="form-room">部屋番号</label>
-                <input type="text" id="form-room">
-            </div>
-            <div class="form-group">
-                <label for="form-furigana">ふりがな</label>
-                <input type="text" id="form-furigana">
-            </div>
-             <div class="form-group">
-                <label for="form-circle">サークル</label>
-                <input type="text" id="form-circle">
-            </div>
+            <div class="form-group"><label for="form-name">名前 (必須)</label><input type="text" id="form-name" required></div>
+            <div class="form-group"><label for="form-room">部屋番号</label><input type="text" id="form-room"></div>
+            <div class="form-group"><label for="form-furigana">ふりがな</label><input type="text" id="form-furigana"></div>
+            <div class="form-group"><label for="form-circle">サークル</label><input type="text" id="form-circle"></div>
             <div class="form-group">
                 <label>初期の荷物/郵便 (任意)</label>
                 <div style="display: flex; gap: 10px;">
@@ -249,14 +242,38 @@
                     <input type="number" id="form-mail" min="0" value="0" placeholder="郵便">
                 </div>
             </div>
-            <div class="form-actions">
-                <button type="submit" class="header-btn" style="background-color: #2ecc71;">登録する</button>
+            <div class="form-actions"><button type="submit" class="header-btn" style="background-color: #2ecc71;">登録する</button></div>
+        </form>
+    </div>
+</div>
+<div id="add-bulk-modal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>寮生を一括追加</h2>
+            <button id="add-bulk-modal-close-btn">&times;</button>
+        </div>
+        <form id="add-bulk-form">
+            <div class="form-group">
+                <label for="bulk-form-dorm">追加先の寮</label>
+                <select id="bulk-form-dorm" required><option value="shofu">松風寮</option><option value="meizen">明善寮</option></select>
             </div>
+            <div class="form-group">
+                <label for="bulk-form-list">寮生リスト</label>
+                <textarea id="bulk-form-list" rows="10" placeholder="ここにリストを貼り付け&#10;形式: 部屋番号 名前 ふりがな サークル (1行に1人)"></textarea>
+            </div>
+            <div class="form-actions"><button type="submit" class="header-btn" style="background-color: #2ecc71;">一括登録する</button></div>
         </form>
     </div>
 </div>
 
-<footer class="footer"> <!-- ... --> </footer>
+<footer class="footer">
+    <span>表示テーマ:</span>
+    <select id="theme-selector">
+        <option value="system">システム</option>
+        <option value="light">昼</option>
+        <option value="dark">夜</option>
+    </select>
+</footer>
 
 <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore-compat.js"></script>
@@ -300,8 +317,11 @@
         addResidentModal: document.getElementById('add-resident-modal'),
         addModalCloseBtn: document.getElementById('add-modal-close-btn'),
         addResidentForm: document.getElementById('add-resident-form'),
+        addBulkModal: document.getElementById('add-bulk-modal'),
+        addBulkModalCloseBtn: document.getElementById('add-bulk-modal-close-btn'),
+        addBulkForm: document.getElementById('add-bulk-form'),
     };
-
+    
     function listenToCollection(collectionName) {
         if (unsubscribe) unsubscribe();
         unsubscribe = db.collection(collectionName).onSnapshot(snapshot => {
@@ -322,21 +342,17 @@
     function renderTable() {
         const searchTerm = elements.searchInput.value.toLowerCase();
         const favoriteId = localStorage.getItem(`dormAppFavoriteId_${currentCollectionName}`);
-
         allResidents.sort((a, b) => {
             if (a.id === favoriteId) return -1;
             if (b.id === favoriteId) return 1;
             return parseInt(a.roomNumber, 10) - parseInt(b.roomNumber, 10);
         });
-
         const filteredResidents = allResidents.filter(r => 
             r.name.toLowerCase().includes(searchTerm) || 
             r.roomNumber.includes(searchTerm) ||
             (r.furigana && r.furigana.toLowerCase().includes(searchTerm))
         );
-
         elements.tableBody.innerHTML = ''; 
-
         if (filteredResidents.length === 0) {
             elements.tableBody.innerHTML = '<tr><td colspan="7">該当する寮生が見つかりません。</td></tr>';
         } else {
@@ -362,7 +378,6 @@
         updateDeleteButtonState();
     }
     
-    // ===== ↓↓↓ 省略されていた関数を全て復元 ↓↓↓ =====
     async function addLog(action, details) {
         try {
             await db.collection("logs").add({ action, details, isAdmin: sessionStorage.getItem('isAdminLoggedIn') === 'true', timestamp: firebase.firestore.FieldValue.serverTimestamp() });
@@ -398,29 +413,27 @@
         }
     }
 
-    function toggleFavorite(residentId) {
+    window.toggleFavorite = function(residentId) {
         const favKey = `dormAppFavoriteId_${currentCollectionName}`;
         const currentFavorite = localStorage.getItem(favKey);
         localStorage.setItem(favKey, currentFavorite === residentId ? '' : residentId);
         renderTable();
     }
 
-    function updateCount(residentId, residentName, type, value) {
+    window.updateCount = function(residentId, residentName, type, value) {
         const docRef = db.collection(currentCollectionName).doc(residentId);
         const increment = firebase.firestore.FieldValue.increment(value);
         docRef.get().then(doc => {
             if (doc.exists && (doc.data()[type] > 0 || value > 0)) {
                 docRef.update({ [type]: increment });
-                const actionType = type === 'luggage' ? '荷物' : '郵便';
-                addLog('個数変更', `[${currentCollectionName}] ${residentName} の${actionType}を ${value > 0 ? '+1' : '-1'}`);
+                addLog('個数変更', `[${currentCollectionName.split('_')[1]}] ${residentName} の${type}を ${value > 0 ? '+1' : '-1'}`);
             }
         });
     }
 
     function showAddResidentModal() {
         elements.addResidentForm.reset();
-        const currentDorm = currentCollectionName.split('_')[1];
-        document.getElementById('form-dorm').value = currentDorm;
+        document.getElementById('form-dorm').value = currentCollectionName.split('_')[1];
         elements.addResidentModal.classList.add('active');
     }
     
@@ -440,21 +453,29 @@
             luggage: parseInt(document.getElementById('form-luggage').value) || 0,
             mail: parseInt(document.getElementById('form-mail').value) || 0,
         };
-
-        if (!newResident.name) {
-            alert('名前は必須です。');
-            return;
-        }
-
+        if (!newResident.name) { alert('名前は必須です。'); return; }
         db.collection(collection).add(newResident).then(() => {
             alert(`${newResident.name} さんを登録しました。`);
-            addLog('寮生追加', `[${collection}] ${newResident.name} を追加`);
+            addLog('寮生追加', `[${dorm}] ${newResident.name} を追加`);
             hideAddResidentModal();
         });
     }
+    
+    function showBulkAddModal() {
+        elements.addBulkForm.reset();
+        document.getElementById('bulk-form-dorm').value = currentCollectionName.split('_')[1];
+        elements.addBulkModal.classList.add('active');
+    }
+    
+    function hideBulkAddModal() {
+        elements.addBulkModal.classList.remove('active');
+    }
 
-    function addResidentsInBulk() {
-        const text = prompt("追加する寮生のリストを貼り付けてください。\n形式：部屋番号 名前 ふりがな サークル (1行に1人)");
+    function handleBulkAddSubmit(event) {
+        event.preventDefault();
+        const dorm = document.getElementById('bulk-form-dorm').value;
+        const collection = `residents_${dorm}`;
+        const text = document.getElementById('bulk-form-list').value;
         if (!text) return;
         const lines = text.trim().split('\n');
         const batch = db.batch();
@@ -462,39 +483,37 @@
         lines.forEach(line => {
             const parts = line.trim().split(/\s+/);
             if (parts.length >= 4) {
-                const newResidentRef = db.collection(currentCollectionName).doc();
-                batch.set(newResidentRef, { 
-                    roomNumber: parts[0], name: parts[1], furigana: parts[2], circle: parts[3],
-                    luggage: 0, mail: 0 
-                });
+                const newResidentRef = db.collection(collection).doc();
+                batch.set(newResidentRef, { roomNumber: parts[0], name: parts[1], furigana: parts[2], circle: parts[3], luggage: 0, mail: 0 });
                 addedNames.push(parts[1]);
             }
         });
         if (addedNames.length > 0) {
             batch.commit().then(() => {
                 alert(`${addedNames.length}人の寮生を追加しました。`);
-                addLog('寮生一括追加', `[${currentCollectionName}] ${addedNames.join(', ')} を追加`);
+                addLog('寮生一括追加', `[${dorm}] ${addedNames.join(', ')} を追加`);
+                hideBulkAddModal();
             });
         }
     }
 
+    window.deleteResident = function(residentId, residentName) {
+        if (confirm(`本当に「${residentName}」さんをリストから削除しますか？`)) {
+            db.collection(currentCollectionName).doc(residentId).delete().then(() => {
+                addLog('寮生削除', `[${currentCollectionName}] ${residentName} を削除`);
+            });
+        }
+    }
+    
     function deleteSelectedResidents() {
         const selectedCheckboxes = document.querySelectorAll('.resident-checkbox:checked');
         if (selectedCheckboxes.length === 0) return;
         if (confirm(`選択した ${selectedCheckboxes.length} 人の寮生を本当に削除しますか？`)) {
             const batch = db.batch();
-            let promises = selectedCheckboxes.forEach(checkbox => batch.delete(db.collection(currentCollectionName).doc(checkbox.dataset.id)));
+            selectedCheckboxes.forEach(checkbox => batch.delete(db.collection(currentCollectionName).doc(checkbox.dataset.id)));
             batch.commit().then(() => {
                 alert(`${selectedCheckboxes.length}人の寮生を削除しました。`);
                 addLog('寮生一括削除', `[${currentCollectionName}] ${selectedCheckboxes.length}人を削除`);
-            });
-        }
-    }
-
-    function deleteResident(residentId, residentName) {
-        if (confirm(`本当に「${residentName}」さんをリストから削除しますか？`)) {
-            db.collection(currentCollectionName).doc(residentId).delete().then(() => {
-                addLog('寮生削除', `[${currentCollectionName}] ${residentName} を削除`);
             });
         }
     }
@@ -575,7 +594,7 @@
         elements.themeSelector.value = savedTheme;
         handleThemeChange(savedTheme);
     }
-
+    
     document.addEventListener('DOMContentLoaded', () => {
         const savedDorm = localStorage.getItem('currentDorm') ? (localStorage.getItem('currentDorm').split('_')[1]) : 'shofu';
         switchDorm(savedDorm);
@@ -590,7 +609,7 @@
         updateLoginStatus();
         elements.searchInput.addEventListener('input', renderTable);
         elements.addResidentBtn.addEventListener('click', showAddResidentModal);
-        elements.addBulkBtn.addEventListener('click', addResidentsInBulk);
+        elements.addBulkBtn.addEventListener('click', showBulkAddModal);
         elements.deleteSelectedBtn.addEventListener('click', deleteSelectedResidents);
         elements.resetAllBtn.addEventListener('click', resetAllCounts);
         elements.selectAllCheckbox.addEventListener('change', e => {
@@ -613,6 +632,9 @@
         elements.addModalCloseBtn.addEventListener('click', hideAddResidentModal);
         elements.addResidentModal.addEventListener('click', e => { if(e.target === elements.addResidentModal) hideAddResidentModal(); });
         elements.addResidentForm.addEventListener('submit', saveNewResident);
+        elements.addBulkModalCloseBtn.addEventListener('click', hideBulkAddModal);
+        elements.addBulkModal.addEventListener('click', e => { if(e.target === elements.addBulkModal) hideBulkAddModal(); });
+        elements.addBulkForm.addEventListener('submit', handleBulkAddSubmit);
         elements.toggleFurigana.addEventListener('change', e => document.body.classList.toggle('show-furigana', e.target.checked));
         elements.toggleCircle.addEventListener('change', e => document.body.classList.toggle('show-circle', e.target.checked));
     });
