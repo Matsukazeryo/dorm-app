@@ -106,6 +106,36 @@
         body.dark-theme .room-number { color: #bdc3c7; }
         .favorite-star { cursor: pointer; font-size: 20px; margin-right: 8px; color: #bdc3c7; }
         .favorite-star.favorited { color: #f1c40f; }
+        /* --- 縦に重ねるふりがな --- */
+        .name-stack{
+            display:inline-flex;
+            flex-direction:column;  /* 上:ふりがな, 下:漢字 */
+            line-height:1;
+        }
+        .furigana-text{
+            display:none;
+            font-size:0.75em;
+            color:#7f8c8d;
+        }
+        /* --- サークルを名前横に 1 文字バッジ表示 --- */
+        .circle-badge{
+            display:none;
+          font-size:0.75em;
+          color:#16a085;
+         margin-left:4px;
+        }
+        body.dark-theme .circle-badge{
+          color:#1abc9c;
+        }
+        body.show-circle .circle-badge{
+           display:inline;
+        }
+        body.dark-theme .furigana-text{
+            color:#bdc3c7;
+        }
+        body.show-furigana .furigana-text{
+            display:block;
+        }
         .count-cell {
             display: inline-flex;   /* 横並びにする */
             align-items: center;    /* 縦方向を中央揃え */
@@ -244,15 +274,13 @@
                 <tr>
                     <th class="checkbox-col"><div class="cell-content"><input type="checkbox" id="select-all-checkbox"></div></th>
                     <th><div class="cell-content">名前</div></th>
-                    <th class="furigana-col"><div class="cell-content">ふりがな</div></th>
-                    <th class="circle-col"><div class="cell-content">サークル</div></th>
                     <th><div class="cell-content">荷物</div></th>
                     <th><div class="cell-content">郵便</div></th>
                     <th class="edit-op-header"><div class="cell-content">操作</div></th>
                 </tr>
             </thead>
             <tbody>
-                <tr><td colspan="7">データベースから読み込み中...</td></tr>
+                <tr><td colspan="5">データベースから読み込み中...</td></tr>
             </tbody>
         </table>
     </div>
@@ -433,20 +461,28 @@
             );
             elements.tableBody.innerHTML = ''; 
             if (filteredResidents.length === 0) {
-                elements.tableBody.innerHTML = '<tr><td colspan="7">該当する寮生が見つかりません。</td></tr>';
+                elements.tableBody.innerHTML = '<tr><td colspan="5">該当する寮生が見つかりません。</td></tr>';
             } else {
                 filteredResidents.forEach(resident => {
                     const isFavorited = resident.id === favoriteId;
                     const row = document.createElement('tr');
                     row.innerHTML = `
-                        <td class="checkbox-col"><div class="cell-content"><input type="checkbox" class="resident-checkbox" data-id="${resident.id}"></div></td>
-                        <td><div class="cell-content name-cell"><span class="favorite-star ${isFavorited ? 'favorited' : ''}" onclick="toggleFavorite('${resident.id}')">★</span><span class="room-number">${resident.roomNumber}</span><span>${resident.name}</span></div></td>
-                        <td class="furigana-col"><div class="cell-content">${resident.furigana || ''}</div></td>
-                        <td class="circle-col"><div class="cell-content">${resident.circle || ''}</div></td>
-                        <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1)">-</button><span class="count-span">${resident.luggage}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1)">+</button></div></td>
-                        <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', -1)">-</button><span class="count-span">${resident.mail}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', 1)">+</button></div></td>
-                        <td class="edit-op-cell"><div class="cell-content"><button class="delete-btn" onclick="deleteResident('${resident.id}', '${resident.name}')">削除</button></div></td>
-                    `;
+      <td class="checkbox-col"><div class="cell-content"><input type="checkbox" class="resident-checkbox" data-id="${resident.id}"></div></td>
+      <td>
+        <div class="cell-content name-cell">
+          <span class="favorite-star ${isFavorited ? 'favorited' : ''}" onclick="toggleFavorite('${resident.id}')">★</span>
+          <span class="room-number">${resident.roomNumber}</span>
+          <span class="name-stack">
+            <span class="furigana-text">${resident.furigana || ''}</span>
+            <span class="kanji-name">${resident.name}</span>
+          </span>
+          <span class="circle-badge">${resident.circle || ''}</span> 
+        </div>
+      </td>
+      <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1)">-</button><span class="count-span">${resident.luggage}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1)">+</button></div></td>
+      <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', -1)">-</button><span class="count-span">${resident.mail}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', 1)">+</button></div></td>
+      <td class="edit-op-cell"><div class="cell-content"><button class="delete-btn" onclick="deleteResident('${resident.id}', '${resident.name}')">削除</button></div></td>
+  `;
                     elements.tableBody.appendChild(row);
                 });
             }
@@ -709,6 +745,8 @@
         elements.toggleCircle.addEventListener('change', e => document.body.classList.toggle('show-circle', e.target.checked));
     });
 
+// --- 削除CSSブロック: .name-stack{ ... } ---
+// --- 削除CSSブロック: .furigana-text{ ... } と body.show-furigana .furigana-text{ ... } ---
 </script>
 
 </body>
