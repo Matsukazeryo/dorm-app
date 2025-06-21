@@ -108,21 +108,27 @@
         .favorite-star.favorited { color: #f1c40f; }
         /* --- 縦に重ねるふりがな --- */
         .name-stack{
-            display:inline-flex;
-            flex-direction:column;  /* 上:ふりがな, 下:漢字 */
+            position:relative;
+            display:inline-block;
             line-height:1;
         }
         .furigana-text{
             display:none;
-            font-size:0.75em;
+            position:absolute;
+            top:-0.9em;       /* 文字の上に重ねる */
+            left:0;
+            width:max-content;
+            font-size:0.7em;
             color:#7f8c8d;
+            pointer-events:none;
+            white-space:nowrap;
         }
         /* --- サークルを名前横に 1 文字バッジ表示 --- */
         .circle-badge{
             display:none;
           font-size:0.75em;
           color:#16a085;
-         margin-left:4px;
+         margin: 0 4px;
         }
         body.dark-theme .circle-badge{
           color:#1abc9c;
@@ -472,11 +478,11 @@
         <div class="cell-content name-cell">
           <span class="favorite-star ${isFavorited ? 'favorited' : ''}" onclick="toggleFavorite('${resident.id}')">★</span>
           <span class="room-number">${resident.roomNumber}</span>
+          <span class="circle-badge">${resident.circle || ''}</span>
           <span class="name-stack">
             <span class="furigana-text">${resident.furigana || ''}</span>
             <span class="kanji-name">${resident.name}</span>
           </span>
-          <span class="circle-badge">${resident.circle || ''}</span> 
         </div>
       </td>
       <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1)">-</button><span class="count-span">${resident.luggage}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1)">+</button></div></td>
