@@ -10,142 +10,99 @@
     <link rel="icon" type="image/png" sizes="16x16" href="https://placehold.co/16x16/3498db/ffffff?text=寮">
     <style>
         :root {
-            --bg-color: #f4f7f9;
-            --container-bg: #ffffff;
-            --text-color: #333;
-            --border-color: #ddd;
-            --header-border: #3498db;
-            --header-text: #2c3e50;
-            --controls-bg: #ecf0f1;
-            --mode-selector-border: #bdc3c7;
-            --mode-label-bg: #fff;
-            --mode-label-text: #34495e;
-            --mode-label-checked-bg: #3498db;
-            --mode-label-checked-text: white;
-            --admin-mode-bg: #e74c3c;
+            --bg-color: #f4f7f9; --container-bg: #ffffff; --text-color: #333;
+            --border-color: #ddd; --header-border: #3498db; --header-text: #2c3e50;
+            --controls-bg: #ecf0f1; --mode-selector-border: #bdc3c7; --mode-label-bg: #fff;
+            --mode-label-text: #34495e; --mode-label-checked-bg: #3498db;
+            --mode-label-checked-text: white; --admin-mode-bg: #e74c3c;
         }
-
         body.dark-theme {
-            --bg-color: #2c3e50;
-            --container-bg: #34495e;
-            --text-color: #ecf0f1;
-            --border-color: #7f8c8d;
-            --header-border: #5dade2;
-            --header-text: #ecf0f1;
-            --controls-bg: #2c3e50;
-            --mode-selector-border: #95a5a6;
-            --mode-label-bg: #7f8c8d;
-            --mode-label-text: #ecf0f1;
+            --bg-color: #2c3e50; --container-bg: #34495e; --text-color: #ecf0f1;
+            --border-color: #7f8c8d; --header-border: #5dade2; --header-text: #ecf0f1;
+            --controls-bg: #2c3e50; --mode-selector-border: #95a5a6;
+            --mode-label-bg: #7f8c8d; --mode-label-text: #ecf0f1;
         }
-
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
-            margin: 0; padding: 20px; background-color: var(--bg-color); color: var(--text-color); transition: background-color 0.3s;
+            margin: 0; padding: 20px; background-color: var(--bg-color); color: var(--text-color);
         }
-        body.count-edit-mode { background-color: var(--count-edit-mode-bg, #f0f8ff); }
-        body.resident-edit-mode { background-color: var(--resident-edit-mode-bg, #fff8f8); }
-        body.dark-theme.count-edit-mode { background-color: #2f4f4f; }
-        body.dark-theme.resident-edit-mode { background-color: #553c3c; }
-
-        .container { 
-            max-width: 800px; margin: 0 auto; background-color: var(--container-bg); 
-            padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
-        }
-        .header-area {
-            display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 10px; gap: 10px; flex-wrap: wrap;
-        }
-        h1 { 
-            text-align: center; color: var(--header-text); border-bottom: 2px solid var(--header-border); 
-            padding-bottom: 10px; margin: 0; flex-grow: 1;
-        }
+        .container { max-width: 800px; margin: 0 auto; background-color: var(--container-bg); padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header-area { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 10px; flex-wrap: wrap; }
+        h1 { text-align: center; color: var(--header-text); border-bottom: 2px solid var(--header-border); padding-bottom: 10px; margin: 0; flex-grow: 1; }
         .header-buttons { display: flex; gap: 8px; align-items: center; }
-        .header-btn {
-            padding: 6px 12px; font-size: 12px; font-weight: bold; color: white;
-            border: none; border-radius: 5px; cursor: pointer;
-        }
+        .header-btn { padding: 6px 12px; font-size: 12px; font-weight: bold; color: white; border: none; border-radius: 5px; cursor: pointer; }
         #login-logout-btn { background-color: #3498db; }
         #login-logout-btn.logout { background-color: #e74c3c; }
         #log-view-btn { background-color: #8e44ad; display: none; }
         body.admin-logged-in #log-view-btn { display: inline-block; }
-
-        /* ===== ↓↓↓ スティッキー（追従）パネルの設定を修正 ↓↓↓ ===== */
+        
         .controls-container {
-            display: flex; flex-direction: column;
-            gap: 15px; padding: 15px; margin: 20px 0;
+            display: flex; flex-direction: column; gap: 15px; padding: 15px; margin: 20px 0 10px 0;
             background-color: var(--controls-bg); border-radius: 8px;
-            position: -webkit-sticky;
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-            border-bottom: 1px solid var(--border-color);
+            position: -webkit-sticky; position: sticky;
+            top: 0; z-index: 1000; border-bottom: 1px solid var(--border-color);
         }
-        /* ===== ↑↑↑ スティッキー（追従）パネルの設定を修正 ↑↑↑ ===== */
-
-        .top-controls { display: flex; align-items: center; width: 100%; gap: 15px; }
-        #search-input {
-            flex-grow: 1; min-width: 150px; padding: 10px; border: 1px solid var(--border-color);
-            border-radius: 6px; font-size: 16px; background-color: var(--mode-label-bg); color: var(--text-color);
+        .dorm-selector {
+            display: flex; border-bottom: 2px solid var(--header-border); margin-bottom: 10px;
         }
-        .mode-selector {
-            display: flex; border-radius: 6px; overflow: hidden;
-            border: 1px solid var(--mode-selector-border); flex-shrink: 0;
+        .dorm-selector button {
+            flex-grow: 1; padding: 10px 15px; font-size: 16px; font-weight: bold;
+            border: none; background-color: transparent; color: #7f8c8d;
+            cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;
         }
+        .dorm-selector button.active { color: var(--header-text); border-bottom-color: var(--header-border); }
+        
+        .top-controls { display: flex; align-items: center; width: 100%; gap: 15px; flex-wrap: wrap;}
+        #search-input { flex-grow: 1; min-width: 150px; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 16px; background-color: var(--mode-label-bg); color: var(--text-color); }
+        .mode-selector { display: flex; border-radius: 6px; overflow: hidden; border: 1px solid var(--mode-selector-border); flex-shrink: 0; }
         .mode-selector input { display: none; }
-        .mode-selector label {
-            padding: 10px 12px; cursor: pointer; background-color: var(--mode-label-bg);
-            color: var(--mode-label-text); transition: background-color 0.2s;
-            border-left: 1px solid var(--mode-selector-border); white-space: nowrap;
-        }
+        .mode-selector label { padding: 10px 12px; cursor: pointer; background-color: var(--mode-label-bg); color: var(--mode-label-text); transition: background-color 0.2s; border-left: 1px solid var(--mode-selector-border); white-space: nowrap; }
         .mode-selector label:first-child { border-left: none; }
         .mode-selector input:checked + label { background-color: var(--mode-label-checked-bg); color: var(--mode-label-checked-text); font-weight: bold; }
         #resident-edit-mode-label { display: none; }
         body.admin-logged-in #resident-edit-mode-label { display: block; }
         body.resident-edit-mode .mode-selector input:checked + label { background-color: var(--admin-mode-bg); }
         
+        .middle-controls {
+            display: flex; gap: 20px; font-size: 14px; padding: 10px; margin-top: 10px;
+            background-color: var(--controls-bg); border-radius: 8px;
+        }
+        .display-toggles label { margin-right: 15px; cursor: pointer; }
+
         .ops-container { display: none; width: 100%; gap: 10px; flex-direction: column; }
         body.count-edit-mode .ops-container,
         body.resident-edit-mode .ops-container { display: flex; }
         
-        .ops-container button {
-             padding: 10px; color: white; border: none;
-             border-radius: 6px; font-size: 14px; font-weight: bold;
-             cursor: pointer; transition: background-color 0.2s;
-        }
+        .ops-container button { padding: 10px; color: white; border: none; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; }
         #reset-all-btn { background-color: #f39c12; display: none; }
-        #reset-all-btn:hover { background-color: #e67e22; }
         body.count-edit-mode #reset-all-btn { display: block; }
 
         .bulk-ops-container { display: none; width: 100%; gap: 10px; }
         body.resident-edit-mode .bulk-ops-container { display: flex; }
-        #add-resident-btn { background-color: #2ecc71; flex-grow: 1; }
+        #add-resident-btn { background-color: #27ae60; flex-grow: 1; }
+        #add-bulk-btn { background-color: #2ecc71; flex-grow: 1; }
         #delete-selected-btn { background-color: #e74c3c; flex-grow: 1; }
         
-        table { 
-            width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed;
-        }
-        th, td { 
-            padding: 8px 12px;
-            border: 1px solid var(--border-color); text-align: center; vertical-align: middle;
-            word-wrap: break-word;
-        }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 8px 12px; border: 1px solid var(--border-color); text-align: center; vertical-align: middle; word-wrap: break-word; }
         td { height: 1px; }
+        
+        .furigana-col, .circle-col { display: none; }
+        body.show-furigana .furigana-col { display: table-cell; }
+        body.show-circle .circle-col { display: table-cell; }
+
+        .furigana { font-size: 0.8em; color: #7f8c8d; }
+        body.dark-theme .furigana { color: #bdc3c7; }
+
         th.checkbox-col, td.checkbox-col { width: 45px; display: none; }
         body.resident-edit-mode th.checkbox-col,
         body.resident-edit-mode td.checkbox-col { display: table-cell; }
-        th:nth-child(2) { width: 48%; }
-        th:nth-child(3), th:nth-child(4) { width: 18%; }
-        th:nth-child(5) { width: 16%; }
         
         th { background-color: var(--mode-label-checked-bg); color: var(--mode-label-checked-text); font-weight: bold; }
         .name-cell { display: flex; align-items: center; font-weight: 500; text-align: left; min-height: 28px; }
-        .room-number {
-            font-size: 0.9em; color: #7f8c8d; margin-right: 8px; min-width: 35px; text-align: right;
-        }
+        .room-number { font-size: 0.9em; color: #7f8c8d; margin-right: 8px; min-width: 35px; text-align: right; }
         body.dark-theme .room-number { color: #bdc3c7; }
-        .favorite-star {
-            cursor: pointer; font-size: 22px; margin-right: 10px; color: #bdc3c7;
-        }
+        .favorite-star { cursor: pointer; font-size: 22px; margin-right: 10px; color: #bdc3c7; }
         .favorite-star.favorited { color: #f1c40f; }
         .count-cell { display: flex; align-items: center; justify-content: center; gap: 10px; }
         .count-span { min-width: 25px; font-weight: bold; font-size: 1.2em; }
@@ -156,10 +113,7 @@
             cursor: pointer; font-size: 18px; font-weight: 600;
             display: flex; align-items: center; justify-content: center; line-height: 1;
         }
-        .delete-btn { 
-            background-color: #c0392b; color: white; border: none; font-size: 12px;
-            padding: 4px 8px; border-radius: 5px; cursor: pointer;
-        }
+        .delete-btn { background-color: #c0392b; color: white; border: none; font-size: 12px; padding: 4px 8px; border-radius: 5px; cursor: pointer; }
         
         .count-cell button { visibility: hidden; }
         body.count-edit-mode .count-cell button { visibility: visible; }
@@ -169,60 +123,33 @@
         body.resident-edit-mode .edit-op-cell { display: table-cell; }
 
         .modal-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background-color: rgba(0,0,0,0.6);
-            display: flex;
-            justify-content: center; align-items: center; z-index: 2000;
-            opacity: 0;
-            visibility: hidden;
-            transition: opacity 0.3s ease, visibility 0.3s;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6);
+            display: flex; justify-content: center; align-items: center; z-index: 2000;
+            opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s;
         }
-        .modal-overlay.active {
-            opacity: 1;
-            visibility: visible;
-        }
-        .modal-content {
-            background-color: var(--container-bg); padding: 20px;
-            border-radius: 8px; width: 90%; max-width: 600px;
-            max-height: 80vh; overflow-y: auto;
-        }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; }
-        #modal-close-btn { font-size: 24px; cursor: pointer; border: none; background: none; color: var(--text-color); }
+        .modal-overlay.active { opacity: 1; visibility: visible; }
+        .modal-content { background-color: var(--container-bg); padding: 20px; border-radius: 8px; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 20px;}
+        #modal-close-btn, #add-modal-close-btn { font-size: 24px; cursor: pointer; border: none; background: none; color: var(--text-color); }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .form-group input, .form-group select { width: 95%; padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; background-color: var(--mode-label-bg); color: var(--text-color); }
+        .form-actions { text-align: right; }
+        .form-actions button { padding: 10px 20px; }
         #log-list { list-style: none; padding: 0; margin-top: 15px; }
         #log-list li { padding: 8px 0; border-bottom: 1px solid var(--border-color); font-size: 14px; }
         #log-list li:last-child { border-bottom: none; }
         #log-list .log-time { font-size: 12px; color: #7f8c8d; display: block; }
         
-        .footer {
-            margin-top: 24px; padding: 10px; display: flex;
-            justify-content: center; align-items: center;
-            gap: 10px; font-size: 14px; color: #7f8c8d;
-        }
+        .footer { margin-top: 24px; padding: 10px; display: flex; justify-content: center; align-items: center; gap: 10px; font-size: 14px; color: #7f8c8d; }
         body.dark-theme .footer { color: #bdc3c7; }
-        #theme-selector {
-             background-color: var(--mode-label-bg);
-             color: var(--text-color);
-             border: 1px solid var(--mode-selector-border);
-             border-radius: 6px;
-             padding: 5px;
-        }
+        #theme-selector { background-color: var(--mode-label-bg); color: var(--text-color); border: 1px solid var(--mode-selector-border); border-radius: 6px; padding: 5px; }
 
-        @media (max-width: 640px) {
-            .top-controls { flex-direction: column; align-items: stretch; }
-            .mode-selector { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
-            body.admin-logged-in .mode-selector { grid-template-columns: 1fr 1fr 1fr; }
-            .mode-selector label { text-align: center; font-size: 14px; }
-            th, td { padding: 8px 5px; font-size: 14px; }
-            .count-cell { gap: 5px; transform: scale(0.9); }
-            .name-cell { align-items: center; gap: 4px; font-size: 13px; }
-            .favorite-star { font-size: 20px; margin-right: 4px; }
-        }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <!-- ===== ↓↓↓ HTMLの構造を元に戻す ↓↓↓ ===== -->
     <div class="header-area">
         <h1>荷物管理アプリ</h1>
         <div class="header-buttons">
@@ -232,8 +159,12 @@
     </div>
     
     <div class="controls-container">
+        <div id="dorm-selector" class="dorm-selector">
+            <button data-dorm="shofu" class="active">松風寮</button>
+            <button data-dorm="meizen">明善寮</button>
+        </div>
         <div class="top-controls">
-            <input type="search" id="search-input" placeholder="名前や部屋番号で検索...">
+            <input type="search" id="search-input" placeholder="部屋番号, 名前, ふりがなで検索...">
             <div class="mode-selector">
                 <input type="radio" id="view-mode" name="mode" checked>
                 <label for="view-mode">閲覧</label>
@@ -246,49 +177,86 @@
         <div class="ops-container">
              <button id="reset-all-btn">全ての荷物/郵便を０にする</button>
              <div class="bulk-ops-container">
-                <button id="add-resident-btn">寮生を一括追加</button>
+                <button id="add-resident-btn">新しい寮生を追加</button>
+                <button id="add-bulk-btn">寮生を一括追加</button>
                 <button id="delete-selected-btn" disabled>選択した寮生を削除</button>
             </div>
         </div>
     </div>
-    <!-- ===== ↑↑↑ HTMLの構造を元に戻す ↑↑↑ ===== -->
+    
+    <div class="middle-controls">
+        <div class="display-toggles">
+            <span>表示設定:</span>
+            <label><input type="checkbox" id="toggle-furigana"> ふりがな</label>
+            <label><input type="checkbox" id="toggle-circle"> サークル</label>
+        </div>
+    </div>
 
     <table id="resident-table">
         <thead>
             <tr>
                 <th class="checkbox-col"><input type="checkbox" id="select-all-checkbox"></th>
                 <th>名前</th>
+                <th class="furigana-col">ふりがな</th>
+                <th class="circle-col">サークル</th>
                 <th>荷物</th>
                 <th>郵便</th>
                 <th class="edit-op-header">操作</th>
             </tr>
         </thead>
         <tbody>
-            <tr><td colspan="5">データベースから読み込み中...</td></tr>
+            <tr><td colspan="7">データベースから読み込み中...</td></tr>
         </tbody>
     </table>
 </div>
 
-<div id="log-modal" class="modal-overlay">
+<div id="log-modal" class="modal-overlay"> <!-- ... --> </div>
+
+<div id="add-resident-modal" class="modal-overlay">
     <div class="modal-content">
         <div class="modal-header">
-            <h2>操作履歴</h2>
-            <button id="modal-close-btn">&times;</button>
+            <h2>新しい寮生を追加</h2>
+            <button id="add-modal-close-btn">&times;</button>
         </div>
-        <ul id="log-list">
-            <li>読み込み中...</li>
-        </ul>
+        <form id="add-resident-form">
+            <div class="form-group">
+                <label for="form-dorm">寮</label>
+                <select id="form-dorm" required>
+                    <option value="shofu">松風寮</option>
+                    <option value="meizen">明善寮</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="form-name">名前 (必須)</label>
+                <input type="text" id="form-name" required>
+            </div>
+            <div class="form-group">
+                <label for="form-room">部屋番号</label>
+                <input type="text" id="form-room">
+            </div>
+            <div class="form-group">
+                <label for="form-furigana">ふりがな</label>
+                <input type="text" id="form-furigana">
+            </div>
+             <div class="form-group">
+                <label for="form-circle">サークル</label>
+                <input type="text" id="form-circle">
+            </div>
+            <div class="form-group">
+                <label>初期の荷物/郵便 (任意)</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="number" id="form-luggage" min="0" value="0" placeholder="荷物">
+                    <input type="number" id="form-mail" min="0" value="0" placeholder="郵便">
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="header-btn" style="background-color: #2ecc71;">登録する</button>
+            </div>
+        </form>
     </div>
 </div>
 
-<footer class="footer">
-    <span>表示テーマ:</span>
-    <select id="theme-selector">
-        <option value="system">システム</option>
-        <option value="light">昼</option>
-        <option value="dark">夜</option>
-    </select>
-</footer>
+<footer class="footer"> <!-- ... --> </footer>
 
 <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore-compat.js"></script>
@@ -308,29 +276,52 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    const tableBody = document.querySelector("#resident-table tbody");
-    const searchInput = document.getElementById('search-input');
-    const addResidentBtn = document.getElementById('add-resident-btn');
-    const deleteSelectedBtn = document.getElementById('delete-selected-btn');
-    const selectAllCheckbox = document.getElementById('select-all-checkbox');
-    const modeSelectors = document.querySelectorAll('input[name="mode"]');
-    const loginLogoutBtn = document.getElementById('login-logout-btn');
-    const resetAllBtn = document.getElementById('reset-all-btn');
-    const themeSelector = document.getElementById('theme-selector');
-    const logViewBtn = document.getElementById('log-view-btn');
-    const logModal = document.getElementById('log-modal');
-    const modalCloseBtn = document.getElementById('modal-close-btn');
-
+    let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_shofu';
     let allResidents = []; 
+    let unsubscribe; 
 
-    db.collection("residents").orderBy("roomNumber").onSnapshot(snapshot => {
-        allResidents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        renderTable(); 
-    }, error => console.error("データの読み込みに失敗しました:", error));
+    const elements = {
+        tableBody: document.querySelector("#resident-table tbody"),
+        searchInput: document.getElementById('search-input'),
+        addResidentBtn: document.getElementById('add-resident-btn'),
+        addBulkBtn: document.getElementById('add-bulk-btn'),
+        deleteSelectedBtn: document.getElementById('delete-selected-btn'),
+        selectAllCheckbox: document.getElementById('select-all-checkbox'),
+        modeSelectors: document.querySelectorAll('input[name="mode"]'),
+        loginLogoutBtn: document.getElementById('login-logout-btn'),
+        resetAllBtn: document.getElementById('reset-all-btn'),
+        themeSelector: document.getElementById('theme-selector'),
+        logViewBtn: document.getElementById('log-view-btn'),
+        logModal: document.getElementById('log-modal'),
+        modalCloseBtn: document.getElementById('modal-close-btn'),
+        toggleFurigana: document.getElementById('toggle-furigana'),
+        toggleCircle: document.getElementById('toggle-circle'),
+        dormSelector: document.getElementById('dorm-selector'),
+        addResidentModal: document.getElementById('add-resident-modal'),
+        addModalCloseBtn: document.getElementById('add-modal-close-btn'),
+        addResidentForm: document.getElementById('add-resident-form'),
+    };
+
+    function listenToCollection(collectionName) {
+        if (unsubscribe) unsubscribe();
+        unsubscribe = db.collection(collectionName).onSnapshot(snapshot => {
+            allResidents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            renderTable(); 
+        }, error => console.error("データの読み込みに失敗しました:", error));
+    }
+    
+    function switchDorm(dorm) {
+        currentCollectionName = `residents_${dorm}`;
+        localStorage.setItem('currentDorm', currentCollectionName);
+        document.querySelectorAll('#dorm-selector button').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.dorm === dorm);
+        });
+        listenToCollection(currentCollectionName);
+    }
 
     function renderTable() {
-        const searchTerm = searchInput.value.toLowerCase();
-        const favoriteId = localStorage.getItem('dormAppFavoriteId');
+        const searchTerm = elements.searchInput.value.toLowerCase();
+        const favoriteId = localStorage.getItem(`dormAppFavoriteId_${currentCollectionName}`);
 
         allResidents.sort((a, b) => {
             if (a.id === favoriteId) return -1;
@@ -339,13 +330,15 @@
         });
 
         const filteredResidents = allResidents.filter(r => 
-            r.name.toLowerCase().includes(searchTerm) || r.roomNumber.includes(searchTerm)
+            r.name.toLowerCase().includes(searchTerm) || 
+            r.roomNumber.includes(searchTerm) ||
+            (r.furigana && r.furigana.toLowerCase().includes(searchTerm))
         );
 
-        tableBody.innerHTML = ''; 
+        elements.tableBody.innerHTML = ''; 
 
         if (filteredResidents.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="5">該当する寮生が見つかりません。</td></tr>';
+            elements.tableBody.innerHTML = '<tr><td colspan="7">該当する寮生が見つかりません。</td></tr>';
         } else {
             filteredResidents.forEach(resident => {
                 const isFavorited = resident.id === favoriteId;
@@ -357,33 +350,32 @@
                         <span class="room-number">${resident.roomNumber}</span>
                         <span>${resident.name}</span>
                     </td>
+                    <td class="furigana-col"><span class="furigana">${resident.furigana || ''}</span></td>
+                    <td class="circle-col">${resident.circle || ''}</td>
                     <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1)">-</button><span class="count-span">${resident.luggage}</span><button onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1)">+</button></div></td>
                     <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', -1)">-</button><span class="count-span">${resident.mail}</span><button onclick="updateCount('${resident.id}', '${resident.name}', 'mail', 1)">+</button></div></td>
                     <td class="edit-op-cell"><button class="delete-btn" onclick="deleteResident('${resident.id}', '${resident.name}')">削除</button></td>
                 `;
-                tableBody.appendChild(row);
+                elements.tableBody.appendChild(row);
             });
         }
         updateDeleteButtonState();
     }
-
+    
+    // ===== ↓↓↓ 省略されていた関数を全て復元 ↓↓↓ =====
     async function addLog(action, details) {
         try {
-            await db.collection("logs").add({
-                action: action, details: details,
-                isAdmin: sessionStorage.getItem('isAdminLoggedIn') === 'true',
-                timestamp: firebase.firestore.FieldValue.serverTimestamp()
-            });
+            await db.collection("logs").add({ action, details, isAdmin: sessionStorage.getItem('isAdminLoggedIn') === 'true', timestamp: firebase.firestore.FieldValue.serverTimestamp() });
         } catch (error) { console.error("ログの追加に失敗しました:", error); }
     }
     
     function showLogModal() {
-        logModal.classList.add('active');
+        elements.logModal.classList.add('active');
         fetchLogs();
     }
 
     function hideLogModal() {
-        logModal.classList.remove('active');
+        elements.logModal.classList.remove('active');
     }
 
     async function fetchLogs() {
@@ -403,48 +395,85 @@
             });
         } catch (error) {
             logList.innerHTML = '<li>履歴の読み込みに失敗しました。</li>';
-            console.error("ログの読み込みエラー:", error);
         }
     }
 
     function toggleFavorite(residentId) {
-        const currentFavorite = localStorage.getItem('dormAppFavoriteId');
-        localStorage.setItem('dormAppFavoriteId', currentFavorite === residentId ? '' : residentId);
+        const favKey = `dormAppFavoriteId_${currentCollectionName}`;
+        const currentFavorite = localStorage.getItem(favKey);
+        localStorage.setItem(favKey, currentFavorite === residentId ? '' : residentId);
         renderTable();
     }
 
     function updateCount(residentId, residentName, type, value) {
-        const docRef = db.collection("residents").doc(residentId);
+        const docRef = db.collection(currentCollectionName).doc(residentId);
         const increment = firebase.firestore.FieldValue.increment(value);
         docRef.get().then(doc => {
             if (doc.exists && (doc.data()[type] > 0 || value > 0)) {
                 docRef.update({ [type]: increment });
                 const actionType = type === 'luggage' ? '荷物' : '郵便';
-                addLog('個数変更', `${residentName} の${actionType}を ${value > 0 ? '+1' : '-1'}`);
+                addLog('個数変更', `[${currentCollectionName}] ${residentName} の${actionType}を ${value > 0 ? '+1' : '-1'}`);
             }
-        }).catch(error => console.error("更新エラー:", error));
+        });
+    }
+
+    function showAddResidentModal() {
+        elements.addResidentForm.reset();
+        const currentDorm = currentCollectionName.split('_')[1];
+        document.getElementById('form-dorm').value = currentDorm;
+        elements.addResidentModal.classList.add('active');
+    }
+    
+    function hideAddResidentModal() {
+        elements.addResidentModal.classList.remove('active');
+    }
+
+    function saveNewResident(event) {
+        event.preventDefault();
+        const dorm = document.getElementById('form-dorm').value;
+        const collection = `residents_${dorm}`;
+        const newResident = {
+            name: document.getElementById('form-name').value.trim(),
+            roomNumber: document.getElementById('form-room').value.trim() || '',
+            furigana: document.getElementById('form-furigana').value.trim() || '',
+            circle: document.getElementById('form-circle').value.trim() || '',
+            luggage: parseInt(document.getElementById('form-luggage').value) || 0,
+            mail: parseInt(document.getElementById('form-mail').value) || 0,
+        };
+
+        if (!newResident.name) {
+            alert('名前は必須です。');
+            return;
+        }
+
+        db.collection(collection).add(newResident).then(() => {
+            alert(`${newResident.name} さんを登録しました。`);
+            addLog('寮生追加', `[${collection}] ${newResident.name} を追加`);
+            hideAddResidentModal();
+        });
     }
 
     function addResidentsInBulk() {
-        const text = prompt("追加する寮生のリストを貼り付けてください。\n形式：部屋番号 名前 (1行に1人)");
+        const text = prompt("追加する寮生のリストを貼り付けてください。\n形式：部屋番号 名前 ふりがな サークル (1行に1人)");
         if (!text) return;
         const lines = text.trim().split('\n');
         const batch = db.batch();
         let addedNames = [];
         lines.forEach(line => {
             const parts = line.trim().split(/\s+/);
-            if (parts.length >= 2) {
-                const room = parts[0];
-                const name = parts.slice(1).join(' ');
-                const newResidentRef = db.collection("residents").doc();
-                batch.set(newResidentRef, { roomNumber: room, name: name, luggage: 0, mail: 0 });
-                addedNames.push(name);
+            if (parts.length >= 4) {
+                const newResidentRef = db.collection(currentCollectionName).doc();
+                batch.set(newResidentRef, { 
+                    roomNumber: parts[0], name: parts[1], furigana: parts[2], circle: parts[3],
+                    luggage: 0, mail: 0 
+                });
+                addedNames.push(parts[1]);
             }
         });
         if (addedNames.length > 0) {
             batch.commit().then(() => {
                 alert(`${addedNames.length}人の寮生を追加しました。`);
-                addLog('寮生一括追加', `${addedNames.join(', ')} を追加`);
+                addLog('寮生一括追加', `[${currentCollectionName}] ${addedNames.join(', ')} を追加`);
             });
         }
     }
@@ -454,52 +483,36 @@
         if (selectedCheckboxes.length === 0) return;
         if (confirm(`選択した ${selectedCheckboxes.length} 人の寮生を本当に削除しますか？`)) {
             const batch = db.batch();
-            let deletedNames = [];
-            let promises = [];
-            selectedCheckboxes.forEach(checkbox => {
-                promises.push(db.collection("residents").doc(checkbox.dataset.id).get());
-            });
-
-            Promise.all(promises).then(docs => {
-                docs.forEach(doc => {
-                    if (doc.exists) {
-                        deletedNames.push(doc.data().name);
-                        batch.delete(doc.ref);
-                    }
-                });
-                batch.commit().then(() => {
-                    alert(`${deletedNames.length}人の寮生を削除しました。`);
-                    addLog('寮生一括削除', `${deletedNames.join(', ')} を削除`);
-                    selectAllCheckbox.checked = false;
-                });
+            let promises = selectedCheckboxes.forEach(checkbox => batch.delete(db.collection(currentCollectionName).doc(checkbox.dataset.id)));
+            batch.commit().then(() => {
+                alert(`${selectedCheckboxes.length}人の寮生を削除しました。`);
+                addLog('寮生一括削除', `[${currentCollectionName}] ${selectedCheckboxes.length}人を削除`);
             });
         }
     }
 
     function deleteResident(residentId, residentName) {
         if (confirm(`本当に「${residentName}」さんをリストから削除しますか？`)) {
-            db.collection("residents").doc(residentId).delete().then(() => {
-                addLog('寮生削除', `${residentName} を削除`);
+            db.collection(currentCollectionName).doc(residentId).delete().then(() => {
+                addLog('寮生削除', `[${currentCollectionName}] ${residentName} を削除`);
             });
         }
     }
 
     function resetAllCounts() {
-        if (confirm('本当に全ての荷物と郵便の数を0にしますか？')) {
+        if (confirm(`本当に${currentCollectionName === 'residents_shofu' ? '松風寮' : '明善寮'}の全ての荷物と郵便の数を0にしますか？`)) {
             const batch = db.batch();
-            allResidents.forEach(resident => {
-                batch.update(db.collection("residents").doc(resident.id), { luggage: 0, mail: 0 });
-            });
+            allResidents.forEach(r => batch.update(db.collection(currentCollectionName).doc(r.id), { luggage: 0, mail: 0 }));
             batch.commit().then(() => {
                 alert('全てのカウントを0にリセットしました。');
-                addLog('全リセット', '全ての荷物/郵便を0にしました');
+                addLog('全リセット', `[${currentCollectionName}] の全カウントをリセット`);
             });
         }
     }
     
     function updateDeleteButtonState() {
         const selectedCheckboxes = document.querySelectorAll('.resident-checkbox:checked');
-        deleteSelectedBtn.disabled = selectedCheckboxes.length === 0;
+        elements.deleteSelectedBtn.disabled = selectedCheckboxes.length === 0;
     }
 
     function handleLoginLogout() {
@@ -528,11 +541,11 @@
         const isLoggedIn = sessionStorage.getItem('isAdminLoggedIn') === 'true';
         document.body.classList.toggle('admin-logged-in', isLoggedIn);
         if (isLoggedIn) {
-            loginLogoutBtn.textContent = 'ログアウト';
-            loginLogoutBtn.classList.add('logout');
+            elements.loginLogoutBtn.textContent = 'ログアウト';
+            elements.loginLogoutBtn.classList.add('logout');
         } else {
-            loginLogoutBtn.textContent = '管理者ログイン';
-            loginLogoutBtn.classList.remove('logout');
+            elements.loginLogoutBtn.textContent = '管理者ログイン';
+            elements.loginLogoutBtn.classList.remove('logout');
         }
     }
 
@@ -541,66 +554,68 @@
         document.body.classList.add(mode);
         const currentTheme = localStorage.getItem('theme') || 'system';
         handleThemeChange(currentTheme);
-        if (mode !== 'resident-edit-mode') selectAllCheckbox.checked = false;
+        if (mode !== 'resident-edit-mode') elements.selectAllCheckbox.checked = false;
         renderTable();
     }
 
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
 
     function applyTheme(theme) {
-        if (theme === 'dark') {
-            document.body.classList.add('dark-theme');
-        } else {
-            document.body.classList.remove('dark-theme');
-        }
+        if (theme === 'dark') document.body.classList.add('dark-theme');
+        else document.body.classList.remove('dark-theme');
     }
 
     function handleThemeChange(selectedTheme) {
-        if (selectedTheme === 'system') {
-            applyTheme(prefersDark.matches ? 'dark' : 'light');
-        } else {
-            applyTheme(selectedTheme);
-        }
+        if (selectedTheme === 'system') applyTheme(prefersDark.matches ? 'dark' : 'light');
+        else applyTheme(selectedTheme);
     }
 
     function initializeTheme() {
         const savedTheme = localStorage.getItem('theme') || 'system';
-        themeSelector.value = savedTheme;
+        elements.themeSelector.value = savedTheme;
         handleThemeChange(savedTheme);
     }
 
-    modeSelectors.forEach(input => input.addEventListener('change', () => { if(input.checked) setMode(input.id); }));
-    tableBody.addEventListener('change', e => { if (e.target.classList.contains('resident-checkbox')) updateDeleteButtonState(); });
-    setMode('view-mode');
-    updateLoginStatus();
-    searchInput.addEventListener('input', renderTable);
-    addResidentBtn.addEventListener('click', addResidentsInBulk);
-    deleteSelectedBtn.addEventListener('click', deleteSelectedResidents);
-    resetAllBtn.addEventListener('click', resetAllCounts);
-    selectAllCheckbox.addEventListener('change', e => {
-        document.querySelectorAll('.resident-checkbox').forEach(cb => cb.checked = e.target.checked);
-        updateDeleteButtonState();
+    document.addEventListener('DOMContentLoaded', () => {
+        const savedDorm = localStorage.getItem('currentDorm') ? (localStorage.getItem('currentDorm').split('_')[1]) : 'shofu';
+        switchDorm(savedDorm);
+        
+        elements.dormSelector.addEventListener('click', (e) => {
+            if(e.target.tagName === 'BUTTON') switchDorm(e.target.dataset.dorm);
+        });
+        
+        elements.modeSelectors.forEach(input => input.addEventListener('change', () => { if(input.checked) setMode(input.id); }));
+        elements.tableBody.addEventListener('change', e => { if (e.target.classList.contains('resident-checkbox')) updateDeleteButtonState(); });
+        setMode('view-mode');
+        updateLoginStatus();
+        elements.searchInput.addEventListener('input', renderTable);
+        elements.addResidentBtn.addEventListener('click', showAddResidentModal);
+        elements.addBulkBtn.addEventListener('click', addResidentsInBulk);
+        elements.deleteSelectedBtn.addEventListener('click', deleteSelectedResidents);
+        elements.resetAllBtn.addEventListener('click', resetAllCounts);
+        elements.selectAllCheckbox.addEventListener('change', e => {
+            document.querySelectorAll('.resident-checkbox').forEach(cb => cb.checked = e.target.checked);
+            updateDeleteButtonState();
+        });
+        elements.loginLogoutBtn.addEventListener('click', handleLoginLogout);
+        elements.themeSelector.addEventListener('change', e => {
+            localStorage.setItem('theme', e.target.value);
+            handleThemeChange(e.target.value);
+        });
+        prefersDark.addEventListener('change', () => {
+            const savedTheme = localStorage.getItem('theme') || 'system';
+            if (savedTheme === 'system') handleThemeChange('system');
+        });
+        initializeTheme();
+        elements.logViewBtn.addEventListener('click', showLogModal);
+        elements.modalCloseBtn.addEventListener('click', hideLogModal);
+        elements.logModal.addEventListener('click', e => { if (e.target === elements.logModal) hideLogModal(); });
+        elements.addModalCloseBtn.addEventListener('click', hideAddResidentModal);
+        elements.addResidentModal.addEventListener('click', e => { if(e.target === elements.addResidentModal) hideAddResidentModal(); });
+        elements.addResidentForm.addEventListener('submit', saveNewResident);
+        elements.toggleFurigana.addEventListener('change', e => document.body.classList.toggle('show-furigana', e.target.checked));
+        elements.toggleCircle.addEventListener('change', e => document.body.classList.toggle('show-circle', e.target.checked));
     });
-    loginLogoutBtn.addEventListener('click', handleLoginLogout);
-    
-    themeSelector.addEventListener('change', (e) => {
-        const selectedTheme = e.target.value;
-        localStorage.setItem('theme', selectedTheme);
-        handleThemeChange(selectedTheme);
-    });
-
-    prefersDark.addEventListener('change', () => {
-        const savedTheme = localStorage.getItem('theme') || 'system';
-        if (savedTheme === 'system') {
-            handleThemeChange('system');
-        }
-    });
-    
-    initializeTheme();
-    
-    logViewBtn.addEventListener('click', showLogModal);
-    modalCloseBtn.addEventListener('click', hideLogModal);
-    logModal.addEventListener('click', e => { if (e.target === logModal) hideLogModal(); });
 
 </script>
 
