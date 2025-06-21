@@ -510,14 +510,15 @@
         
         async function addLog(action, details) {
             try {
-                const now = new Date();
                 await db.collection("logs").add({
                     action,
                     details,
                     isAdmin: sessionStorage.getItem('isAdminLoggedIn') === 'true',
-                    timestamp: firebase.firestore.Timestamp.fromDate(now)   // クライアント時刻を書き込む
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp() // サーバー時刻
                 });
-            } catch (error) { console.error("ログの追加に失敗しました:", error); }
+            } catch (error) {
+                console.error("ログの追加に失敗しました:", error);
+            }
         }
 
         function showLogModal(){
