@@ -395,16 +395,18 @@
         renderTable();
     }
 
+    // 荷物/郵便の個数を ±1 する
     function updateCount(residentId, residentName, type, value) {
-        const docRef = db.collection(currentCollectionName).doc(residentId);
+        const docRef   = db.collection(currentCollectionName).doc(residentId);
         const increment = firebase.firestore.FieldValue.increment(value);
-        docRef.get().then(doc => {
-                const typeJa = (type === 'luggage') ? '荷物' : '郵便';
-                addLog('個数変更', `[${currentCollectionName.split('_')[1]}] ${residentName} の${typeJa}を ${value > 0 ? '+1' : '-1'}`);
-            if (doc.exists && (doc.data()[type] > 0 || value > 0)) {
-                docRef.update({ [type]: increment });
-            }
-        });
+
+        docRef.update({ [type]: increment })
+              .then(() => {
+                  const typeJa = (type === 'luggage') ? '荷物' : '郵便';
+                  addLog('個数変更',
+                         `[${currentCollectionName.split('_')[1]}] ${residentName} の${typeJa}を ${value > 0 ? '+1' : '-1'}`);
+              })
+              .catch((e) => console.error('updateCount error', e));
     }
 
     function deleteResident(residentId, residentName) {
