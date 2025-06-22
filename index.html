@@ -522,6 +522,12 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
+        // PWA（Webアプリ）で起動されているかチェック
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+        if (!isStandalone) {
+            // Webブラウザで開いている場合、通知が利用できない旨を表示
+            alert('通知を受信するには、ホーム画面に追加してアプリとして起動してください。');
+        }
         const elements = {
             tableBody: document.querySelector("#resident-table tbody"),
             searchInput: document.getElementById('search-input'),
