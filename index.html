@@ -282,6 +282,31 @@
           margin: 0 8px;
         }
         /* ===== 庶務モードOFF専用レイアウトここまで ===== */
+        /* Off-mode ±ボタンの見た目をカスタマイズ */
+        .off-mode-container .off-counts button {
+          background-color: var(--header-border);
+          color: #fff;
+          border: none;
+          border-radius: 50%;
+          width: 36px;
+          height: 36px;
+          font-size: 1.2em;
+          font-weight: bold;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          margin: 0 8px;
+          cursor: pointer;
+        }
+        /* モバイル向け微調整 */
+        @media (max-width: 600px) {
+          .off-mode-container .off-counts button {
+            width: 32px;
+            height: 32px;
+            font-size: 1.1em;
+            margin: 0 6px;
+          }
+        }
    </style>
 </head>
 <body>
@@ -297,7 +322,6 @@
               <span class="slider round"></span>
             </label>
             <span id="sohmu-label" style="margin-left:4px; font-weight:bold; color:var(--header-text);">庶務</span>
-            <button id="disable-alert-btn" class="header-btn" style="background:#95a5a6;">今後表示しない</button>
         </div>
     </div>
     
@@ -565,12 +589,13 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-        // iOS PWA（Webアプリ）で起動されているかチェック
+        // Show standalone-mode alert only once
+        const suppressAlert = localStorage.getItem('suppressStandaloneAlert');
         const isiOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
         const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-        if (isiOS && !isStandalone) {
-            // iOS のブラウザで開いている場合、通知が利用できない旨を表示
+        if (isiOS && !isStandalone && !suppressAlert) {
             alert('通知を受信するには、ホーム画面に追加してアプリとして起動してください。');
+            localStorage.setItem('suppressStandaloneAlert', 'true');
         }
         const elements = {
             tableBody: document.querySelector("#resident-table tbody"),
