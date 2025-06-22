@@ -386,6 +386,7 @@
     <select id="self-select"></select>
     <div class="form-actions">
       <button id="self-select-btn" class="header-btn" style="background-color:#27ae60;">決定</button>
+      <button id="self-cancel-btn" class="header-btn" style="background-color:#e74c3c; margin-left:8px;">キャンセル</button>
     </div>
   </div>
 </div>
@@ -679,6 +680,9 @@
                       btn.disabled = false;
                       btn.textContent = '決定';
                     };
+                    document.getElementById('self-cancel-btn').addEventListener('click', () => {
+                      document.getElementById('self-select-modal').classList.remove('active');
+                    });
                   })();
                   return;
                 }
