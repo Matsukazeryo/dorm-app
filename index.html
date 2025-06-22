@@ -257,6 +257,7 @@
         <div class="header-buttons">
             <button id="login-logout-btn" class="header-btn">管理者ログイン</button>
             <button id="log-view-btn" class="header-btn" style="background:#8e44ad;">操作履歴</button>
+            <button id="request-permission-btn" class="header-btn" style="background:#27ae60;">通知許可</button>
         </div>
     </div>
     
@@ -546,6 +547,7 @@
             logViewBtn: document.getElementById('log-view-btn'),
             logModal: document.getElementById('log-modal'),
             modalCloseBtn: document.getElementById('modal-close-btn'),
+            requestPermissionBtn: document.getElementById('request-permission-btn'),
         };
     
         function listenToCollection(collectionName) {
@@ -554,18 +556,32 @@
                 allResidents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 // Show self-select modal if first visit
                 if (!localStorage.getItem('myResidentId')) {
-                  const select = document.getElementById('self-select');
-                  select.innerHTML = allResidents.map(r =>
-                    `<option value="${r.id}">${r.name} (${r.roomNumber})</option>`
-                  ).join('');
-                  document.getElementById('self-select-modal').classList.add('active');
-                  document.getElementById('self-select-btn').onclick = () => {
-                    const id = select.value;
-                    localStorage.setItem('myResidentId', id);
-                    document.getElementById('self-select-modal').classList.remove('active');
-                    renderTable();
-                  };
-                  return; // skip initial render until selection
+                  const selectModal = document.getElementById('self-select-modal');
+                  (async () => {
+                    const select = document.getElementById('self-select');
+                    const dorms = ['shofu', 'meizen'];
+                    const lists = await Promise.all(dorms.map(d =>
+                      db.collection(`residents_${d}`).get().then(snap =>
+                        snap.docs.map(doc => ({ id: doc.id, ...doc.data(), dorm: d }))
+                      )
+                    ));
+                    const combined = lists.flat().sort((a, b) => {
+                      const idxA = dorms.indexOf(a.dorm), idxB = dorms.indexOf(b.dorm);
+                      if (idxA !== idxB) return idxA - idxB;
+                      return (parseInt(a.roomNumber) || 0) - (parseInt(b.roomNumber) || 0);
+                    });
+                    select.innerHTML = combined.map(r =>
+                      `<option value="${r.id}">${r.dorm === 'shofu' ? '松風寮' : '明善寮'} - ${r.roomNumber} ${r.name}</option>`
+                    ).join('');
+                    selectModal.classList.add('active');
+                    document.getElementById('self-select-btn').onclick = () => {
+                      const id = select.value;
+                      localStorage.setItem('myResidentId', id);
+                      selectModal.classList.remove('active');
+                      renderTable();
+                    };
+                  })();
+                  return;
                 }
                 renderTable(); 
             }, error => console.error("データの読み込みに失敗しました:", error));
@@ -889,7 +905,16 @@
         });
         // ===== iOS Safari 対策：ユーザー操作で通知許可をリクエスト =====
         initializeTheme();
-        requestNotificationPermission();
+        // 通知許可ボタン表示制御
+        if (Notification.permission !== 'granted') {
+          elements.requestPermissionBtn.style.display = 'inline-block';
+        } else {
+          elements.requestPermissionBtn.style.display = 'none';
+        }
+        elements.requestPermissionBtn.addEventListener('click', async () => {
+          await requestNotificationPermission();
+          elements.requestPermissionBtn.style.display = 'none';
+        });
         // 30分ごとに lastSeen を更新
         setInterval(updateLastSeen, 30 * 60 * 1000);
         elements.addModalCloseBtn.addEventListener('click', hideAddResidentModal);
