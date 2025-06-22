@@ -346,6 +346,7 @@
             </div>
         </div>
         <div class="ops-container">
+            <button id="reset-all-btn" class="header-btn" style="background-color:#f39c12;">【松風・明善】全ての荷物/郵便を0にする</button>
              <div class="bulk-ops-container">
                 <button id="add-resident-btn">新しい寮生を追加</button>
                 <button id="add-bulk-btn">寮生を一括追加</button>
@@ -607,6 +608,7 @@
             addResidentBtn: document.getElementById('add-resident-btn'),
             addBulkBtn: document.getElementById('add-bulk-btn'),
             deleteSelectedBtn: document.getElementById('delete-selected-btn'),
+            resetAllBtn: document.getElementById('reset-all-btn'),
             selectAllCheckbox: document.getElementById('select-all-checkbox'),
             modeSelectors: document.querySelectorAll('input[name="mode"]'),
             loginLogoutBtn: document.getElementById('login-logout-btn'),
@@ -630,6 +632,7 @@
             logModal: document.getElementById('log-modal'),
             modalCloseBtn: document.getElementById('modal-close-btn'),
         };
+
     
         function listenToCollection(collectionName) {
             if (unsubscribe) unsubscribe();
@@ -701,6 +704,10 @@
                 btn.classList.toggle('active', btn.dataset.dorm === dorm);
             });
             listenToCollection(currentCollectionName);
+            // Update reset button label to show current dorm name
+            const dormLabel = dorm === 'shofu' ? '松風寮' : '明善寮';
+            const resetBtn = document.getElementById('reset-all-btn');
+            if (resetBtn) resetBtn.textContent = `${dormLabel}の全ての荷物/郵便を0にする`;
         }
 
         window.renderTable = () => {
@@ -1043,6 +1050,8 @@
         elements.addResidentBtn.addEventListener('click', showAddResidentModal);
         elements.addBulkBtn.addEventListener('click', showBulkAddModal);
         elements.deleteSelectedBtn.addEventListener('click', deleteSelectedResidents);
+        // 全リセットボタンのイベント登録
+        elements.resetAllBtn.addEventListener('click', resetAllCounts);
         // 庶務モードに応じてコントロール表示を切り替え
         elements.sohmuToggle.addEventListener('change', () => {
             // Hide dorm selector when 庶務モード is OFF
