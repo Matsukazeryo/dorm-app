@@ -469,6 +469,12 @@
         }
     }
     async function toggleFavorite(residentId) {
+        console.log("🔄 toggleFavorite called", { residentId, currentDeviceToken });
+        // Ensure we have a device token before saving favorite
+        if (!currentDeviceToken) {
+            console.log("⚠️ No FCM token yet; requesting permission first");
+            await requestNotificationPermission();
+        }
         const favKey = `dormAppFavoriteId_${currentCollectionName}`;
         const currentFavorite = localStorage.getItem(favKey);
         localStorage.setItem(favKey, currentFavorite === residentId ? '' : residentId);
