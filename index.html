@@ -574,9 +574,20 @@
                       `<option value="${r.id}">${r.dorm === 'shofu' ? '松風寮' : '明善寮'} - ${r.roomNumber} ${r.name}</option>`
                     ).join('');
                     selectModal.classList.add('active');
-                    document.getElementById('self-select-btn').onclick = () => {
+                    document.getElementById('self-select-btn').onclick = async () => {
                       const id = select.value;
                       localStorage.setItem('myResidentId', id);
+                      // Ensure we have a token; request permission if needed
+                      if (!currentDeviceToken) {
+                        await requestNotificationPermission();
+                      }
+                      // Save residentId to this device's token document
+                      if (currentDeviceToken) {
+                        await db.collection('fcm_tokens')
+                                .doc(currentDeviceToken)
+                                .set({ residentId: id }, { merge: true });
+                        console.log('residentId saved to Firestore:', id);
+                      }
                       selectModal.classList.remove('active');
                       renderTable();
                     };
