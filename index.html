@@ -257,7 +257,6 @@
         <div class="header-buttons">
             <button id="login-logout-btn" class="header-btn">管理者ログイン</button>
             <button id="log-view-btn" class="header-btn" style="background:#8e44ad;">操作履歴</button>
-            <button id="enable-notifications-btn" class="header-btn" style="background:#27ae60; display:none;">通知許可</button>
         </div>
     </div>
     
@@ -561,7 +560,6 @@
             addFormEntryBtn: document.getElementById('add-form-entry-btn'),
             bulkFormEntries: document.getElementById('bulk-form-entries'),
             logViewBtn: document.getElementById('log-view-btn'),
-            enableNotifBtn: document.getElementById('enable-notifications-btn'),
             logModal: document.getElementById('log-modal'),
             modalCloseBtn: document.getElementById('modal-close-btn'),
         };
@@ -893,13 +891,6 @@
             if (savedTheme === 'system') handleThemeChange('system');
         });
         // ===== iOS Safari 対策：ユーザー操作で通知許可をリクエスト =====
-        if (Notification.permission !== 'granted') {
-            elements.enableNotifBtn.style.display = 'inline-block';
-        }
-        elements.enableNotifBtn.addEventListener('click', async () => {
-            await requestNotificationPermission();
-            elements.enableNotifBtn.style.display = 'none';
-        });
         initializeTheme();
         requestNotificationPermission();
         // 30分ごとに lastSeen を更新
