@@ -420,8 +420,6 @@
             });
             currentDeviceToken = token;   // ← グローバル変数に保存
             console.log('FCM token:', token);
-            // 開発用：画面にも表示してコピーしやすくする
-            alert('FCM token:\n' + token);
             if (token) {
                 // プラットフォーム判定
                 const platform = /iPhone|iPad/.test(navigator.userAgent) ? 'ios'
