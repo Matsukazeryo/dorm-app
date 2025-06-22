@@ -37,11 +37,6 @@
         #login-logout-btn { background-color: #3498db; }
         #login-logout-btn.logout { background-color: #e74c3c; }
 
-        /* 朝チェックモード時のみ全員荷物リセットボタンを表示 */
-        body.check-mode #zero-luggage-btn {
-          display: inline-block;
-        }
-
         /* ==== 操作履歴モーダル ==== */
         .modal-overlay{
             position:fixed; inset:0;
@@ -262,8 +257,6 @@
         <div class="header-buttons">
             <button id="login-logout-btn" class="header-btn">管理者ログイン</button>
             <button id="log-view-btn" class="header-btn" style="background:#8e44ad;">操作履歴</button>
-            <button id="request-permission-btn" class="header-btn" style="background:#27ae60;">通知許可</button>
-            <button id="zero-luggage-btn" class="header-btn" style="background:#f39c12; display:none;">全員の荷物を0にする</button>
         </div>
     </div>
     
@@ -281,10 +274,6 @@
                 <label for="count-edit-mode">個数変更</label>
                 <input type="radio" id="resident-edit-mode" name="mode">
                 <label for="resident-edit-mode" id="resident-edit-mode-label">寮生編集</label>
-                <input type="radio" id="check-mode" name="mode">
-                <label for="check-mode">朝チェック</label>
-                <input type="radio" id="office-mode" name="mode">
-                <label for="office-mode">庶務モード</label>
             </div>
         </div>
         <div class="ops-container">
@@ -532,10 +521,11 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-        // PWA（Webアプリ）で起動されているかチェック
+        // iOS PWA（Webアプリ）で起動されているかチェック
+        const isiOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
         const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-        if (!isStandalone) {
-            // Webブラウザで開いている場合、通知が利用できない旨を表示
+        if (isiOS && !isStandalone) {
+            // iOS のブラウザで開いている場合、通知が利用できない旨を表示
             alert('通知を受信するには、ホーム画面に追加してアプリとして起動してください。');
         }
         const elements = {
@@ -563,8 +553,6 @@
             logViewBtn: document.getElementById('log-view-btn'),
             logModal: document.getElementById('log-modal'),
             modalCloseBtn: document.getElementById('modal-close-btn'),
-            requestPermissionBtn: document.getElementById('request-permission-btn'),
-            zeroLuggageBtn: document.getElementById('zero-luggage-btn'),
         };
     
         function listenToCollection(collectionName) {
@@ -939,28 +927,6 @@
         });
         // ===== iOS Safari 対策：ユーザー操作で通知許可をリクエスト =====
         initializeTheme();
-        // 通知許可ボタン表示制御
-        if (Notification.permission !== 'granted') {
-          elements.requestPermissionBtn.style.display = 'inline-block';
-        } else {
-          elements.requestPermissionBtn.style.display = 'none';
-        }
-        elements.requestPermissionBtn.addEventListener('click', async () => {
-          await requestNotificationPermission();
-          elements.requestPermissionBtn.style.display = 'none';
-        });
-        elements.zeroLuggageBtn.addEventListener('click', () => {
-          if (confirm('本当に全員の荷物を0にリセットしますか？')) {
-            const batch = db.batch();
-            allResidents.forEach(r =>
-              batch.update(db.collection(currentCollectionName).doc(r.id), { luggage: 0 })
-            );
-            batch.commit().then(() => {
-              alert('全員の荷物を0にリセットしました。');
-              addLog('荷物リセット', `[${currentCollectionName}] 全員の荷物を0にリセット`);
-            });
-          }
-        });
         // 30分ごとに lastSeen を更新
         setInterval(updateLastSeen, 30 * 60 * 1000);
         elements.addModalCloseBtn.addEventListener('click', hideAddResidentModal);
