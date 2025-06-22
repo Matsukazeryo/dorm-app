@@ -173,6 +173,20 @@
         body.dark-theme .furigana-small{
             color:#bdc3c7;   /* 色は既存と同じ */
         }
+
+        /* iOS-like toggle switch */
+        .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px; background-color: white; transition: .4s; }
+        .switch input:checked + .slider { background-color: #2196F3; }
+        .switch input:checked + .slider:before { transform: translateX(20px); }
+        .slider.round { border-radius: 34px; }
+        .slider.round:before { border-radius: 50%; }
+
+        /* Highlight own row when 庶務モード OFF */
+        .highlight-row { transform: scale(1.1); background-color: #fff9c4; }
+        .highlight-row .cell-content { font-size: 1.3em; }
         .count-cell {
             display: inline-flex;   /* 横並びにする */
             align-items: center;    /* 縦方向を中央揃え */
@@ -245,8 +259,23 @@
                height: 22px;
                font-size: 14px;
              }
+        }
 
-            }
+        /* ===== 庶務モードOFF専用レイアウト ===== */
+        .off-mode-container {
+          text-align: center;
+          padding: 20px;
+        }
+        .off-name {
+          font-size: 1.5em;
+          font-weight: bold;
+          margin-bottom: 10px;
+        }
+        .off-counts {
+          font-size: 1.2em;
+          color: var(--text-color);
+        }
+        /* ===== 庶務モードOFF専用レイアウトここまで ===== */
    </style>
 </head>
 <body>
@@ -257,6 +286,11 @@
         <div class="header-buttons">
             <button id="login-logout-btn" class="header-btn">管理者ログイン</button>
             <button id="log-view-btn" class="header-btn" style="background:#8e44ad;">操作履歴</button>
+            <label class="switch" style="margin-left:8px;">
+              <input type="checkbox" id="sohmu-toggle">
+              <span class="slider round"></span>
+            </label>
+            <span id="sohmu-label" style="margin-left:4px; font-weight:bold; color:var(--header-text);">庶務</span>
         </div>
     </div>
     
@@ -309,6 +343,9 @@
                 <tr><td colspan="5">データベースから読み込み中...</td></tr>
             </tbody>
         </table>
+    </div>
+    <div style="text-align:center; margin-top:20px;">
+      <button id="change-resident-btn" class="header-btn" style="background:#3498db;">寮生変更</button>
     </div>
 </div>
 
@@ -538,10 +575,14 @@
             modeSelectors: document.querySelectorAll('input[name="mode"]'),
             loginLogoutBtn: document.getElementById('login-logout-btn'),
             resetAllBtn: document.getElementById('reset-all-btn'),
+            sohmuToggle: document.getElementById('sohmu-toggle'),
             themeSelector: document.getElementById('theme-selector'),
             toggleFurigana: document.getElementById('toggle-furigana'),
             toggleCircle: document.getElementById('toggle-circle'),
             dormSelector: document.getElementById('dorm-selector'),
+            topControls: document.querySelector('.top-controls'),
+            middleControls: document.querySelector('.middle-controls'),
+            changeResidentBtn: document.getElementById('change-resident-btn'),
             addResidentModal: document.getElementById('add-resident-modal'),
             addModalCloseBtn: document.getElementById('add-modal-close-btn'),
             addResidentForm: document.getElementById('add-resident-form'),
@@ -620,41 +661,72 @@
 
         window.renderTable = () => {
             const searchTerm = elements.searchInput.value.toLowerCase();
+            const sohmuOn = elements.sohmuToggle.checked;
             const myId = localStorage.getItem('myResidentId');
-            allResidents.sort((a, b) => {
+            // Hide table header when 庶務モード is OFF
+            const tableHead = document.querySelector('#resident-table thead');
+            tableHead.style.display = sohmuOn ? '' : 'none';
+            const baseList = sohmuOn
+              ? allResidents
+              : allResidents.filter(r => r.id === myId);
+            baseList.sort((a, b) => {
               if (a.id === myId) return -1;
               if (b.id === myId) return 1;
               return (parseInt(a.roomNumber) || 0) - (parseInt(b.roomNumber) || 0);
             });
-            const filteredResidents = allResidents.filter(r => 
-                (r.name && r.name.toLowerCase().includes(searchTerm)) || 
-                (r.roomNumber && r.roomNumber.includes(searchTerm)) ||
-                (r.furigana && r.furigana.toLowerCase().includes(searchTerm))
+            const filteredResidents = baseList.filter(r => 
+              (r.name && r.name.toLowerCase().includes(searchTerm)) ||
+              (r.roomNumber && r.roomNumber.includes(searchTerm)) ||
+              (r.furigana && r.furigana.toLowerCase().includes(searchTerm))
             );
             elements.tableBody.innerHTML = ''; 
             if (filteredResidents.length === 0) {
                 elements.tableBody.innerHTML = '<tr><td colspan="5">該当する寮生が見つかりません。</td></tr>';
             } else {
                 filteredResidents.forEach(resident => {
-                    // 文字数でふりがな用クラスを付与
-                    const furiClass = resident.furigana && resident.furigana.length > 6 ? ' furigana-small' : '';
                     const row = document.createElement('tr');
-                    row.innerHTML = `
-      <td class="checkbox-col"><div class="cell-content"><input type="checkbox" class="resident-checkbox" data-id="${resident.id}"></div></td>
-      <td>
-        <div class="cell-content name-cell">
-          <span class="room-number">${resident.roomNumber}</span>
-          <span class="circle-badge">${resident.circle || ''}</span>
-          <span class="name-stack">
-            <span class="furigana-text${furiClass}">${resident.furigana || ''}</span>
-            <span class="kanji-name">${resident.name}</span>
-          </span>
-        </div>
-      </td>
-      <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1)">-</button><span class="count-span">${resident.luggage}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1)">+</button></div></td>
-      <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', -1)">-</button><span class="count-span">${resident.mail}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', 1)">+</button></div></td>
-      <td class="edit-op-cell"><div class="cell-content"><button class="delete-btn" onclick="deleteResident('${resident.id}', '${resident.name}')">削除</button></div></td>
-  `;
+                    if (!elements.sohmuToggle.checked) {
+                        // 庶務モード OFF のときのレイアウト
+                        row.innerHTML = `
+                          <td colspan="5" style="border:none; padding:20px; text-align:center;">
+                            <div class="off-mode-container">
+                              <div class="off-name">${resident.name}</div>
+                              <div class="off-counts">
+                                <div>
+                                  荷物:
+                                  <button onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1)">-</button>
+                                  <span class="off-count-number">${resident.luggage}</span>
+                                  <button onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1)">+</button>
+                                </div>
+                                <div style="margin-top:10px;">
+                                  郵便:
+                                  <button onclick="updateCount('${resident.id}', '${resident.name}', 'mail', -1)">-</button>
+                                  <span class="off-count-number">${resident.mail}</span>
+                                  <button onclick="updateCount('${resident.id}', '${resident.name}', 'mail', 1)">+</button>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        `;
+                    } else {
+                        // 庶務モード ON のときは通常レイアウト
+                        row.innerHTML = `
+                          <td class="checkbox-col"><div class="cell-content"><input type="checkbox" class="resident-checkbox" data-id="${resident.id}"></div></td>
+                          <td>
+                            <div class="cell-content name-cell">
+                              <span class="room-number">${resident.roomNumber}</span>
+                              <span class="circle-badge">${resident.circle || ''}</span>
+                              <span class="name-stack">
+                                <span class="furigana-text${resident.furigana && resident.furigana.length > 6 ? ' furigana-small' : ''}">${resident.furigana || ''}</span>
+                                <span class="kanji-name">${resident.name}</span>
+                              </span>
+                            </div>
+                          </td>
+                          <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1)">-</button><span class="count-span">${resident.luggage}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1)">+</button></div></td>
+                          <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', -1)">-</button><span class="count-span">${resident.mail}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', 1)">+</button></div></td>
+                          <td class="edit-op-cell"><div class="cell-content"><button class="delete-btn" onclick="deleteResident('${resident.id}', '${resident.name}')">削除</button></div></td>
+                        `;
+                    }
                     elements.tableBody.appendChild(row);
                 });
             }
@@ -912,6 +984,23 @@
         elements.addBulkBtn.addEventListener('click', showBulkAddModal);
         elements.deleteSelectedBtn.addEventListener('click', deleteSelectedResidents);
         elements.resetAllBtn.addEventListener('click', resetAllCounts);
+        // 庶務モードに応じてリセットボタン表示を切り替え
+        elements.sohmuToggle.addEventListener('change', () => {
+            elements.resetAllBtn.style.display = elements.sohmuToggle.checked ? 'block' : 'none';
+            // Hide dorm selector when 庶務モード is OFF
+            elements.dormSelector.style.display = elements.sohmuToggle.checked ? 'flex' : 'none';
+            // Hide search bar and display settings when off
+            elements.topControls.style.display = elements.sohmuToggle.checked ? 'flex' : 'none';
+            elements.middleControls.style.display = elements.sohmuToggle.checked ? 'flex' : 'none';
+            renderTable();
+        });
+        // 初期表示設定
+        elements.resetAllBtn.style.display = elements.sohmuToggle.checked ? 'block' : 'none';
+        // Initial hide/show for dorm selector
+        elements.dormSelector.style.display = elements.sohmuToggle.checked ? 'flex' : 'none';
+        // Initial hide/show for controls in off-mode
+        elements.topControls.style.display = elements.sohmuToggle.checked ? 'flex' : 'none';
+        elements.middleControls.style.display = elements.sohmuToggle.checked ? 'flex' : 'none';
         elements.selectAllCheckbox.addEventListener('change', e => {
             document.querySelectorAll('.resident-checkbox').forEach(cb => cb.checked = e.target.checked);
             updateDeleteButtonState();
@@ -943,6 +1032,13 @@
         elements.logViewBtn.addEventListener('click', showLogModal);
         elements.modalCloseBtn.addEventListener('click', hideLogModal);
         elements.logModal.addEventListener('click', e=>{ if(e.target===elements.logModal) hideLogModal(); });
+
+        // 寮生変更ボタン：再度自分選択モーダルを開く
+        elements.changeResidentBtn.addEventListener('click', () => {
+          localStorage.removeItem('myResidentId');
+          // リスナーを一旦再登録してモーダル表示処理を走らせる
+          listenToCollection(currentCollectionName);
+        });
     });
 
 // --- 削除CSSブロック: .name-stack{ ... } ---
