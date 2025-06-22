@@ -581,6 +581,12 @@
                     ).join('');
                     selectModal.classList.add('active');
                     document.getElementById('self-select-btn').onclick = async () => {
+                      // Show loading state
+                      const btn = document.getElementById('self-select-btn');
+                      btn.disabled = true;
+                      btn.textContent = '読み込み中...';
+                      // Optionally show loading in table
+                      document.querySelector('#resident-table tbody').innerHTML = '<tr><td colspan="5">読み込み中...</td></tr>';
                       const id = select.value;
                       localStorage.setItem('myResidentId', id);
                       // Ensure we have a token; request permission if needed
