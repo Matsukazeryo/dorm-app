@@ -215,7 +215,11 @@
         .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
         .form-group input, .form-group select, .form-group textarea { width: 95%; padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; background-color: var(--mode-label-bg); color: var(--text-color); font-family: inherit; }
         .form-group textarea { resize: vertical; min-height: 100px; }
-        .form-actions { text-align: right; margin-top: 20px; }
+        .form-actions {
+          display: flex;
+          justify-content: space-between;
+          margin-top: 20px;
+        }
         .form-actions button { padding: 10px 20px; }
         /* #log-list: ログモーダル関連CSSは削除 */
         
@@ -385,8 +389,8 @@
     <h2>あなたの名前を選択してください</h2>
     <select id="self-select"></select>
     <div class="form-actions">
+      <button id="self-cancel-btn" class="header-btn" style="background-color:#e74c3c;">キャンセル</button>
       <button id="self-select-btn" class="header-btn" style="background-color:#27ae60;">決定</button>
-      <button id="self-cancel-btn" class="header-btn" style="background-color:#e74c3c; margin-left:8px;">キャンセル</button>
     </div>
   </div>
 </div>
