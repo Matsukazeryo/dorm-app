@@ -312,6 +312,18 @@
     </div>
 </div>
 
+<!-- ==== 自分選択モーダル ==== -->
+<div id="self-select-modal" class="modal-overlay">
+  <div class="modal-content">
+    <h2>あなたの名前を選択してください</h2>
+    <select id="self-select"></select>
+    <div class="form-actions">
+      <button id="self-select-btn" class="header-btn" style="background-color:#27ae60;">決定</button>
+    </div>
+  </div>
+</div>
+<!-- ==== 自分選択モーダル ここまで ==== -->
+
 <!-- ==== 操作履歴モーダル ==== -->
 <div id="log-modal" class="modal-overlay">
   <div class="modal-content">
@@ -465,32 +477,6 @@
             console.error('addLog error',e);
         }
     }
-    async function toggleFavorite(residentId) {
-        console.log("🔄 toggleFavorite called", { residentId, currentDeviceToken });
-        // Ensure we have a device token before saving favorite
-        if (!currentDeviceToken) {
-            console.log("⚠️ No FCM token yet; requesting permission first");
-            await requestNotificationPermission();
-        }
-        const favKey = `dormAppFavoriteId_${currentCollectionName}`;
-        const currentFavorite = localStorage.getItem(favKey);
-        localStorage.setItem(favKey, currentFavorite === residentId ? '' : residentId);
-        // Firestore に residentId を保存／解除
-        const newFavoriteId = (currentFavorite === residentId) ? '' : residentId;
-        if (currentDeviceToken) {
-            const tokenDocRef = db.collection('fcm_tokens').doc(currentDeviceToken);
-            if (newFavoriteId) {
-                // 星を付けた → residentId を保存
-                await tokenDocRef.set({ residentId: newFavoriteId }, { merge: true });
-            } else {
-                // 星を外した → residentId フィールドを削除
-                try {
-                    await tokenDocRef.update({ residentId: firebase.firestore.FieldValue.delete() });
-                } catch (_) { /* doc がまだ無い場合などは無視 */ }
-            }
-        }
-        renderTable();
-    }
 
     // 荷物/郵便の個数を ±1 する（0 未満にならないように制御）
     function updateCount(residentId, residentName, type, value) {
@@ -566,6 +552,21 @@
             if (unsubscribe) unsubscribe();
             unsubscribe = db.collection(collectionName).onSnapshot(snapshot => {
                 allResidents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                // Show self-select modal if first visit
+                if (!localStorage.getItem('myResidentId')) {
+                  const select = document.getElementById('self-select');
+                  select.innerHTML = allResidents.map(r =>
+                    `<option value="${r.id}">${r.name} (${r.roomNumber})</option>`
+                  ).join('');
+                  document.getElementById('self-select-modal').classList.add('active');
+                  document.getElementById('self-select-btn').onclick = () => {
+                    const id = select.value;
+                    localStorage.setItem('myResidentId', id);
+                    document.getElementById('self-select-modal').classList.remove('active');
+                    renderTable();
+                  };
+                  return; // skip initial render until selection
+                }
                 renderTable(); 
             }, error => console.error("データの読み込みに失敗しました:", error));
         }
@@ -581,11 +582,11 @@
 
         window.renderTable = () => {
             const searchTerm = elements.searchInput.value.toLowerCase();
-            const favoriteId = localStorage.getItem(`dormAppFavoriteId_${currentCollectionName}`);
+            const myId = localStorage.getItem('myResidentId');
             allResidents.sort((a, b) => {
-                if (a.id === favoriteId) return -1;
-                if (b.id === favoriteId) return 1;
-                return (parseInt(a.roomNumber) || 0) - (parseInt(b.roomNumber) || 0);
+              if (a.id === myId) return -1;
+              if (b.id === myId) return 1;
+              return (parseInt(a.roomNumber) || 0) - (parseInt(b.roomNumber) || 0);
             });
             const filteredResidents = allResidents.filter(r => 
                 (r.name && r.name.toLowerCase().includes(searchTerm)) || 
@@ -597,7 +598,6 @@
                 elements.tableBody.innerHTML = '<tr><td colspan="5">該当する寮生が見つかりません。</td></tr>';
             } else {
                 filteredResidents.forEach(resident => {
-                    const isFavorited = resident.id === favoriteId;
                     // 文字数でふりがな用クラスを付与
                     const furiClass = resident.furigana && resident.furigana.length > 6 ? ' furigana-small' : '';
                     const row = document.createElement('tr');
@@ -605,7 +605,6 @@
       <td class="checkbox-col"><div class="cell-content"><input type="checkbox" class="resident-checkbox" data-id="${resident.id}"></div></td>
       <td>
         <div class="cell-content name-cell">
-          <span class="favorite-star ${isFavorited ? 'favorited' : ''}" onclick="toggleFavorite('${resident.id}')">★</span>
           <span class="room-number">${resident.roomNumber}</span>
           <span class="circle-badge">${resident.circle || ''}</span>
           <span class="name-stack">
