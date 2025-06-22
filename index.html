@@ -37,6 +37,11 @@
         #login-logout-btn { background-color: #3498db; }
         #login-logout-btn.logout { background-color: #e74c3c; }
 
+        /* 朝チェックモード時のみ全員荷物リセットボタンを表示 */
+        body.check-mode #zero-luggage-btn {
+          display: inline-block;
+        }
+
         /* ==== 操作履歴モーダル ==== */
         .modal-overlay{
             position:fixed; inset:0;
@@ -258,6 +263,7 @@
             <button id="login-logout-btn" class="header-btn">管理者ログイン</button>
             <button id="log-view-btn" class="header-btn" style="background:#8e44ad;">操作履歴</button>
             <button id="request-permission-btn" class="header-btn" style="background:#27ae60;">通知許可</button>
+            <button id="zero-luggage-btn" class="header-btn" style="background:#f39c12; display:none;">全員の荷物を0にする</button>
         </div>
     </div>
     
@@ -554,6 +560,7 @@
             logModal: document.getElementById('log-modal'),
             modalCloseBtn: document.getElementById('modal-close-btn'),
             requestPermissionBtn: document.getElementById('request-permission-btn'),
+            zeroLuggageBtn: document.getElementById('zero-luggage-btn'),
         };
     
         function listenToCollection(collectionName) {
@@ -937,6 +944,18 @@
         elements.requestPermissionBtn.addEventListener('click', async () => {
           await requestNotificationPermission();
           elements.requestPermissionBtn.style.display = 'none';
+        });
+        elements.zeroLuggageBtn.addEventListener('click', () => {
+          if (confirm('本当に全員の荷物を0にリセットしますか？')) {
+            const batch = db.batch();
+            allResidents.forEach(r =>
+              batch.update(db.collection(currentCollectionName).doc(r.id), { luggage: 0 })
+            );
+            batch.commit().then(() => {
+              alert('全員の荷物を0にリセットしました。');
+              addLog('荷物リセット', `[${currentCollectionName}] 全員の荷物を0にリセット`);
+            });
+          }
         });
         // 30分ごとに lastSeen を更新
         setInterval(updateLastSeen, 30 * 60 * 1000);
