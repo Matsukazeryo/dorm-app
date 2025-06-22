@@ -342,7 +342,6 @@
             </div>
         </div>
         <div class="ops-container">
-             <button id="reset-all-btn">全ての荷物/郵便を０にする</button>
              <div class="bulk-ops-container">
                 <button id="add-resident-btn">新しい寮生を追加</button>
                 <button id="add-bulk-btn">寮生を一括追加</button>
@@ -606,7 +605,6 @@
             selectAllCheckbox: document.getElementById('select-all-checkbox'),
             modeSelectors: document.querySelectorAll('input[name="mode"]'),
             loginLogoutBtn: document.getElementById('login-logout-btn'),
-            resetAllBtn: document.getElementById('reset-all-btn'),
             sohmuToggle: document.getElementById('sohmu-toggle'),
             themeSelector: document.getElementById('theme-selector'),
             toggleFurigana: document.getElementById('toggle-furigana'),
@@ -649,7 +647,7 @@
                       return (parseInt(a.roomNumber) || 0) - (parseInt(b.roomNumber) || 0);
                     });
                     select.innerHTML = combined.map(r =>
-                      `<option value="${r.id}">${r.dorm === 'shofu' ? '松風寮' : '明善寮'} - ${r.roomNumber} ${r.name}</option>`
+                      `<option value="${r.id}" data-dorm="${r.dorm}">${r.dorm === 'shofu' ? '松風寮' : '明善寮'} - ${r.roomNumber} ${r.name}</option>`
                     ).join('');
                     selectModal.classList.add('active');
                     document.getElementById('self-select-btn').onclick = async () => {
@@ -661,6 +659,9 @@
                       document.querySelector('#resident-table tbody').innerHTML = '<tr><td colspan="5">読み込み中...</td></tr>';
                       const id = select.value;
                       localStorage.setItem('myResidentId', id);
+                      // Switch dorm view to match selected resident
+                      const selectedDorm = select.options[select.selectedIndex].getAttribute('data-dorm');
+                      switchDorm(selectedDorm);
                       // Ensure we have a token; request permission if needed
                       if (!currentDeviceToken) {
                         await requestNotificationPermission();
@@ -674,6 +675,9 @@
                       }
                       selectModal.classList.remove('active');
                       renderTable();
+                      // Reset the button back to its original state
+                      btn.disabled = false;
+                      btn.textContent = '決定';
                     };
                   })();
                   return;
@@ -701,11 +705,17 @@
             const baseList = sohmuOn
               ? allResidents
               : allResidents.filter(r => r.id === myId);
-            baseList.sort((a, b) => {
-              if (a.id === myId) return -1;
-              if (b.id === myId) return 1;
-              return (parseInt(a.roomNumber) || 0) - (parseInt(b.roomNumber) || 0);
-            });
+            if (sohmuOn) {
+              // 庶務モード ON: 通常の部屋番号順
+              baseList.sort((a, b) => (parseInt(a.roomNumber) || 0) - (parseInt(b.roomNumber) || 0));
+            } else {
+              // 庶務モード OFF: 自分をトップに、以降部屋番号順
+              baseList.sort((a, b) => {
+                if (a.id === myId) return -1;
+                if (b.id === myId) return 1;
+                return (parseInt(a.roomNumber) || 0) - (parseInt(b.roomNumber) || 0);
+              });
+            }
             const filteredResidents = baseList.filter(r => 
               (r.name && r.name.toLowerCase().includes(searchTerm)) ||
               (r.roomNumber && r.roomNumber.includes(searchTerm)) ||
@@ -963,9 +973,15 @@
             if (isLoggedIn) {
                 elements.loginLogoutBtn.textContent = 'ログアウト';
                 elements.loginLogoutBtn.classList.add('logout');
+                // 管理者は常に庶務モード ON、トグル無効化
+                elements.sohmuToggle.checked = true;
+                elements.sohmuToggle.disabled = true;
+                elements.sohmuToggle.dispatchEvent(new Event('change'));
             } else {
                 elements.loginLogoutBtn.textContent = '管理者ログイン';
                 elements.loginLogoutBtn.classList.remove('logout');
+                // 管理者ログアウト時はトグル有効化
+                elements.sohmuToggle.disabled = false;
             }
         }
 
@@ -1007,7 +1023,11 @@
             if(e.target.tagName === 'BUTTON') switchDorm(e.target.dataset.dorm);
         });
         
-        elements.modeSelectors.forEach(input => input.addEventListener('change', () => { if(input.checked) setMode(input.id); }));
+        elements.modeSelectors.forEach(input => 
+          input.addEventListener('change', () => {
+            if (input.checked) setMode(input.id);
+          })
+        );
         elements.tableBody.addEventListener('change', e => { if (e.target.classList.contains('resident-checkbox')) updateDeleteButtonState(); });
         setMode('view-mode');
         updateLoginStatus();
@@ -1015,10 +1035,8 @@
         elements.addResidentBtn.addEventListener('click', showAddResidentModal);
         elements.addBulkBtn.addEventListener('click', showBulkAddModal);
         elements.deleteSelectedBtn.addEventListener('click', deleteSelectedResidents);
-        elements.resetAllBtn.addEventListener('click', resetAllCounts);
-        // 庶務モードに応じてリセットボタン表示を切り替え
+        // 庶務モードに応じてコントロール表示を切り替え
         elements.sohmuToggle.addEventListener('change', () => {
-            elements.resetAllBtn.style.display = elements.sohmuToggle.checked ? 'block' : 'none';
             // Hide dorm selector when 庶務モード is OFF
             elements.dormSelector.style.display = elements.sohmuToggle.checked ? 'flex' : 'none';
             // Hide search bar and display settings when off
@@ -1027,7 +1045,6 @@
             renderTable();
         });
         // 初期表示設定
-        elements.resetAllBtn.style.display = elements.sohmuToggle.checked ? 'block' : 'none';
         // Initial hide/show for dorm selector
         elements.dormSelector.style.display = elements.sohmuToggle.checked ? 'flex' : 'none';
         // Initial hide/show for controls in off-mode
@@ -1065,11 +1082,12 @@
         elements.modalCloseBtn.addEventListener('click', hideLogModal);
         elements.logModal.addEventListener('click', e=>{ if(e.target===elements.logModal) hideLogModal(); });
 
-        // 寮生変更ボタン：再度自分選択モーダルを開く
+        // 寮生変更ボタン：自分選択モーダルを即座に開く
         elements.changeResidentBtn.addEventListener('click', () => {
+          // Reset selection and immediately show the self-select modal
           localStorage.removeItem('myResidentId');
-          // リスナーを一旦再登録してモーダル表示処理を走らせる
-          listenToCollection(currentCollectionName);
+          const selectModal = document.getElementById('self-select-modal');
+          selectModal.classList.add('active');
         });
     });
 
