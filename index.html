@@ -281,6 +281,8 @@
                 <label for="count-edit-mode">個数変更</label>
                 <input type="radio" id="resident-edit-mode" name="mode">
                 <label for="resident-edit-mode" id="resident-edit-mode-label">寮生編集</label>
+                <input type="radio" id="office-mode" name="mode">
+                <label for="office-mode">庶務モード</label>
             </div>
         </div>
         <div class="ops-container">
@@ -629,12 +631,14 @@
         window.renderTable = () => {
             const searchTerm = elements.searchInput.value.toLowerCase();
             const myId = localStorage.getItem('myResidentId');
-            allResidents.sort((a, b) => {
+            const isOfficeMode = document.body.classList.contains('office-mode');
+            let candidates = isOfficeMode ? allResidents : allResidents.filter(r => r.id === myId);
+            candidates.sort((a, b) => {
               if (a.id === myId) return -1;
               if (b.id === myId) return 1;
               return (parseInt(a.roomNumber) || 0) - (parseInt(b.roomNumber) || 0);
             });
-            const filteredResidents = allResidents.filter(r => 
+            const filteredResidents = candidates.filter(r => 
                 (r.name && r.name.toLowerCase().includes(searchTerm)) || 
                 (r.roomNumber && r.roomNumber.includes(searchTerm)) ||
                 (r.furigana && r.furigana.toLowerCase().includes(searchTerm))
