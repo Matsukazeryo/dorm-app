@@ -407,8 +407,6 @@
         try {
             // Register Firebase service worker
             const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-            // Attach registration to messaging
-            messaging.useServiceWorker(registration);
 
             // Ask user for permission
             const permission = await Notification.requestPermission();
@@ -416,7 +414,8 @@
 
             // Get the FCM token
             const token = await messaging.getToken({
-                                vapidKey: 'BP-A4DPeS4EWGjWtRUBYPLExlhQXq-4l_te7txwJa8qAR7RxQnbaaabUKpX3akGRFxwAeg9IpUjM1w0Nmrq77KQ'
+                vapidKey: 'BP-A4DPeS4EWGjWtRUBYPLExlhQXq-4l_te7txwJa8qAR7RxQnbaaabUKpX3akGRFxwAeg9IpUjM1w0Nmrq77KQ',
+                serviceWorkerRegistration: registration
             });
             console.log('FCM token:', token);
             // 開発用：画面にも表示してコピーしやすくする
