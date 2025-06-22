@@ -272,8 +272,14 @@
           margin-bottom: 10px;
         }
         .off-counts {
-          font-size: 1.2em;
+          font-size: 1.5em;
           color: var(--text-color);
+        }
+        /* Emphasize off-mode counts */
+        .off-count-number {
+          font-size: 2.5em;
+          font-weight: bold;
+          margin: 0 8px;
         }
         /* ===== 庶務モードOFF専用レイアウトここまで ===== */
    </style>
@@ -291,6 +297,7 @@
               <span class="slider round"></span>
             </label>
             <span id="sohmu-label" style="margin-left:4px; font-weight:bold; color:var(--header-text);">庶務</span>
+            <button id="disable-alert-btn" class="header-btn" style="background:#95a5a6;">今後表示しない</button>
         </div>
     </div>
     
