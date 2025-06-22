@@ -400,6 +400,7 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const messaging = firebase.messaging();
+    let currentDeviceToken = null;   // このデバイスの FCM トークンを保持
 
     /* ==== FCM Push Notification Setup ==== */
     async function requestNotificationPermission() {
@@ -418,16 +419,25 @@
                 vapidKey: 'BP-A4DPeS4EWGjWtRUBYPLExlhQXq-4l_te7txwJa8qAR7RxQnbaaabUKpX3akGRFxwAeg9IpUjM1w0Nmrq77KQ',
                 serviceWorkerRegistration: registration
             });
+            currentDeviceToken = token;   // ← グローバル変数に保存
             console.log('FCM token:', token);
             // 開発用：画面にも表示してコピーしやすくする
             alert('FCM token:\n' + token);
             if (token) {
-                // 最短：token をそのまま Firestore に保存
+                // プラットフォーム判定
+                const platform = /iPhone|iPad/.test(navigator.userAgent) ? 'ios'
+                              : /Android/.test(navigator.userAgent)    ? 'android'
+                              : 'desktop';
+
                 await db.collection('fcm_tokens')
-                        .doc(token)                      // token をドキュメントIDに
+                        .doc(token)          // token = ドキュメントID
                         .set({
-                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                        });
+                            dorm     : currentCollectionName.split('_')[1],   // 'shofu' or 'meizen'
+                            lastSeen : firebase.firestore.FieldValue.serverTimestamp(),
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                            platform,
+                            ua       : navigator.userAgent
+                        }, { merge: true });
                 console.log('Token saved to Firestore');
             }
         } catch (err) {
@@ -458,10 +468,24 @@
             console.error('addLog error',e);
         }
     }
-    function toggleFavorite(residentId) {
+    async function toggleFavorite(residentId) {
         const favKey = `dormAppFavoriteId_${currentCollectionName}`;
         const currentFavorite = localStorage.getItem(favKey);
         localStorage.setItem(favKey, currentFavorite === residentId ? '' : residentId);
+        // Firestore に residentId を保存／解除
+        const newFavoriteId = (currentFavorite === residentId) ? '' : residentId;
+        if (currentDeviceToken) {
+            const tokenDocRef = db.collection('fcm_tokens').doc(currentDeviceToken);
+            if (newFavoriteId) {
+                // 星を付けた → residentId を保存
+                await tokenDocRef.set({ residentId: newFavoriteId }, { merge: true });
+            } else {
+                // 星を外した → residentId フィールドを削除
+                try {
+                    await tokenDocRef.update({ residentId: firebase.firestore.FieldValue.delete() });
+                } catch (_) { /* doc がまだ無い場合などは無視 */ }
+            }
+        }
         renderTable();
     }
 
@@ -497,6 +521,16 @@
         }
     }
     
+    // --- 最終利用時刻を定期的にアップデート ---
+    async function updateLastSeen() {
+        if (currentDeviceToken) {
+            await db.collection('fcm_tokens')
+                    .doc(currentDeviceToken)
+                    .update({ lastSeen: firebase.firestore.FieldValue.serverTimestamp() })
+                    .catch(()=>{});  // doc 不存在や権限エラーは無視
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         const elements = {
             tableBody: document.querySelector("#resident-table tbody"),
@@ -862,6 +896,8 @@
         });
         initializeTheme();
         requestNotificationPermission();
+        // 30分ごとに lastSeen を更新
+        setInterval(updateLastSeen, 30 * 60 * 1000);
         elements.addModalCloseBtn.addEventListener('click', hideAddResidentModal);
         elements.addResidentModal.addEventListener('click', e => { if(e.target === elements.addResidentModal) hideAddResidentModal(); });
         elements.addResidentForm.addEventListener('submit', saveNewResident);
