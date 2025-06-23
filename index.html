@@ -313,12 +313,49 @@
           font-size:1.1em;
           color:var(--header-text);
         }
+        /* お知らせ本文は改行を保持して表示 */
+        #announcement-content{
+          white-space:pre-wrap;
+        }
         .announcement.editing #announcement-content{
           outline:1px dashed var(--header-border);
           cursor:text;
         }
-        body.admin-logged-in #edit-announcement-btn{
+        body.admin-logged-in #post-announcement-btn{
           display:inline-block;   /* 標準では非表示 → 管理者のみ表示 */
+        }
+        /* 複数お知らせ表示用リスト */
+        .announcement-list{
+          list-style:none;
+          padding:0;
+          margin:0;
+        }
+        .announcement-list li{
+          border-bottom:1px solid var(--border-color);
+          padding:6px 0;
+          white-space:pre-wrap;
+        }
+        .announce-time{
+          display:block;
+          font-size:0.75em;
+          color:#7f8c8d;
+          margin-top:2px;
+        }
+        body.dark-theme .announce-time{
+          color:#bdc3c7;
+        }
+        /* ピン留めアイコン */
+        .pin-tag{
+          font-size:0.9em;
+          margin-right:4px;
+        }
+        .announce-title{
+          font-weight:bold;
+          margin-right:4px;
+        }
+        .announce-body{
+          white-space:pre-wrap;
+          margin-top:2px;
         }
         /* Off-mode ±ボタンの見た目をカスタマイズ */
         .off-mode-container .off-counts button {
@@ -399,15 +436,6 @@
         </div>
     </div>
 
-        <!-- ===== お知らせ欄 (庶務モードOFF で表示) ===== -->
-        <div id="announcement-container" class="announcement" style="display:none;">
-            <div class="announcement-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                <h2 style="margin:0;font-size:1.2em;">お知らせ</h2>
-                <button id="edit-announcement-btn" class="header-btn" style="background:#27ae60;display:none;">編集</button>
-            </div>
-            <div id="announcement-content">お知らせはありません。</div>
-        </div>
-        <!-- ===== お知らせ欄ここまで ===== -->
 
     <div class="table-container">
         <table id="resident-table">
@@ -428,6 +456,17 @@
     <div style="text-align:center; margin-top:20px;">
       <button id="change-resident-btn" class="header-btn" style="background:#3498db;">寮生変更</button>
     </div>
+    <!-- ===== お知らせ欄 (庶務モードOFF で表示) ===== -->
+    <div id="announcement-container" class="announcement" style="display:none;">
+        <div class="announcement-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <h2 style="margin:0;font-size:1.2em;">お知らせ</h2>
+            <button id="post-announcement-btn" class="header-btn" style="background:#27ae60;display:none;">投稿</button>
+        </div>
+        <ul id="announcement-list" class="announcement-list">
+            <li>お知らせはありません。</li>
+        </ul>
+    </div>
+    <!-- ===== お知らせ欄ここまで ===== -->
 </div>
 
 <!-- ==== 自分選択モーダル ==== -->
@@ -500,6 +539,31 @@
         </form>
     </div>
 </div>
+
+<!-- ==== お知らせ投稿モーダル ==== -->
+<div id="post-announcement-modal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>お知らせを投稿</h2>
+      <button id="post-modal-close-btn" class="modal-close-btn">&times;</button>
+    </div>
+    <form id="post-announcement-form">
+      <div class="form-group">
+        <label for="post-title">タイトル</label>
+        <input type="text" id="post-title" maxlength="50" placeholder="タイトルを入力">
+      </div>
+      <div class="form-group">
+        <label for="post-body">本文</label>
+        <textarea id="post-body" rows="6" placeholder="本文を入力（改行可）"></textarea>
+      </div>
+      <div class="form-actions">
+        <button type="button" id="post-cancel-btn" class="header-btn" style="background-color:#e74c3c;">キャンセル</button>
+        <button type="submit" class="header-btn" style="background-color:#27ae60;">投稿</button>
+      </div>
+    </form>
+  </div>
+</div>
+<!-- ==== お知らせ投稿モーダル ここまで ==== -->
 
 
 <footer class="footer">
@@ -685,20 +749,83 @@
             logModal: document.getElementById('log-modal'),
             modalCloseBtn: document.getElementById('modal-close-btn'),
             announcementContainer: document.getElementById('announcement-container'),
-            editAnnouncementBtn  : document.getElementById('edit-announcement-btn'),
-            announcementContent  : document.getElementById('announcement-content'),
+            postAnnouncementBtn : document.getElementById('post-announcement-btn'),
+            announcementList    : document.getElementById('announcement-list'),
+            postAnnouncementModal : document.getElementById('post-announcement-modal'),
+            postModalCloseBtn     : document.getElementById('post-modal-close-btn'),
+            postAnnouncementForm  : document.getElementById('post-announcement-form'),
+            postTitleInput        : document.getElementById('post-title'),
+            postBodyInput         : document.getElementById('post-body'),
+            postCancelBtn         : document.getElementById('post-cancel-btn'),
+            postModalTitle        : document.querySelector('#post-announcement-modal h2'),
+            postSubmitBtn         : document.querySelector('#post-announcement-form button[type="submit"]'),
         };
 
-        /* ===== Announcement (お知らせ欄) ===== */
-        const announcementDocRef = db.collection('config').doc('announcement');
+        // 編集中の announcement ドキュメント参照（null = 新規投稿モード）
+        let editingDocRef = null;  // null = 新規投稿モード
 
-        // Firestore listener: update announcement text in real‑time
-        announcementDocRef.onSnapshot(doc => {
-            const data = doc.data();
-            elements.announcementContent.textContent =
-              (data && data.text && data.text.trim())
-                ? data.text
-                : 'お知らせはありません。';
+        /* ===== Announcement (複数投稿版) ===== */
+        const announcementsRef = db.collection('announcements').orderBy('timestamp', 'desc');
+
+        // Firestore listener: build announcement list
+        announcementsRef.onSnapshot(snap => {
+            if (snap.empty) {
+                elements.announcementList.innerHTML = '<li>お知らせはありません。</li>';
+                return;
+            }
+            elements.announcementList.innerHTML = '';
+            const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
+            // ---- sort: pinned first, then newest ----
+            const docs = snap.docs.sort((a,b)=>{
+              const aPin = a.data().pinned ? 1 : 0;
+              const bPin = b.data().pinned ? 1 : 0;
+              if(aPin !== bPin) return bPin - aPin;                // pinned=true が先
+              return (b.data().timestamp?.toMillis?.()||0) - (a.data().timestamp?.toMillis?.()||0);
+            });
+
+            docs.forEach(doc=>{
+              const data = doc.data();
+              const li   = document.createElement('li');
+              const timeText = data.timestamp && data.timestamp.toDate
+                 ? data.timestamp.toDate().toLocaleString('ja-JP',{ dateStyle:'medium', timeStyle:'short' })
+                 : '';
+              li.innerHTML = `
+                  <div>${data.pinned ? '<span class="pin-tag">📌</span>' : ''}<span class="announce-title">${data.title || '(無題)'}</span></div>
+                  <div class="announce-body">${data.body || data.text || ''}</div>
+                  <span class="announce-time">${timeText}</span>
+              `;
+              if (isAdmin) {
+                  // 削除ボタン
+                  const delBtn = document.createElement('button');
+                  delBtn.textContent = '削除';
+                  delBtn.style.marginLeft = '8px';
+                  delBtn.onclick = () => { if(confirm('本当に削除しますか？')) doc.ref.delete(); };
+                  li.appendChild(delBtn);
+
+                  // ピン/解除ボタン
+                  const pinBtn = document.createElement('button');
+                  pinBtn.textContent = data.pinned ? 'ピン解除' : 'ピン留め';
+                  pinBtn.style.marginLeft = '4px';
+                  pinBtn.onclick = () => doc.ref.update({ pinned: !data.pinned });
+                  li.appendChild(pinBtn);
+
+                  // 編集ボタン
+                  const editBtn = document.createElement('button');
+                  editBtn.textContent = '編集';
+                  editBtn.style.marginLeft = '4px';
+                  editBtn.onclick = () => {
+                      editingDocRef = doc.ref;
+                      elements.postTitleInput.value = data.title || '';
+                      elements.postBodyInput.value  = data.body  || data.text || '';
+                      elements.postModalTitle.textContent = 'お知らせを編集';
+                      elements.postSubmitBtn.textContent  = '更新';
+                      elements.postAnnouncementModal.classList.add('active');
+                      elements.postTitleInput.focus();
+                  };
+                  li.appendChild(editBtn);
+              }
+              elements.announcementList.appendChild(li);
+            });
         });
 
         // Show/hide announcement depending on 庶務モード
@@ -707,6 +834,20 @@
             // 管理者は編集のため常に表示、それ以外は庶務モード OFF のときだけ
             elements.announcementContainer.style.display =
               (!elements.sohmuToggle.checked || isAdmin) ? 'block' : 'none';
+        }
+
+        // ===== お知らせ欄の位置を管理者モードで切り替え =====
+        function repositionAnnouncement(isAdmin){
+            const container = document.querySelector('.container');
+            const controls  = document.querySelector('.controls-container');
+            const bottomBtnWrapper = document.querySelector('#change-resident-btn').parentNode; // 下側の div
+            if(isAdmin){
+                // 管理者: コントロールの直後、テーブルより上に配置
+                container.insertBefore(elements.announcementContainer, controls.nextSibling);
+            }else{
+                // 一般: 画面下（寮生変更ボタンのすぐ下）に戻す
+                bottomBtnWrapper.parentNode.insertBefore(elements.announcementContainer, bottomBtnWrapper.nextSibling);
+            }
         }
 
     
@@ -1107,7 +1248,8 @@
             const isLoggedIn = sessionStorage.getItem('isAdminLoggedIn') === 'true';
             document.body.classList.toggle('admin-logged-in', isLoggedIn);
             if (isLoggedIn) {
-                elements.editAnnouncementBtn.style.display = 'inline-block';
+                elements.postAnnouncementBtn.style.display = 'inline-block';
+                repositionAnnouncement(true);
                 elements.loginLogoutBtn.textContent = 'ログアウト';
                 elements.loginLogoutBtn.classList.add('logout');
                 // 管理者は常に庶務モード ON、トグル無効化
@@ -1115,7 +1257,8 @@
                 elements.sohmuToggle.disabled = true;
                 elements.sohmuToggle.dispatchEvent(new Event('change'));
             } else {
-                elements.editAnnouncementBtn.style.display = 'none';
+                elements.postAnnouncementBtn.style.display = 'none';
+                repositionAnnouncement(false);
                 elements.loginLogoutBtn.textContent = '管理者ログイン';
                 elements.loginLogoutBtn.classList.remove('logout');
                 // 管理者ログアウト時はトグル有効化
@@ -1171,6 +1314,7 @@
         elements.tableBody.addEventListener('change', e => { if (e.target.classList.contains('resident-checkbox')) updateDeleteButtonState(); });
         setMode('view-mode');
         updateLoginStatus();
+        repositionAnnouncement(sessionStorage.getItem('isAdminLoggedIn')==='true');
         elements.searchInput.addEventListener('input', renderTable);
         elements.addResidentBtn.addEventListener('click', showAddResidentModal);
         elements.addBulkBtn.addEventListener('click', showBulkAddModal);
@@ -1189,6 +1333,52 @@
             // Show or hide the announcement area
             updateAnnouncementVisibility();
             renderTable();
+        });
+
+        /* ===== お知らせ欄 投稿モーダル ===== */
+        elements.postAnnouncementBtn.addEventListener('click', () => {
+            editingDocRef = null;
+            elements.postModalTitle.textContent = 'お知らせを投稿';
+            elements.postSubmitBtn.textContent  = '投稿';
+            elements.postTitleInput.value = '';
+            elements.postBodyInput.value  = '';
+            elements.postAnnouncementModal.classList.add('active');
+            elements.postTitleInput.focus();
+        });
+
+        // Enter キーで送信しない（タイトル入力）
+        elements.postTitleInput.addEventListener('keydown', e=>{
+            if(e.key === 'Enter') e.preventDefault();
+        });
+
+        // フォーム送信
+        elements.postAnnouncementForm.addEventListener('submit', async e=>{
+            e.preventDefault();
+            const title = elements.postTitleInput.value.trim();
+            const body  = elements.postBodyInput.value.trim();
+            if(!title && !body) return;
+
+            if(editingDocRef){
+                // ---- 既存ドキュメントを更新 ----
+                await editingDocRef.update({ title: title || '(無題)', body });
+            }else{
+                // ---- 新規追加 ----
+                await db.collection('announcements').add({
+                    title : title || '(無題)',
+                    body,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    pinned:false
+                });
+            }
+            elements.postAnnouncementModal.classList.remove('active');
+        });
+
+        // モーダル閉じる
+        function closePostModal(){ elements.postAnnouncementModal.classList.remove('active'); }
+        elements.postModalCloseBtn.addEventListener('click', closePostModal);
+        elements.postCancelBtn.addEventListener('click', closePostModal);
+        elements.postAnnouncementModal.addEventListener('click', e=>{
+            if(e.target === elements.postAnnouncementModal) closePostModal();
         });
         // 初期表示設定
         // Initial hide/show for dorm selector
@@ -1239,27 +1429,6 @@
             localStorage.setItem('showDorm', e.target.checked);
         });
 
-        /* ===== お知らせ欄 編集機能 ===== */
-        let editingAnnouncement = false;
-
-        elements.editAnnouncementBtn.addEventListener('click', async () => {
-            if (!editingAnnouncement) {
-                // Enter edit mode
-                editingAnnouncement = true;
-                elements.announcementContainer.classList.add('editing');
-                elements.announcementContent.contentEditable = 'true';
-                elements.announcementContent.focus();
-                elements.editAnnouncementBtn.textContent = '保存';
-            } else {
-                // Save and exit edit mode
-                const newText = elements.announcementContent.innerText.trim();
-                await announcementDocRef.set({ text: newText }, { merge: true });
-                editingAnnouncement = false;
-                elements.announcementContainer.classList.remove('editing');
-                elements.announcementContent.contentEditable = 'false';
-                elements.editAnnouncementBtn.textContent = '編集';
-            }
-        });
         elements.logViewBtn.addEventListener('click', showLogModal);
         elements.modalCloseBtn.addEventListener('click', hideLogModal);
         elements.logModal.addEventListener('click', e=>{ if(e.target===elements.logModal) hideLogModal(); });
