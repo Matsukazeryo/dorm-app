@@ -615,6 +615,21 @@
 <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-messaging-compat.js"></script>
 
 <script>
+    // 重複した Service Worker を自動で解除
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations()
+          .then(regs => {
+            regs.forEach(reg => {
+              const url = reg.active && reg.active.scriptURL;
+              // firebase-messaging-sw.js が複数登録されている不要なものを削除
+              if (url && url.endsWith('/firebase-messaging-sw.js') && reg.scope !== location.origin + '/') {
+                console.log('Unregistering duplicate SW:', reg.scope);
+                reg.unregister();
+              }
+            });
+          })
+          .catch(console.error);
+    }
     const ADMIN_PASSWORD = "Password";
     const firebaseConfig = {
       apiKey: "AIzaSyDUevNVtZEycMZ7jl9xSimUqg0PB5SbheY",
