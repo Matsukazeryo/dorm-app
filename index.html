@@ -516,7 +516,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-messaging-compat.js"></script>
 
 <script>
-    const ADMIN_PASSWORD = "password";
+    const ADMIN_PASSWORD = "Password";
     const firebaseConfig = {
       apiKey: "AIzaSyDUevNVtZEycMZ7jl9xSimUqg0PB5SbheY",
       authDomain: "dorm-manager-30ce8.firebaseapp.com",
@@ -703,8 +703,10 @@
 
         // Show/hide announcement depending on 庶務モード
         function updateAnnouncementVisibility(){
+            const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
+            // 管理者は編集のため常に表示、それ以外は庶務モード OFF のときだけ
             elements.announcementContainer.style.display =
-              elements.sohmuToggle.checked ? 'none' : 'block';
+              (!elements.sohmuToggle.checked || isAdmin) ? 'block' : 'none';
         }
 
     
