@@ -333,6 +333,7 @@
         <div id="dorm-selector" class="dorm-selector">
             <button data-dorm="shofu" class="active">松風寮</button>
             <button data-dorm="meizen">明善寮</button>
+            <button data-dorm="all">両方</button>
         </div>
         <div class="top-controls">
             <input type="search" id="search-input" placeholder="部屋番号, 名前, ふりがなで検索...">
@@ -553,7 +554,13 @@
 
     // 荷物/郵便の個数を ±1 する（0 未満にならないように制御）
     function updateCount(residentId, residentName, type, value) {
-        const docRef = db.collection(currentCollectionName).doc(residentId);
+        // Determine target collection for “all” mode
+        let targetCollection = currentCollectionName;
+        if (currentCollectionName === 'all') {
+            const resident = allResidents.find(r => r.id === residentId);
+            targetCollection = `residents_${resident.dorm}`;
+        }
+        const docRef = db.collection(targetCollection).doc(residentId);
 
         db.runTransaction(async (t) => {
             const snap = await t.get(docRef);
@@ -697,20 +704,49 @@
             }, error => console.error("データの読み込みに失敗しました:", error));
         }
         
+        // Listen to both dorm collections and merge data for "all" view
+        function listenToAllCollections() {
+            if (unsubscribe) unsubscribe();
+            // Fetch both collections and combine snapshots
+            const shofuRef = db.collection('residents_shofu');
+            const meizenRef = db.collection('residents_meizen');
+            unsubscribe = shofuRef.onSnapshot(shofuSnap => {
+                meizenRef.get().then(meizenSnap => {
+                    allResidents = [
+                        ...shofuSnap.docs.map(doc => ({ id: doc.id, ...doc.data(), dorm: 'shofu' })),
+                        ...meizenSnap.docs.map(doc => ({ id: doc.id, ...doc.data(), dorm: 'meizen' }))
+                    ];
+                    renderTable();
+                });
+            });
+        }
+
         function switchDorm(dorm) {
-            currentCollectionName = `residents_${dorm}`;
-            localStorage.setItem('currentDorm', currentCollectionName);
+            // Update active button UI
             document.querySelectorAll('#dorm-selector button').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.dorm === dorm);
             });
-            listenToCollection(currentCollectionName);
-            // Update reset button label to show current dorm name
-            const dormLabel = dorm === 'shofu' ? '松風寮' : '明善寮';
+            // Handle "all" separately
+            if (dorm === 'all') {
+                currentCollectionName = 'all'; 
+                listenToAllCollections();
+            } else {
+                currentCollectionName = `residents_${dorm}`;
+                listenToCollection(currentCollectionName);
+            }
+            // Update reset button label based on selected dorm
             const resetBtn = document.getElementById('reset-all-btn');
-            if (resetBtn) resetBtn.textContent = `${dormLabel}の全ての荷物/郵便を0にする`;
+            if (resetBtn) {
+              if (dorm === 'all') {
+                resetBtn.textContent = '松風・明善寮の全ての荷物/郵便を0にする';
+              } else {
+                const dormLabel = dorm === 'shofu' ? '松風寮' : '明善寮';
+                resetBtn.textContent = `${dormLabel}の全ての荷物/郵便を0にする`;
+              }
+            }
         }
 
-        window.renderTable = () => {
+        window.renderTable = async () => {
             const searchTerm = elements.searchInput.value.toLowerCase();
             const sohmuOn = elements.sohmuToggle.checked;
             const myId = localStorage.getItem('myResidentId');
@@ -945,14 +981,26 @@
         }
 
         function resetAllCounts() {
-            if (confirm(`本当に${currentCollectionName === 'residents_shofu' ? '松風寮' : '明善寮'}の全ての荷物と郵便の数を0にしますか？`)) {
+            // Determine target collections: single dorm or both
+            const targets = currentCollectionName === 'all' 
+                ? ['residents_shofu', 'residents_meizen'] 
+                : [currentCollectionName];
+            const confirmMsg = currentCollectionName === 'all' 
+                ? '本当に松風寮と明善寮の全ての荷物と郵便を0にしますか？' 
+                : `本当に${currentCollectionName === 'residents_shofu' ? '松風寮' : '明善寮'}の全ての荷物と郵便の数を0にしますか？`;
+            if (!confirm(confirmMsg)) return;
+            // Batch reset for each target collection
+            targets.forEach(collectionName => {
                 const batch = db.batch();
-                allResidents.forEach(r => batch.update(db.collection(currentCollectionName).doc(r.id), { luggage: 0, mail: 0 }));
+                allResidents
+                  .filter(r => collectionName === 'all' ? true : (`residents_${r.dorm}` === collectionName))
+                  .forEach(r => batch.update(db.collection(collectionName).doc(r.id), { luggage: 0, mail: 0 }));
                 batch.commit().then(() => {
-                    alert('全てのカウントを0にリセットしました。');
-                    addLog('全リセット', `[${currentCollectionName}] の全カウントをリセット`);
-                });
-            }
+                    alert(`${collectionName === 'all' ? '全寮' : (collectionName === 'residents_shofu' ? '松風寮' : '明善寮')}の全てのカウントを0にリセットしました。`);
+                    addLog('全リセット', `[${collectionName.split('_')[1]}] の全カウントをリセット`);
+                    if (collectionName === currentCollectionName || currentCollectionName === 'all') renderTable();
+                }).catch(err => console.error('resetAllCounts error', err));
+            });
         }
         
         function updateDeleteButtonState() {
