@@ -669,9 +669,9 @@
         // サービスワーカー側で OS 通知を出しているため
         // ページ側では重複を避けて OS 通知を出さない。
         // 必要ならここで in‑page toast などを表示しても良い。
-        messaging.onMessage(({ notification }) => {
-            console.log('Foreground FCM message received:', notification);
-        });
+        //messaging.onMessage(({ notification }) => {
+            //console.log('Foreground FCM message received:', notification);
+       // });
     }
     /* ===================================== */
 
