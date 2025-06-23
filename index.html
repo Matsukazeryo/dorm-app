@@ -304,8 +304,8 @@
         .announcement{
           border:1px solid var(--header-border);
           background:var(--container-bg);
-          padding:12px 16px;
-          margin:16px 0 24px 0;
+          padding:8px 12px;          /* 旧: 12px 16px → 少し詰める */
+          margin:12px 0 16px 0;      /* 上下余白を短縮 */
           border-radius:6px;
         }
         .announcement h2{
@@ -332,7 +332,7 @@
         }
         .announcement-list li{
           border-bottom:1px solid var(--border-color);
-          padding:6px 0;
+          padding:4px 0;            /* 旧: 6px 0 → 行間を詰める */
           white-space:pre-wrap;
         }
         .announce-time{
@@ -355,7 +355,7 @@
         }
         .announce-body{
           white-space:pre-wrap;
-          margin-top:2px;
+          margin-top:1px;           /* さらにスペースを微調整 */
         }
         /* Off-mode ±ボタンの見た目をカスタマイズ */
         .off-mode-container .off-counts button {
@@ -453,9 +453,6 @@
             </tbody>
         </table>
     </div>
-    <div style="text-align:center; margin-top:20px;">
-      <button id="change-resident-btn" class="header-btn" style="background:#3498db;">寮生変更</button>
-    </div>
     <!-- ===== お知らせ欄 (庶務モードOFF で表示) ===== -->
     <div id="announcement-container" class="announcement" style="display:none;">
         <div class="announcement-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
@@ -467,6 +464,9 @@
         </ul>
     </div>
     <!-- ===== お知らせ欄ここまで ===== -->
+    <div style="text-align:center; margin-top:20px;">
+      <button id="change-resident-btn" class="header-btn" style="background:#3498db;">寮生変更</button>
+    </div>
 </div>
 
 <!-- ==== 自分選択モーダル ==== -->
@@ -762,6 +762,33 @@
         };
 
         // 編集中の announcement ドキュメント参照（null = 新規投稿モード）
+        // === 寮生選択用プルダウンを最新データで埋め直す ===
+        async function populateSelfSelectOptions(){
+            const select = document.getElementById('self-select');
+            if(!select) return;
+            select.innerHTML = '<option>読み込み中...</option>';
+            const dorms = ['shofu','meizen'];
+            try{
+                const lists = await Promise.all(dorms.map(d =>
+                   db.collection(`residents_${d}`).get().then(snap =>
+                     snap.docs.map(doc => ({ id: doc.id, ...doc.data(), dorm:d }))
+                   )
+                ));
+                const combined = lists.flat().sort((a,b)=>{
+                    const idxA=dorms.indexOf(a.dorm), idxB=dorms.indexOf(b.dorm);
+                    if(idxA!==idxB) return idxA-idxB;
+                    return (parseInt(a.roomNumber)||0)-(parseInt(b.roomNumber)||0);
+                });
+                select.innerHTML = combined.map(r =>
+                  `<option value="${r.id}" data-dorm="${r.dorm}">
+                      ${r.dorm==='shofu'?'松風寮':'明善寮'} - ${r.roomNumber} ${r.name}
+                   </option>`
+                ).join('');
+            }catch(e){
+                console.error('populateSelfSelectOptions',e);
+                select.innerHTML='<option value="">読み込み失敗</option>';
+            }
+        }
         let editingDocRef = null;  // null = 新規投稿モード
 
         /* ===== Announcement (複数投稿版) ===== */
@@ -845,8 +872,8 @@
                 // 管理者: コントロールの直後、テーブルより上に配置
                 container.insertBefore(elements.announcementContainer, controls.nextSibling);
             }else{
-                // 一般: 画面下（寮生変更ボタンのすぐ下）に戻す
-                bottomBtnWrapper.parentNode.insertBefore(elements.announcementContainer, bottomBtnWrapper.nextSibling);
+                // 一般: 画面下（寮生変更ボタンの直前）に配置
+                bottomBtnWrapper.parentNode.insertBefore(elements.announcementContainer, bottomBtnWrapper);
             }
         }
 
@@ -1433,12 +1460,12 @@
         elements.modalCloseBtn.addEventListener('click', hideLogModal);
         elements.logModal.addEventListener('click', e=>{ if(e.target===elements.logModal) hideLogModal(); });
 
-        // 寮生変更ボタン：自分選択モーダルを即座に開く
-        elements.changeResidentBtn.addEventListener('click', () => {
-          // Reset selection and immediately show the self-select modal
+        // 寮生変更ボタン：毎回リストを再取得してモーダルを開く
+        elements.changeResidentBtn.addEventListener('click', async () => {
+          // Reset stored ID and reload list each time
           localStorage.removeItem('myResidentId');
-          const selectModal = document.getElementById('self-select-modal');
-          selectModal.classList.add('active');
+          await populateSelfSelectOptions();
+          document.getElementById('self-select-modal').classList.add('active');
         });
     });
 
