@@ -160,6 +160,20 @@
         body.show-circle .circle-badge{
            display:inline;
         }
+
+        /* ===== Dorm marker (松 / 明) ===== */
+        .dorm-marker{
+            display:none;
+            font-size:0.75em;
+            color:#2980b9;
+            margin:0 4px;
+        }
+        body.dark-theme .dorm-marker{
+            color:#5dade2;
+        }
+        body.show-dorm .dorm-marker{
+            display:inline;
+        }
         body.dark-theme .furigana-text{
             color:#bdc3c7;
         }
@@ -361,6 +375,7 @@
             <span>表示設定:</span>
             <label><input type="checkbox" id="toggle-furigana"> ふりがな</label>
             <label><input type="checkbox" id="toggle-circle"> サークル</label>
+            <label><input type="checkbox" id="toggle-dorm"> 寮</label>
         </div>
     </div>
 
@@ -623,6 +638,7 @@
             themeSelector: document.getElementById('theme-selector'),
             toggleFurigana: document.getElementById('toggle-furigana'),
             toggleCircle: document.getElementById('toggle-circle'),
+            toggleDorm  : document.getElementById('toggle-dorm'),
             dormSelector: document.getElementById('dorm-selector'),
             topControls: document.querySelector('.top-controls'),
             middleControls: document.querySelector('.middle-controls'),
@@ -777,13 +793,16 @@
                 elements.tableBody.innerHTML = '<tr><td colspan="5">該当する寮生が見つかりません。</td></tr>';
             } else {
                 filteredResidents.forEach(resident => {
+                    const dorm = resident.dorm || currentCollectionName.split('_')[1];
+                    const dormMarker = dorm === 'shofu' ? '松' : '明';
                     const row = document.createElement('tr');
                     if (!elements.sohmuToggle.checked) {
                         // 庶務モード OFF のときのレイアウト
+                        const dormMarker = resident.dorm === 'shofu' ? '松' : (resident.dorm === 'meizen' ? '明' : '');
                         row.innerHTML = `
                           <td colspan="5" style="border:none; padding:20px; text-align:center;">
                             <div class="off-mode-container">
-                              <div class="off-name">${resident.name}</div>
+                              <div class="off-name"><span class="dorm-marker">${dormMarker}</span>${resident.name}</div>
                               <div class="off-counts">
                                 <div>
                                   荷物:
@@ -808,6 +827,7 @@
                           <td>
                             <div class="cell-content name-cell">
                               <span class="room-number">${resident.roomNumber}</span>
+                              <span class="dorm-marker">${dormMarker}</span>
                               <span class="circle-badge">${resident.circle || ''}</span>
                               <span class="name-stack">
                                 <span class="furigana-text${resident.furigana && resident.furigana.length > 6 ? ' furigana-small' : ''}">${resident.furigana || ''}</span>
@@ -1051,10 +1071,12 @@
         function setMode(mode) {
             const keepFurigana = document.body.classList.contains('show-furigana');
             const keepCircle   = document.body.classList.contains('show-circle');
+            const keepDorm     = document.body.classList.contains('show-dorm');
             document.body.className = sessionStorage.getItem('isAdminLoggedIn') === 'true' ? 'admin-logged-in' : '';
             document.body.classList.add(mode);
             if (keepFurigana) document.body.classList.add('show-furigana');
             if (keepCircle)   document.body.classList.add('show-circle');
+            if (keepDorm)     document.body.classList.add('show-dorm');
             const currentTheme = localStorage.getItem('theme') || 'system';
             handleThemeChange(currentTheme);
             if (mode !== 'resident-edit-mode') elements.selectAllCheckbox.checked = false;
@@ -1107,6 +1129,8 @@
             // Hide search bar and display settings when off
             elements.topControls.style.display = elements.sohmuToggle.checked ? 'flex' : 'none';
             elements.middleControls.style.display = elements.sohmuToggle.checked ? 'flex' : 'none';
+            // Hide "寮生変更" button when 庶務モード is ON
+            elements.changeResidentBtn.style.display = elements.sohmuToggle.checked ? 'none' : 'inline-block';
             renderTable();
         });
         // 初期表示設定
@@ -1115,6 +1139,8 @@
         // Initial hide/show for controls in off-mode
         elements.topControls.style.display = elements.sohmuToggle.checked ? 'flex' : 'none';
         elements.middleControls.style.display = elements.sohmuToggle.checked ? 'flex' : 'none';
+        // Initial display setting for "寮生変更" button
+        elements.changeResidentBtn.style.display = elements.sohmuToggle.checked ? 'none' : 'inline-block';
         elements.selectAllCheckbox.addEventListener('change', e => {
             document.querySelectorAll('.resident-checkbox').forEach(cb => cb.checked = e.target.checked);
             updateDeleteButtonState();
@@ -1143,6 +1169,16 @@
         });
         elements.toggleFurigana.addEventListener('change', e => document.body.classList.toggle('show-furigana', e.target.checked));
         elements.toggleCircle.addEventListener('change', e => document.body.classList.toggle('show-circle', e.target.checked));
+        // Restore dorm marker toggle state
+        if (localStorage.getItem('showDorm') === 'true') {
+            elements.toggleDorm.checked = true;
+            document.body.classList.add('show-dorm');
+        }
+        // Dorm marker toggle with persistence
+        elements.toggleDorm.addEventListener('change', e => {
+            document.body.classList.toggle('show-dorm', e.target.checked);
+            localStorage.setItem('showDorm', e.target.checked);
+        });
         elements.logViewBtn.addEventListener('click', showLogModal);
         elements.modalCloseBtn.addEventListener('click', hideLogModal);
         elements.logModal.addEventListener('click', e=>{ if(e.target===elements.logModal) hideLogModal(); });
