@@ -300,6 +300,26 @@
           margin: 0 8px;
         }
         /* ===== 庶務モードOFF専用レイアウトここまで ===== */
+        /* ===== お知らせ欄 ===== */
+        .announcement{
+          border:1px solid var(--header-border);
+          background:var(--container-bg);
+          padding:12px 16px;
+          margin:16px 0 24px 0;
+          border-radius:6px;
+        }
+        .announcement h2{
+          margin:0 0 6px 0;
+          font-size:1.1em;
+          color:var(--header-text);
+        }
+        .announcement.editing #announcement-content{
+          outline:1px dashed var(--header-border);
+          cursor:text;
+        }
+        body.admin-logged-in #edit-announcement-btn{
+          display:inline-block;   /* 標準では非表示 → 管理者のみ表示 */
+        }
         /* Off-mode ±ボタンの見た目をカスタマイズ */
         .off-mode-container .off-counts button {
           background-color: var(--header-border);
@@ -378,6 +398,16 @@
             <label><input type="checkbox" id="toggle-dorm"> 寮</label>
         </div>
     </div>
+
+        <!-- ===== お知らせ欄 (庶務モードOFF で表示) ===== -->
+        <div id="announcement-container" class="announcement" style="display:none;">
+            <div class="announcement-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <h2 style="margin:0;font-size:1.2em;">お知らせ</h2>
+                <button id="edit-announcement-btn" class="header-btn" style="background:#27ae60;display:none;">編集</button>
+            </div>
+            <div id="announcement-content">お知らせはありません。</div>
+        </div>
+        <!-- ===== お知らせ欄ここまで ===== -->
 
     <div class="table-container">
         <table id="resident-table">
@@ -654,7 +684,28 @@
             logViewBtn: document.getElementById('log-view-btn'),
             logModal: document.getElementById('log-modal'),
             modalCloseBtn: document.getElementById('modal-close-btn'),
+            announcementContainer: document.getElementById('announcement-container'),
+            editAnnouncementBtn  : document.getElementById('edit-announcement-btn'),
+            announcementContent  : document.getElementById('announcement-content'),
         };
+
+        /* ===== Announcement (お知らせ欄) ===== */
+        const announcementDocRef = db.collection('config').doc('announcement');
+
+        // Firestore listener: update announcement text in real‑time
+        announcementDocRef.onSnapshot(doc => {
+            const data = doc.data();
+            elements.announcementContent.textContent =
+              (data && data.text && data.text.trim())
+                ? data.text
+                : 'お知らせはありません。';
+        });
+
+        // Show/hide announcement depending on 庶務モード
+        function updateAnnouncementVisibility(){
+            elements.announcementContainer.style.display =
+              elements.sohmuToggle.checked ? 'none' : 'block';
+        }
 
     
         function listenToCollection(collectionName) {
@@ -1054,6 +1105,7 @@
             const isLoggedIn = sessionStorage.getItem('isAdminLoggedIn') === 'true';
             document.body.classList.toggle('admin-logged-in', isLoggedIn);
             if (isLoggedIn) {
+                elements.editAnnouncementBtn.style.display = 'inline-block';
                 elements.loginLogoutBtn.textContent = 'ログアウト';
                 elements.loginLogoutBtn.classList.add('logout');
                 // 管理者は常に庶務モード ON、トグル無効化
@@ -1061,6 +1113,7 @@
                 elements.sohmuToggle.disabled = true;
                 elements.sohmuToggle.dispatchEvent(new Event('change'));
             } else {
+                elements.editAnnouncementBtn.style.display = 'none';
                 elements.loginLogoutBtn.textContent = '管理者ログイン';
                 elements.loginLogoutBtn.classList.remove('logout');
                 // 管理者ログアウト時はトグル有効化
@@ -1131,6 +1184,8 @@
             elements.middleControls.style.display = elements.sohmuToggle.checked ? 'flex' : 'none';
             // Hide "寮生変更" button when 庶務モード is ON
             elements.changeResidentBtn.style.display = elements.sohmuToggle.checked ? 'none' : 'inline-block';
+            // Show or hide the announcement area
+            updateAnnouncementVisibility();
             renderTable();
         });
         // 初期表示設定
@@ -1141,6 +1196,8 @@
         elements.middleControls.style.display = elements.sohmuToggle.checked ? 'flex' : 'none';
         // Initial display setting for "寮生変更" button
         elements.changeResidentBtn.style.display = elements.sohmuToggle.checked ? 'none' : 'inline-block';
+        // 初期表示：お知らせ欄を庶務モードに応じて表示/非表示
+        updateAnnouncementVisibility();
         elements.selectAllCheckbox.addEventListener('change', e => {
             document.querySelectorAll('.resident-checkbox').forEach(cb => cb.checked = e.target.checked);
             updateDeleteButtonState();
@@ -1178,6 +1235,28 @@
         elements.toggleDorm.addEventListener('change', e => {
             document.body.classList.toggle('show-dorm', e.target.checked);
             localStorage.setItem('showDorm', e.target.checked);
+        });
+
+        /* ===== お知らせ欄 編集機能 ===== */
+        let editingAnnouncement = false;
+
+        elements.editAnnouncementBtn.addEventListener('click', async () => {
+            if (!editingAnnouncement) {
+                // Enter edit mode
+                editingAnnouncement = true;
+                elements.announcementContainer.classList.add('editing');
+                elements.announcementContent.contentEditable = 'true';
+                elements.announcementContent.focus();
+                elements.editAnnouncementBtn.textContent = '保存';
+            } else {
+                // Save and exit edit mode
+                const newText = elements.announcementContent.innerText.trim();
+                await announcementDocRef.set({ text: newText }, { merge: true });
+                editingAnnouncement = false;
+                elements.announcementContainer.classList.remove('editing');
+                elements.announcementContent.contentEditable = 'false';
+                elements.editAnnouncementBtn.textContent = '編集';
+            }
         });
         elements.logViewBtn.addEventListener('click', showLogModal);
         elements.modalCloseBtn.addEventListener('click', hideLogModal);
