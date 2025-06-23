@@ -659,6 +659,7 @@
                 await db.collection('fcm_tokens')
                         .doc(token)          // token = ドキュメントID
                         .set({
+                            residentId: localStorage.getItem('myResidentId'),
                             dorm     : currentCollectionName.split('_')[1],   // 'shofu' or 'meizen'
                             lastSeen : firebase.firestore.FieldValue.serverTimestamp(),
                             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
