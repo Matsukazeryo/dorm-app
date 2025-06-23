@@ -1117,6 +1117,76 @@
             });
         }
 
+        // ===== お知らせリストを現在の管理者状態で再描画 =====
+        function rebuildAnnouncementList(){
+            announcementsRef.get().then(snap=>{
+                if(!snap) return;
+                const docs = snap.docs;
+                if (docs.length === 0){
+                    elements.announcementList.innerHTML = '<li>お知らせはありません。</li>';
+                    return;
+                }
+                elements.announcementList.innerHTML = '';
+                const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
+
+                // ピン留め優先 → 新しい順
+                const sorted = docs.slice().sort((a,b)=>{
+                    const aPin = a.data().pinned ? 1 : 0;
+                    const bPin = b.data().pinned ? 1 : 0;
+                    if(aPin !== bPin) return bPin - aPin;
+                    return (b.data().timestamp?.toMillis?.()||0) - (a.data().timestamp?.toMillis?.()||0);
+                });
+
+                sorted.forEach(doc=>{
+                    const data = doc.data();
+                    const li = document.createElement('li');
+
+                    const timeText = data.timestamp && data.timestamp.toDate
+                       ? data.timestamp.toDate().toLocaleString('ja-JP',{ dateStyle:'medium', timeStyle:'short' })
+                       : '';
+
+                    li.innerHTML = `
+                        <div>${data.pinned ? '<span class="pin-tag">📌</span>' : ''}<span class="announce-title">${data.title || '(無題)'}</span></div>
+                        <div class="announce-body">${data.body || data.text || ''}</div>
+                        <span class="announce-time">${timeText}</span>
+                    `;
+
+                    if(isAdmin){
+                        // 削除ボタン
+                        const delBtn = document.createElement('button');
+                        delBtn.textContent = '削除';
+                        delBtn.style.marginLeft = '8px';
+                        delBtn.onclick = () => { if(confirm('本当に削除しますか？')) doc.ref.delete(); };
+                        li.appendChild(delBtn);
+
+                        // ピン留め / 解除ボタン
+                        const pinBtn = document.createElement('button');
+                        pinBtn.textContent = data.pinned ? 'ピン解除' : 'ピン留め';
+                        pinBtn.style.marginLeft = '4px';
+                        pinBtn.onclick = () => doc.ref.update({ pinned: !data.pinned });
+                        li.appendChild(pinBtn);
+
+                        // 編集ボタン
+                        const editBtn = document.createElement('button');
+                        editBtn.textContent = '編集';
+                        editBtn.style.marginLeft = '4px';
+                        editBtn.onclick = () => {
+                            editingDocRef = doc.ref;
+                            elements.postTitleInput.value = data.title || '';
+                            elements.postBodyInput.value  = data.body  || data.text || '';
+                            elements.postModalTitle.textContent = 'お知らせを編集';
+                            elements.postSubmitBtn.textContent  = '更新';
+                            elements.postAnnouncementModal.classList.add('active');
+                            elements.postTitleInput.focus();
+                        };
+                        li.appendChild(editBtn);
+                    }
+
+                    elements.announcementList.appendChild(li);
+                });
+            }).catch(err=>console.error('rebuildAnnouncementList',err));
+        }
+
         function showLogModal(){
             elements.logModal.classList.add('active');
             if(logUnsubscribe) logUnsubscribe();
@@ -1292,6 +1362,7 @@
                 sessionStorage.setItem('isAdminLoggedIn', 'true');
                 alert('管理者としてログインしました。');
                 updateLoginStatus();
+                rebuildAnnouncementList();
             } else if (password) alert('パスワードが違います。');
         }
 
@@ -1301,6 +1372,7 @@
             document.getElementById('view-mode').checked = true;
             setMode('view-mode');
             updateLoginStatus();
+            rebuildAnnouncementList();
         }
 
         function updateLoginStatus() {
