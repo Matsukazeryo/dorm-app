@@ -667,7 +667,10 @@
 
         // Handle foreground messages
         messaging.onMessage(({ notification }) => {
-            if (notification) new Notification(notification.title, notification);
+            if (notification && document.visibilityState !== 'visible') {
+                // 画面が非表示（バックグラウンド）ならページ側で通知を出す
+                new Notification(notification.title, notification);
+            }
         });
     }
     /* ===================================== */
