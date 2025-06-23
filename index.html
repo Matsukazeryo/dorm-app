@@ -636,10 +636,8 @@
         if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
 
         try {
-            // Register Firebase service worker
+            // Register Firebase Messaging service worker
             const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-            // PWA用オフラインキャッシュも有効化
-            await navigator.serviceWorker.register('/service-worker.js', { scope: '/' });
 
             // Ask user for permission
             const permission = await Notification.requestPermission();
@@ -758,6 +756,8 @@
             alert('通知を受信するには、ホーム画面に追加してアプリとして起動してください。');
             localStorage.setItem('suppressStandaloneAlert', 'true');
         }
+        // ページ読み込み時に通知許可をリクエスト
+        requestNotificationPermission();
         const elements = {
             tableBody: document.querySelector("#resident-table tbody"),
             searchInput: document.getElementById('search-input'),
