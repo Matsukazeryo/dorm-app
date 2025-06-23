@@ -338,7 +338,7 @@
         }
         .announcement-list li{
           border-bottom:1px solid var(--border-color);
-          padding:2px 0;            /* さらに詰める */
+          padding:0;                /* ぴったり詰める */
           white-space:pre-wrap;
         }
         .announce-time{
@@ -346,7 +346,7 @@
           font-size:0.68em;   /* 少し小さく */
           color:#7f8c8d;
           margin-top:0;       /* 本文との距離を詰める */
-          line-height:1.2;
+          line-height:1.1;
         }
         body.dark-theme .announce-time{
           color:#bdc3c7;
@@ -368,8 +368,23 @@
         }
         /* タイトル行と本文行の間隔をさらに縮める */
         .announcement-list li > div:first-of-type{
-          margin-bottom:2px;   /* デフォルト 6~8px 相当 → 2px に */
+          margin-bottom:0;          /* 余白ゼロ */
           line-height:1.25;    /* 行高も詰める */
+        }
+        .announcement-list li > *{
+          margin:0;
+        }
+        /* ==== さらに縦方向を圧縮（本文と日付を横並び） ==== */
+        .announce-body{
+        display:block;       /* 本文を左端に揃えて改行 */
+        margin:0;            /* 余白ゼロ */
+        line-height:1.25;    /* 適度に詰めた行高 */
+        }
+        .announce-time{
+        display:block;       /* 本文直下に左詰めで表示 */
+         margin:1px 0 0 0;    /* 本文との間に 1px だけ */
+         font-size:0.68em;
+         line-height:1.1;
         }
         /* Off-mode ±ボタンの見た目をカスタマイズ */
         .off-mode-container .off-counts button {
