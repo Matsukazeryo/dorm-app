@@ -638,6 +638,16 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const messaging = firebase.messaging();
+
+    // フォアグラウンドで通知を受け取ったら表示
+    messaging.onMessage(payload => {
+        console.log('Foreground FCM message received:', payload);
+        const { notification } = payload;
+        if (notification && Notification.permission === 'granted') {
+            new Notification(notification.title, { body: notification.body });
+        }
+    });
+
     let currentDeviceToken = null;   // このデバイスの FCM トークンを保持
 
     /* ==== FCM Push Notification Setup ==== */
