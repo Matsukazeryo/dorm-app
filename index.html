@@ -420,6 +420,10 @@
         }
    </style>
 </head>
+
+<div id="loading-overlay" style="display:none; position:fixed; inset:0; background:rgba(255,255,255,0.8); z-index:3000; align-items:center; justify-content:center;">
+  <div>読み込み中...</div>
+</div>
 <body>
 
 <div class="container">
@@ -973,6 +977,8 @@
                     selectModal.classList.add('active');
                     selectModal.style.pointerEvents = 'auto';
                     document.getElementById('self-select-btn').onclick = async () => {
+                      // Show loading overlay
+                      document.getElementById('loading-overlay').style.display = 'flex';
                       // Show loading state
                       const btn = document.getElementById('self-select-btn');
                       btn.disabled = true;
@@ -1001,6 +1007,8 @@
                       // Reset the button back to its original state
                       btn.disabled = false;
                       btn.textContent = '決定';
+                      // Hide loading overlay
+                      document.getElementById('loading-overlay').style.display = 'none';
                     };
                     document.getElementById('self-cancel-btn').addEventListener('click', () => {
                       const selectModal = document.getElementById('self-select-modal');
@@ -1620,6 +1628,36 @@
           localStorage.removeItem('myResidentId');
           await populateSelfSelectOptions();
           document.getElementById('self-select-modal').classList.add('active');
+          // Setup self-select-btn handler again (with loading overlay)
+          const btn = document.getElementById('self-select-btn');
+          btn.onclick = async () => {
+            // Show loading overlay
+            document.getElementById('loading-overlay').style.display = 'flex';
+            btn.disabled = true;
+            btn.textContent = '読み込み中...';
+            document.querySelector('#resident-table tbody').innerHTML = '<tr><td colspan="5">読み込み中...</td></tr>';
+            const select = document.getElementById('self-select');
+            const id = select.value;
+            localStorage.setItem('myResidentId', id);
+            const selectedDorm = select.options[select.selectedIndex].getAttribute('data-dorm');
+            switchDorm(selectedDorm);
+            if (!currentDeviceToken) {
+              await requestNotificationPermission();
+            }
+            if (currentDeviceToken) {
+              await db.collection('fcm_tokens')
+                      .doc(currentDeviceToken)
+                      .set({ residentId: id }, { merge: true });
+              console.log('residentId saved to Firestore:', id);
+            }
+            document.getElementById('self-select-modal').classList.remove('active');
+            document.getElementById('self-select-modal').style.pointerEvents = 'none';
+            renderTable();
+            btn.disabled = false;
+            btn.textContent = '決定';
+            // Hide loading overlay
+            document.getElementById('loading-overlay').style.display = 'none';
+          };
         });
     });
 
