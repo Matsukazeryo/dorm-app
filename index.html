@@ -681,13 +681,14 @@
             console.error('FCM initialization failed', err);
         }
 
-        // Handle foreground messages
-        // サービスワーカー側で OS 通知を出しているため
-        // ページ側では重複を避けて OS 通知を出さない。
-        // 必要ならここで in‑page toast などを表示しても良い。
-        //messaging.onMessage(({ notification }) => {
-            //console.log('Foreground FCM message received:', notification);
-       // });
+        // フォアグラウンドで通知を受け取ったら表示
+        messaging.onMessage(payload => {
+            console.log('Foreground FCM message received:', payload);
+            const { notification } = payload;
+            if (notification && Notification.permission === 'granted') {
+                new Notification(notification.title, { body: notification.body });
+            }
+        });
     }
     /* ===================================== */
 
