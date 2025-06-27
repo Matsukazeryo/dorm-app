@@ -971,6 +971,7 @@
                       `<option value="${r.id}" data-dorm="${r.dorm}">${r.dorm === 'shofu' ? '松風寮' : '明善寮'} - ${r.roomNumber} ${r.name}</option>`
                     ).join('');
                     selectModal.classList.add('active');
+                    selectModal.style.pointerEvents = 'auto';
                     document.getElementById('self-select-btn').onclick = async () => {
                       // Show loading state
                       const btn = document.getElementById('self-select-btn');
@@ -995,13 +996,16 @@
                         console.log('residentId saved to Firestore:', id);
                       }
                       selectModal.classList.remove('active');
+                      selectModal.style.pointerEvents = 'none';
                       renderTable();
                       // Reset the button back to its original state
                       btn.disabled = false;
                       btn.textContent = '決定';
                     };
                     document.getElementById('self-cancel-btn').addEventListener('click', () => {
-                      document.getElementById('self-select-modal').classList.remove('active');
+                      const selectModal = document.getElementById('self-select-modal');
+                      selectModal.classList.remove('active');
+                      selectModal.style.pointerEvents = 'none';
                     });
                   })();
                   return;
