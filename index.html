@@ -797,6 +797,7 @@
             dormSelector: document.getElementById('dorm-selector'),
             topControls: document.querySelector('.top-controls'),
             middleControls: document.querySelector('.middle-controls'),
+            opsContainer: document.querySelector('.ops-container'),
             changeResidentBtn: document.getElementById('change-resident-btn'),
             addResidentModal: document.getElementById('add-resident-modal'),
             addModalCloseBtn: document.getElementById('add-modal-close-btn'),
@@ -1488,6 +1489,13 @@
             // Hide search bar and display settings when off
             elements.topControls.style.display = elements.sohmuToggle.checked ? 'flex' : 'none';
             elements.middleControls.style.display = elements.sohmuToggle.checked ? 'flex' : 'none';
+            // Hide ops container when 庶務モード is OFF
+            elements.opsContainer.style.display = elements.sohmuToggle.checked ? '' : 'none';
+            // If 庶務モード is OFF, always fall back to 閲覧モード
+            if (!elements.sohmuToggle.checked) {
+                document.getElementById('view-mode').checked = true;
+                setMode('view-mode');
+            }
             // Hide "寮生変更" button when 庶務モード is ON
             elements.changeResidentBtn.style.display = elements.sohmuToggle.checked ? 'none' : 'inline-block';
             // Show or hide the announcement area
@@ -1546,6 +1554,8 @@
         // Initial hide/show for controls in off-mode
         elements.topControls.style.display = elements.sohmuToggle.checked ? 'flex' : 'none';
         elements.middleControls.style.display = elements.sohmuToggle.checked ? 'flex' : 'none';
+        // Hide ops container initially if 庶務モード is OFF
+        elements.opsContainer.style.display = elements.sohmuToggle.checked ? '' : 'none';
         // Initial display setting for "寮生変更" button
         elements.changeResidentBtn.style.display = elements.sohmuToggle.checked ? 'none' : 'inline-block';
         // 初期表示：お知らせ欄を庶務モードに応じて表示/非表示
