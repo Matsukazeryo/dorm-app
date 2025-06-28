@@ -14,7 +14,6 @@
     <meta name="apple-mobile-web-app-title" content="荷物管理アプリ">
     <meta name="mobile-web-app-capable" content="yes">
     <!-- Provide a web‑app manifest so iPad always launches in standalone -->
-    <link rel="manifest" href="/manifest.json">
     <style>
         :root {
             --bg-color: #f4f7f9; --container-bg: #ffffff; --text-color: #333;
@@ -660,14 +659,6 @@
         try {
             // Register Firebase Messaging service worker
             const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-
-            // Register PWA cache Service Worker
-            try {
-                const pwaReg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-                console.log('PWA Service Worker registered:', pwaReg);
-            } catch (err) {
-                console.error('PWA SW registration failed:', err);
-            }
 
             // Ask user for permission
             const permission = await Notification.requestPermission();
