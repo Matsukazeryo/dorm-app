@@ -692,15 +692,7 @@
         } catch (err) {
             console.error('FCM initialization failed', err);
         }
-
-        // フォアグラウンドで通知を受け取ったら表示
-        messaging.onMessage(payload => {
-            console.log('Foreground FCM message received:', payload);
-            const { notification } = payload;
-            if (notification && Notification.permission === 'granted') {
-                new Notification(notification.title, { body: notification.body });
-            }
-        });
+        // OS通知はこのページでは表示しない（messaging.onMessage未設定）
     }
     /* ===================================== */
 
