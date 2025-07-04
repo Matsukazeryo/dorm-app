@@ -692,7 +692,15 @@
         } catch (err) {
             console.error('FCM initialization failed', err);
         }
-        // OS通知はこのページでは表示しない（messaging.onMessage未設定）
+
+        // フォアグラウンドで通知を受け取ったら表示
+        messaging.onMessage(payload => {
+            console.log('Foreground FCM message received:', payload);
+            const { notification } = payload;
+            if (notification && Notification.permission === 'granted') {
+                new Notification(notification.title, { body: notification.body });
+            }
+        });
     }
     /* ===================================== */
 
@@ -772,7 +780,7 @@
             localStorage.setItem('suppressStandaloneAlert', 'true');
         }
         // ページ読み込み時に通知許可をリクエスト
-        // requestNotificationPermission(); // 通知許可は自動でリクエストしない（ユーザー操作でのみ）
+        requestNotificationPermission();
         const elements = {
             tableBody: document.querySelector("#resident-table tbody"),
             searchInput: document.getElementById('search-input'),
@@ -844,53 +852,6 @@
                 console.error('populateSelfSelectOptions',e);
                 select.innerHTML='<option value="">読み込み失敗</option>';
             }
-            // Set up the self-select button to request notification permission first
-            document.getElementById('self-select-btn').onclick = () => {
-                // ユーザー操作で通知許可をリクエスト（同期的に実行）
-                Notification.requestPermission().then(permission => {
-                  if (permission === 'granted') {
-                    requestNotificationPermission();
-                  }
-                });
-                // 続きの処理は非同期で実行
-                (async () => {
-                    // Show loading overlay
-                    document.getElementById('loading-overlay').style.display = 'flex';
-                    // Show loading state
-                    const btn = document.getElementById('self-select-btn');
-                    btn.disabled = true;
-                    btn.textContent = '読み込み中...';
-                    // Optionally show loading in table
-                    document.querySelector('#resident-table tbody').innerHTML = '<tr><td colspan="5">読み込み中...</td></tr>';
-                    const id = select.value;
-                    localStorage.setItem('myResidentId', id);
-                    // Switch dorm view to match selected resident
-                    const selectedDorm = select.options[select.selectedIndex].getAttribute('data-dorm');
-                    switchDorm(selectedDorm);
-                    // Ensure we have a token; request permission if needed
-                    if (!currentDeviceToken) {
-                      await requestNotificationPermission();
-                    }
-                    // Save residentId to this device's token document
-                    if (currentDeviceToken) {
-                      await db.collection('fcm_tokens')
-                              .doc(currentDeviceToken)
-                              .set({ residentId: id }, { merge: true });
-                      console.log('residentId saved to Firestore:', id);
-                    }
-                    document.getElementById('self-select-modal').classList.remove('active');
-                    document.getElementById('self-select-modal').style.pointerEvents = 'none';
-                    renderTable();
-                    // Reset the button back to its original state
-                    btn.disabled = false;
-                    btn.textContent = '決定';
-                    // Hide loading overlay
-                    document.getElementById('loading-overlay').style.display = 'none';
-                })();
-            };
-            document.getElementById('self-cancel-btn').addEventListener('click', () => {
-              document.getElementById('self-select-modal').classList.remove('active');
-            });
         }
         let editingDocRef = null;  // null = 新規投稿モード
 
@@ -1006,51 +967,44 @@
                     ).join('');
                     selectModal.classList.add('active');
                     selectModal.style.pointerEvents = 'auto';
-                    document.getElementById('self-select-btn').onclick = () => {
-                      // ユーザー操作で通知許可をリクエスト（同期的に実行）
-                      Notification.requestPermission().then(permission => {
-                        if (permission === 'granted') {
-                          requestNotificationPermission();
-                        }
-                      });
-                      // 続きの処理は非同期で実行
-                      (async () => {
-                        // Show loading overlay
-                        document.getElementById('loading-overlay').style.display = 'flex';
-                        // Show loading state
-                        const btn = document.getElementById('self-select-btn');
-                        btn.disabled = true;
-                        btn.textContent = '読み込み中...';
-                        // Optionally show loading in table
-                        document.querySelector('#resident-table tbody').innerHTML = '<tr><td colspan="5">読み込み中...</td></tr>';
-                        const id = select.value;
-                        localStorage.setItem('myResidentId', id);
-                        // Switch dorm view to match selected resident
-                        const selectedDorm = select.options[select.selectedIndex].getAttribute('data-dorm');
-                        switchDorm(selectedDorm);
-                        // Ensure we have a token; request permission if needed
-                        if (!currentDeviceToken) {
-                          await requestNotificationPermission();
-                        }
-                        // Save residentId to this device's token document
-                        if (currentDeviceToken) {
-                          await db.collection('fcm_tokens')
-                                  .doc(currentDeviceToken)
-                                  .set({ residentId: id }, { merge: true });
-                          console.log('residentId saved to Firestore:', id);
-                        }
-                        selectModal.classList.remove('active');
-                        selectModal.style.pointerEvents = 'none';
-                        renderTable();
-                        // Reset the button back to its original state
-                        btn.disabled = false;
-                        btn.textContent = '決定';
-                        // Hide loading overlay
-                        document.getElementById('loading-overlay').style.display = 'none';
-                      })();
+                    document.getElementById('self-select-btn').onclick = async () => {
+                      // Show loading overlay
+                      document.getElementById('loading-overlay').style.display = 'flex';
+                      // Show loading state
+                      const btn = document.getElementById('self-select-btn');
+                      btn.disabled = true;
+                      btn.textContent = '読み込み中...';
+                      // Optionally show loading in table
+                      document.querySelector('#resident-table tbody').innerHTML = '<tr><td colspan="5">読み込み中...</td></tr>';
+                      const id = select.value;
+                      localStorage.setItem('myResidentId', id);
+                      // Switch dorm view to match selected resident
+                      const selectedDorm = select.options[select.selectedIndex].getAttribute('data-dorm');
+                      switchDorm(selectedDorm);
+                      // Ensure we have a token; request permission if needed
+                      if (!currentDeviceToken) {
+                        await requestNotificationPermission();
+                      }
+                      // Save residentId to this device's token document
+                      if (currentDeviceToken) {
+                        await db.collection('fcm_tokens')
+                                .doc(currentDeviceToken)
+                                .set({ residentId: id }, { merge: true });
+                        console.log('residentId saved to Firestore:', id);
+                      }
+                      selectModal.classList.remove('active');
+                      selectModal.style.pointerEvents = 'none';
+                      renderTable();
+                      // Reset the button back to its original state
+                      btn.disabled = false;
+                      btn.textContent = '決定';
+                      // Hide loading overlay
+                      document.getElementById('loading-overlay').style.display = 'none';
                     };
                     document.getElementById('self-cancel-btn').addEventListener('click', () => {
-                      document.getElementById('self-select-modal').classList.remove('active');
+                      const selectModal = document.getElementById('self-select-modal');
+                      selectModal.classList.remove('active');
+                      selectModal.style.pointerEvents = 'none';
                     });
                   })();
                   return;
@@ -1665,6 +1619,36 @@
           localStorage.removeItem('myResidentId');
           await populateSelfSelectOptions();
           document.getElementById('self-select-modal').classList.add('active');
+          // Setup self-select-btn handler again (with loading overlay)
+          const btn = document.getElementById('self-select-btn');
+          btn.onclick = async () => {
+            // Show loading overlay
+            document.getElementById('loading-overlay').style.display = 'flex';
+            btn.disabled = true;
+            btn.textContent = '読み込み中...';
+            document.querySelector('#resident-table tbody').innerHTML = '<tr><td colspan="5">読み込み中...</td></tr>';
+            const select = document.getElementById('self-select');
+            const id = select.value;
+            localStorage.setItem('myResidentId', id);
+            const selectedDorm = select.options[select.selectedIndex].getAttribute('data-dorm');
+            switchDorm(selectedDorm);
+            if (!currentDeviceToken) {
+              await requestNotificationPermission();
+            }
+            if (currentDeviceToken) {
+              await db.collection('fcm_tokens')
+                      .doc(currentDeviceToken)
+                      .set({ residentId: id }, { merge: true });
+              console.log('residentId saved to Firestore:', id);
+            }
+            document.getElementById('self-select-modal').classList.remove('active');
+            document.getElementById('self-select-modal').style.pointerEvents = 'none';
+            renderTable();
+            btn.disabled = false;
+            btn.textContent = '決定';
+            // Hide loading overlay
+            document.getElementById('loading-overlay').style.display = 'none';
+          };
         });
     });
 
@@ -1674,5 +1658,3 @@
 
 </body>
 </html>
-
-
