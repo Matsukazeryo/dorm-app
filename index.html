@@ -436,6 +436,7 @@
               <span class="slider round"></span>
             </label>
             <span id="sohmu-label" style="margin-left:4px; font-weight:bold; color:var(--header-text);">庶務</span>
+            <button id="enable-notifications-btn" class="header-btn" style="background:#2980b9;">通知を許可</button>
         </div>
     </div>
     
@@ -772,7 +773,7 @@
             localStorage.setItem('suppressStandaloneAlert', 'true');
         }
         // ページ読み込み時に通知許可をリクエスト
-        requestNotificationPermission();
+        // requestNotificationPermission(); // 通知許可は自動でリクエストしない（ユーザー操作でのみ）
         const elements = {
             tableBody: document.querySelector("#resident-table tbody"),
             searchInput: document.getElementById('search-input'),
@@ -1653,3 +1654,9 @@
 
 </body>
 </html>
+
+        // iOS Safari requires a user gesture for notification permission
+        const enableNotifBtn = document.getElementById('enable-notifications-btn');
+        enableNotifBtn.addEventListener('click', () => {
+          requestNotificationPermission();
+        });
