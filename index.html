@@ -780,7 +780,7 @@
             localStorage.setItem('suppressStandaloneAlert', 'true');
         }
         // ページ読み込み時に通知許可をリクエスト
-        requestNotificationPermission();
+        // requestNotificationPermission();
         const elements = {
             tableBody: document.querySelector("#resident-table tbody"),
             searchInput: document.getElementById('search-input'),
@@ -981,6 +981,10 @@
                       // Switch dorm view to match selected resident
                       const selectedDorm = select.options[select.selectedIndex].getAttribute('data-dorm');
                       switchDorm(selectedDorm);
+                      // ユーザー操作で通知許可をリクエスト
+                      if (Notification && Notification.requestPermission) {
+                          await Notification.requestPermission();
+                      }
                       // Ensure we have a token; request permission if needed
                       if (!currentDeviceToken) {
                         await requestNotificationPermission();
@@ -1632,6 +1636,10 @@
             localStorage.setItem('myResidentId', id);
             const selectedDorm = select.options[select.selectedIndex].getAttribute('data-dorm');
             switchDorm(selectedDorm);
+            // ユーザー操作で通知許可をリクエスト
+            if (Notification && Notification.requestPermission) {
+                await Notification.requestPermission();
+            }
             if (!currentDeviceToken) {
               await requestNotificationPermission();
             }
