@@ -1002,9 +1002,7 @@
                       document.getElementById('loading-overlay').style.display = 'none';
                     };
                     document.getElementById('self-cancel-btn').addEventListener('click', () => {
-                      const selectModal = document.getElementById('self-select-modal');
-                      selectModal.classList.remove('active');
-                      selectModal.style.pointerEvents = 'none';
+                      document.getElementById('self-select-modal').classList.remove('active');
                     });
                   })();
                   return;
@@ -1649,6 +1647,11 @@
             // Hide loading overlay
             document.getElementById('loading-overlay').style.display = 'none';
           };
+        });
+
+        // Ensure cancel button always closes the modal
+        document.getElementById('self-cancel-btn').addEventListener('click', () => {
+          document.getElementById('self-select-modal').classList.remove('active');
         });
     });
 
