@@ -617,6 +617,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-messaging-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-auth-compat.js"></script>
 
 <script>
     // 重複した Service Worker を自動で解除
@@ -648,6 +649,7 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const messaging = firebase.messaging();
+    const auth = firebase.auth();
 
 
     let currentDeviceToken = null;   // このデバイスの FCM トークンを保持
@@ -1455,11 +1457,18 @@
         function login() {
             const password = prompt('管理者パスワードを入力してください:');
             if (password === ADMIN_PASSWORD) {
-                sessionStorage.setItem('isAdminLoggedIn', 'true');
-                alert('管理者としてログインしました。');
-                updateLoginStatus();
-                rebuildAnnouncementList();
-            } else if (password) alert('パスワードが違います。');
+                auth.signInAnonymously().then(() => {
+                    sessionStorage.setItem('isAdminLoggedIn', 'true');
+                    alert('管理者としてログインしました。');
+                    updateLoginStatus();
+                    rebuildAnnouncementList();
+                }).catch(e => {
+                    console.error('auth signInAnonymously failed', e);
+                    alert('ログイン処理に失敗しました（認証）: ' + (e.code || e.message));
+                });
+            } else if (password) {
+                alert('パスワードが違います。');
+            }
         }
 
         function logout() {
@@ -1469,6 +1478,7 @@
             setMode('view-mode');
             updateLoginStatus();
             rebuildAnnouncementList();
+            if (auth.currentUser) { auth.signOut().catch(err => console.warn('auth signOut failed', err)); }
         }
 
         function updateLoginStatus() {
