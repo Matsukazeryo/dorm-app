@@ -864,9 +864,12 @@
         }
 
         function closeSelfSelectModal(){
-          const selectModal = document.getElementById('self-select-modal');
-          selectModal.classList.remove('active');
-          selectModal.style.pointerEvents = 'none';
+            const selectModal = document.getElementById('self-select-modal');
+            selectModal.classList.remove('active');
+            selectModal.style.pointerEvents = 'none';
+            // 再度開いたときに通常表示へ戻す
+            const cancelBtn = document.getElementById('self-cancel-btn');
+            if (cancelBtn) cancelBtn.style.display = '';
         }
 
         async function handleSelfSelectConfirm(){
@@ -1674,6 +1677,12 @@
         elements.opsContainer.style.display = elements.sohmuToggle.checked ? '' : 'none';
         // Initial display setting for "寮生変更" button
         elements.changeResidentBtn.style.display = elements.sohmuToggle.checked ? 'none' : 'inline-block';
+        // 寮生変更ボタンから開いた場合はキャンセルを非表示
+        elements.changeResidentBtn.addEventListener('click', () => {
+            const cancelBtn = document.getElementById('self-cancel-btn');
+            if (cancelBtn) cancelBtn.style.display = 'none';
+            openSelfSelectModal();
+        });
         // 初期表示：お知らせ欄を庶務モードに応じて表示/非表示
         updateAnnouncementVisibility();
         elements.selectAllCheckbox.addEventListener('change', e => {
