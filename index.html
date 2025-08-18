@@ -959,7 +959,8 @@
         function listenToCollection(collectionName) {
             if (unsubscribe) unsubscribe();
             unsubscribe = db.collection(collectionName).onSnapshot(snapshot => {
-                allResidents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const dormKey = collectionName.split('_')[1];
+                allResidents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), dorm: dormKey }));
                 // Show self-select modal if first visit
                 if (!localStorage.getItem('myResidentId')) {
                   const selectModal = document.getElementById('self-select-modal');
@@ -1393,22 +1394,30 @@
         }
 
         function resetAllCounts() {
-            // Determine target collections: single dorm or both
-            const targets = currentCollectionName === 'all' 
-                ? ['residents_shofu', 'residents_meizen'] 
+            const targets = currentCollectionName === 'all'
+                ? ['residents_shofu', 'residents_meizen']
                 : [currentCollectionName];
-            const confirmMsg = currentCollectionName === 'all' 
-                ? '本当に松風寮と明善寮の全ての荷物と郵便を0にしますか？' 
+
+            const confirmMsg = currentCollectionName === 'all'
+                ? '本当に松風寮と明善寮の全ての荷物と郵便を0にしますか？'
                 : `本当に${currentCollectionName === 'residents_shofu' ? '松風寮' : '明善寮'}の全ての荷物と郵便の数を0にしますか？`;
+
             if (!confirm(confirmMsg)) return;
-            // Batch reset for each target collection
+
             targets.forEach(collectionName => {
                 const batch = db.batch();
-                allResidents
-                  .filter(r => collectionName === 'all' ? true : (`residents_${r.dorm}` === collectionName))
-                  .forEach(r => batch.update(db.collection(collectionName).doc(r.id), { luggage: 0, mail: 0 }));
+
+                const residentsForTarget = (currentCollectionName === 'all')
+                    ? allResidents.filter(r => `residents_${r.dorm}` === collectionName)
+                    : allResidents; // 単一寮ビューでは既にその寮の住人だけ
+
+                residentsForTarget.forEach(r => {
+                    batch.update(db.collection(collectionName).doc(r.id), { luggage: 0, mail: 0 });
+                });
+
                 batch.commit().then(() => {
-                    alert(`${collectionName === 'all' ? '全寮' : (collectionName === 'residents_shofu' ? '松風寮' : '明善寮')}の全てのカウントを0にリセットしました。`);
+                    const dormLabel = collectionName === 'residents_shofu' ? '松風寮' : '明善寮';
+                    alert(`${dormLabel}の全てのカウントを0にリセットしました。`);
                     addLog('全リセット', `[${collectionName.split('_')[1]}] の全カウントをリセット`);
                     if (collectionName === currentCollectionName || currentCollectionName === 'all') renderTable();
                 }).catch(err => console.error('resetAllCounts error', err));
