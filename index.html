@@ -1005,7 +1005,65 @@
                 allResidents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), dorm: dormKey }));
                 // Show self-select modal if first visit
                 if (!localStorage.getItem('myResidentId')) {
-                  openSelfSelectModal();
+                  const selectModal = document.getElementById('self-select-modal');
+                  (async () => {
+                    const select = document.getElementById('self-select');
+                    const dorms = ['shofu', 'meizen'];
+                    const lists = await Promise.all(dorms.map(d =>
+                      db.collection(`residents_${d}`).get().then(snap =>
+                        snap.docs.map(doc => ({ id: doc.id, ...doc.data(), dorm: d }))
+                      )
+                    ));
+                    const combined = lists.flat().sort((a, b) => {
+                      const idxA = dorms.indexOf(a.dorm), idxB = dorms.indexOf(b.dorm);
+                      if (idxA !== idxB) return idxA - idxB;
+                      return (parseInt(a.roomNumber) || 0) - (parseInt(b.roomNumber) || 0);
+                    });
+                    select.innerHTML = combined.map(r =>
+                      `<option value="${r.id}" data-dorm="${r.dorm}">${r.dorm === 'shofu' ? '松風寮' : '明善寮'} - ${r.roomNumber} ${r.name}</option>`
+                    ).join('');
+                    selectModal.classList.add('active');
+                    selectModal.style.pointerEvents = 'auto';
+                    document.getElementById('self-select-btn').onclick = async () => {
+                      // Show loading overlay
+                      document.getElementById('loading-overlay').style.display = 'flex';
+                      // Show loading state
+                      const btn = document.getElementById('self-select-btn');
+                      btn.disabled = true;
+                      btn.textContent = '読み込み中...';
+                      // Optionally show loading in table
+                      document.querySelector('#resident-table tbody').innerHTML = '<tr><td colspan="5">読み込み中...</td></tr>';
+                      const id = select.value;
+                      localStorage.setItem('myResidentId', id);
+                      // Switch dorm view to match selected resident
+                      const selectedDorm = select.options[select.selectedIndex].getAttribute('data-dorm');
+                      switchDorm(selectedDorm);
+                      // Ensure we have a token; request permission if needed
+                      if (!currentDeviceToken) {
+                        await requestNotificationPermission();
+                      }
+                      // Save residentId to this device's token document
+                      if (currentDeviceToken) {
+                        await db.collection('fcm_tokens')
+                                .doc(currentDeviceToken)
+                                .set({ residentId: id }, { merge: true });
+                        console.log('residentId saved to Firestore:', id);
+                      }
+                      selectModal.classList.remove('active');
+                      selectModal.style.pointerEvents = 'none';
+                      renderTable();
+                      // Reset the button back to its original state
+                      btn.disabled = false;
+                      btn.textContent = '決定';
+                      // Hide loading overlay
+                      document.getElementById('loading-overlay').style.display = 'none';
+                    };
+                    document.getElementById('self-cancel-btn').addEventListener('click', () => {
+                      const selectModal = document.getElementById('self-select-modal');
+                      selectModal.classList.remove('active');
+                      selectModal.style.pointerEvents = 'none';
+                    });
+                  })();
                   return;
                 }
                 renderTable(); 
@@ -1616,10 +1674,6 @@
         elements.opsContainer.style.display = elements.sohmuToggle.checked ? '' : 'none';
         // Initial display setting for "寮生変更" button
         elements.changeResidentBtn.style.display = elements.sohmuToggle.checked ? 'none' : 'inline-block';
-        // 「寮生変更」ボタンで自分選択モーダルを開く
-        if (elements.changeResidentBtn) {
-          elements.changeResidentBtn.addEventListener('click', openSelfSelectModal);
-        }
         // 初期表示：お知らせ欄を庶務モードに応じて表示/非表示
         updateAnnouncementVisibility();
         elements.selectAllCheckbox.addEventListener('change', e => {
@@ -1631,13 +1685,6 @@
             localStorage.setItem('theme', e.target.value);
             handleThemeChange(e.target.value);
         });
-        // ===== 自分選択モーダル: Cancel/Confirm/Backdrop =====
-        const selfCancelBtn = document.getElementById('self-cancel-btn');
-        if (selfCancelBtn) selfCancelBtn.addEventListener('click', closeSelfSelectModal);
-        const selfSelectBtn = document.getElementById('self-select-btn');
-        if (selfSelectBtn) selfSelectBtn.addEventListener('click', handleSelfSelectConfirm);
-        const selfSelectModalEl = document.getElementById('self-select-modal');
-        if (selfSelectModalEl) selfSelectModalEl.addEventListener('click', (e)=>{ if(e.target===selfSelectModalEl) closeSelfSelectModal(); });
         prefersDark.addEventListener('change', () => {
             const savedTheme = localStorage.getItem('theme') || 'system';
             if (savedTheme === 'system') handleThemeChange('system');
