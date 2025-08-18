@@ -423,23 +423,13 @@
    .crazy-nav .nav-btn.active{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.12);background:linear-gradient(135deg,#6dd5fa,#ff758c);color:#fff}
    .fab{display:none;width:48px;height:48px;border-radius:50%;align-items:center;justify-content:center;font-size:24px;font-weight:900;background:linear-gradient(135deg,#ff758c,#ff7eb3);color:#fff;border:none;cursor:pointer;box-shadow:0 10px 20px rgba(255,120,160,.3)}
 </style>
-    <!-- PARTY THEME & Nav/FAB CSS moved into the main <style> block above -->
-        /* PARTY gradient background */
-        body {
-          background: radial-gradient(1200px 600px at 20% -10%, #ffe680 0%, transparent 60%),
-                      radial-gradient(1200px 600px at 120% 10%, #a8e6ff 0%, transparent 60%),
-                      linear-gradient(120deg, #fffcfe 0%, #f7faff 100%);
-        }
-        /* Nav helper */
-        .crazy-nav .spacer { flex: 1; }
-        /* Fab active press effect */
-        .fab:active { transform: translateY(1px) scale(.98); }
 </head>
+
+<body>
 
 <div id="loading-overlay" style="display:none; position:fixed; inset:0; background:rgba(255,255,255,0.8); z-index:3000; align-items:center; justify-content:center;">
   <div>読み込み中...</div>
 </div>
-<body>
 
 <div class="container">
     <div class="header-area">
@@ -460,6 +450,7 @@
       <div class="spacer"></div>
       <button id="fab-post" class="fab" title="お知らせ投稿">＋</button>
     </nav>
+    <section id="view-residents">
     
     <div class="controls-container">
         <div id="dorm-selector" class="dorm-selector">
@@ -527,6 +518,7 @@
     </div>
     </section>
     <!-- ===== お知らせ欄ここまで ===== -->
+    </section>
     <div style="text-align:center; margin-top:20px;">
       <button id="change-resident-btn" class="header-btn" style="background:#3498db;">寮生変更</button>
     </div>
@@ -731,6 +723,7 @@
     let allResidents = []; 
     let unsubscribe; 
     let logUnsubscribe = null;  // 操作履歴 listener
+    let currentView = 'residents';
 
     // 全ての関数をグローバルスコープに配置
     async function addLog(action, details){
@@ -792,6 +785,38 @@
                     .catch(()=>{});  // doc 不存在や権限エラーは無視
         }
     }
+
+    function switchViewAnimated(view){
+      if (currentView === view) return;
+      const res = document.getElementById('view-residents');
+      const ann = document.getElementById('view-announcements');
+      const from = currentView === 'residents' ? res : ann;
+      const to   = view === 'residents' ? res : ann;
+
+      if (from && to){
+        // cancel previous
+        from.classList.remove('view-enter','view-exit');
+        to.classList.remove('view-enter','view-exit');
+
+        // show target and play enter
+        to.style.display = 'block';
+        to.classList.add('view-enter');
+        to.addEventListener('animationend', ()=> to.classList.remove('view-enter'), { once:true });
+
+        // play exit on current then hide
+        from.classList.add('view-exit');
+        from.addEventListener('animationend', ()=>{ from.classList.remove('view-exit'); from.style.display = 'none'; }, { once:true });
+      }
+
+      currentView = view;
+      document.querySelectorAll('#crazy-nav .nav-btn').forEach(btn=>{
+        btn.classList.toggle('active', btn.dataset.view === view);
+      });
+      const fab = document.getElementById('fab-post');
+      const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
+      if (fab) fab.style.display = (view==='announcements' && isAdmin) ? 'inline-flex' : 'none';
+    }
+    function switchView(view){ switchViewAnimated(view); }
 
     document.addEventListener('DOMContentLoaded', () => {
         // Show standalone-mode alert only once
@@ -1651,4 +1676,23 @@
             elements.bulkFormEntries.appendChild(createBulkFormEntry());
         });
         elements.toggleFurigana.addEventListener('change', e => document.body.classList.toggle('show-furigana', e.target.checked));
-elements.toggleCircle.addEventListener('change', e => document.body.classList.toggle('show-circle', e.target.checked));
+        elements.toggleCircle.addEventListener('change', e => document.body.classList.toggle('show-circle', e.target.checked));
+// Insert crazy-nav event delegation for view switching
+const crazyNav = document.getElementById('crazy-nav');
+if (crazyNav){
+  crazyNav.addEventListener('click', (e)=>{
+    const btn = e.target.closest('.nav-btn');
+    if (!btn) return;
+    e.preventDefault();
+    switchView(btn.dataset.view);
+  });
+}
+</style>
+    /* PARTY gradient background */
+    body {
+      background: radial-gradient(1200px 600px at 20% -10%, #ffe680 0%, transparent 60%),
+                  radial-gradient(1200px 600px at 120% 10%, #a8e6ff 0%, transparent 60%),
+                  linear-gradient(120deg, #fffcfe 0%, #f7faff 100%);
+    }
+    .crazy-nav .spacer { flex: 1; }
+    .fab:active { transform: translateY(1px) scale(.98); }
