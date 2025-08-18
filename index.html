@@ -693,12 +693,13 @@
             console.error('FCM initialization failed', err);
         }
 
-        // フォアグラウンド受信時: OS通知は出さない（重複防止）
-        // ここでは必要なら画面内トースト等で知らせる実装にする
+        // フォアグラウンドで通知を受け取ったら表示
         messaging.onMessage(payload => {
             console.log('Foreground FCM message received:', payload);
-            // 重複防止のため、ここで new Notification(...) は呼ばない
-            // TODO: 画面内バナー/トーストを出したい場合はここに実装
+            const { notification } = payload;
+            if (notification && Notification.permission === 'granted') {
+                new Notification(notification.title, { body: notification.body });
+            }
         });
     }
     /* ===================================== */
