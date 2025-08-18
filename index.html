@@ -1028,21 +1028,36 @@
             }, error => console.error("データの読み込みに失敗しました:", error));
         }
         
-        // Listen to both dorm collections and merge data for "all" view
+        // Listen to both dorm collections and merge data for "all" view (リアルタイムで両方購読)
         function listenToAllCollections() {
-            if (unsubscribe) unsubscribe();
-            // Fetch both collections and combine snapshots
+            if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+
             const shofuRef = db.collection('residents_shofu');
             const meizenRef = db.collection('residents_meizen');
-            unsubscribe = shofuRef.onSnapshot(shofuSnap => {
-                meizenRef.get().then(meizenSnap => {
-                    allResidents = [
-                        ...shofuSnap.docs.map(doc => ({ id: doc.id, ...doc.data(), dorm: 'shofu' })),
-                        ...meizenSnap.docs.map(doc => ({ id: doc.id, ...doc.data(), dorm: 'meizen' }))
-                    ];
-                    renderTable();
-                });
+
+            let shofuDocs = [];
+            let meizenDocs = [];
+
+            const renderMerged = () => {
+                allResidents = [
+                    ...shofuDocs.map(doc => ({ id: doc.id, ...doc.data(), dorm: 'shofu' })),
+                    ...meizenDocs.map(doc => ({ id: doc.id, ...doc.data(), dorm: 'meizen' }))
+                ];
+                renderTable();
+            };
+
+            const unsubShofu = shofuRef.onSnapshot(snap => {
+                shofuDocs = snap.docs;
+                renderMerged();
             });
+
+            const unsubMeizen = meizenRef.onSnapshot(snap => {
+                meizenDocs = snap.docs;
+                renderMerged();
+            });
+
+            // unify into one unsubscribe
+            unsubscribe = () => { try { unsubShofu(); } catch(_){} try { unsubMeizen(); } catch(_){} };
         }
 
         function switchDorm(dorm) {
@@ -1419,8 +1434,11 @@
                     const dormLabel = collectionName === 'residents_shofu' ? '松風寮' : '明善寮';
                     alert(`${dormLabel}の全てのカウントを0にリセットしました。`);
                     addLog('全リセット', `[${collectionName.split('_')[1]}] の全カウントをリセット`);
-                    if (collectionName === currentCollectionName || currentCollectionName === 'all') renderTable();
-                }).catch(err => console.error('resetAllCounts error', err));
+                    // UIの更新は onSnapshot に任せる（ここでは再描画しない）
+                }).catch(err => {
+                    console.error('resetAllCounts error', err);
+                    alert(`全リセットに失敗しました。権限やネットワークを確認してください。\n詳細: ${err && (err.code || err.message || err)}`);
+                });
             });
         }
         
