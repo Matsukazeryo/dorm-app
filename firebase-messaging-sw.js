@@ -1,12 +1,11 @@
 // Firebase Cloud Messaging service worker (compat API)
-// 注意: SW では onMessage は使わず、onBackgroundMessage を使う。
-//      ページ側の前景通知/UI はクライアントJSで実装すること。
+// 背景通知の二重表示対策入り
 
-// 1) SDK を SW 側で読み込む（互換APIで統一）
+// 1) SDK（compat）
 importScripts('https://www.gstatic.com/firebasejs/9.6.7/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.6.7/firebase-messaging-compat.js');
 
-// 2) Web と同じ設定で初期化
+// 2) 初期化（ページと同じ）
 firebase.initializeApp({
   apiKey: "AIzaSyDUevNVtZEycMZ7jl9xSimUqg0PB5SbheY",
   authDomain: "dorm-manager-30ce8.firebaseapp.com",
@@ -17,39 +16,44 @@ firebase.initializeApp({
   measurementId: "G-Y9XBHQKJW2"
 });
 
-// 3) SW 内でも messaging を生成
 const messaging = firebase.messaging();
 
-// 4) バックグラウンド受信時の通知表示（アプリがバックグラウンド/非アクティブ時）
-messaging.onBackgroundMessage((payload) => {
-  // FCM の payload.notification を利用
-  const n = payload && payload.notification ? payload.notification : {};
-  const title = n.title || '通知';
-  const body  = n.body  || '';
-  const icon  = n.icon  || '/icons/icon-180.png'; // あるアイコンパスに調整可
-  const clickAction = n.click_action || (payload && payload.fcmOptions && payload.fcmOptions.link) || '/';
+// 直近表示のゆるい重複除去（同じ内容が2秒以内に来たら捨てる）
+let __lastShown = { title: '', body: '', t: 0 };
 
-  self.registration.showNotification(title, {
-    body,
-    icon,
-    data: { url: clickAction }
-  });
+// 3) バックグラウンド受信
+messaging.onBackgroundMessage((payload) => {
+  // ★ここが肝★
+  // payload.notification が付いている通知は、ブラウザ/SDKが自動表示することがある。
+  // → 自前の showNotification は呼ばない（重複防止）。
+  if (payload && payload.notification && (payload.notification.title || payload.notification.body || payload.notification.icon)) {
+    return;
+  }
+
+  // data-only メッセージだけ自前表示
+  const d = (payload && payload.data) || {};
+  const title = d.title || '通知';
+  const body  = d.body  || '';
+  const icon  = d.icon  || '/icons/icon-180.png';
+  const url   = d.click_action || d.link || '/';
+  const tag   = d.tag; // 送信側が tag を付けていれば置換・集約に使える
+
+  const now = Date.now();
+  if (__lastShown.title === title && __lastShown.body === body && (now - __lastShown.t) < 2000) {
+    return; // 直近と同一 → スキップ
+  }
+  __lastShown = { title, body, t: now };
+
+  self.registration.showNotification(title, { body, icon, tag, data: { url } });
 });
 
-// 5) 通知クリックでウィンドウをフォーカス/オープン
+// 4) クリックで復帰
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const targetUrl = (event.notification && event.notification.data && event.notification.data.url) || '/';
   event.waitUntil((async () => {
-    const allClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
-    for (const client of allClients) {
-      if ('focus' in client) return client.focus();
-    }
+    const all = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const c of all) { if ('focus' in c) return c.focus(); }
     if (clients.openWindow) return clients.openWindow(targetUrl);
   })());
 });
-
-// （参考）
-// これまで SW にあった `messaging.onMessage(...)` はページ用APIなので削除。
-// フォアグラウンド表示をしたい場合は、クライアント側で onMessage を使って
-// in-app toast を出すなどの実装にすること。
