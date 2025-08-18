@@ -890,14 +890,29 @@
                   const delBtn = document.createElement('button');
                   delBtn.textContent = '削除';
                   delBtn.style.marginLeft = '8px';
-                  delBtn.onclick = () => { if(confirm('本当に削除しますか？')) doc.ref.delete(); };
+                  delBtn.onclick = async () => {
+                    if (!confirm('本当に削除しますか？')) return;
+                    try {
+                      await doc.ref.delete();
+                    } catch (e) {
+                      alert('削除に失敗しました（権限不足の可能性）: ' + (e.code || e.message));
+                      console.error(e);
+                    }
+                  };
                   li.appendChild(delBtn);
 
                   // ピン/解除ボタン
                   const pinBtn = document.createElement('button');
                   pinBtn.textContent = data.pinned ? 'ピン解除' : 'ピン留め';
                   pinBtn.style.marginLeft = '4px';
-                  pinBtn.onclick = () => doc.ref.update({ pinned: !data.pinned });
+                  pinBtn.onclick = async () => {
+                    try {
+                      await doc.ref.update({ pinned: !data.pinned });
+                    } catch (e) {
+                      alert('更新に失敗しました（権限不足の可能性）: ' + (e.code || e.message));
+                      console.error(e);
+                    }
+                  };
                   li.appendChild(pinBtn);
 
                   // 編集ボタン
@@ -1196,14 +1211,29 @@
                         const delBtn = document.createElement('button');
                         delBtn.textContent = '削除';
                         delBtn.style.marginLeft = '8px';
-                        delBtn.onclick = () => { if(confirm('本当に削除しますか？')) doc.ref.delete(); };
+                        delBtn.onclick = async () => {
+                          if (!confirm('本当に削除しますか？')) return;
+                          try {
+                            await doc.ref.delete();
+                          } catch (e) {
+                            alert('削除に失敗しました（権限不足の可能性）: ' + (e.code || e.message));
+                            console.error(e);
+                          }
+                        };
                         li.appendChild(delBtn);
 
                         // ピン留め / 解除ボタン
                         const pinBtn = document.createElement('button');
                         pinBtn.textContent = data.pinned ? 'ピン解除' : 'ピン留め';
                         pinBtn.style.marginLeft = '4px';
-                        pinBtn.onclick = () => doc.ref.update({ pinned: !data.pinned });
+                        pinBtn.onclick = async () => {
+                          try {
+                            await doc.ref.update({ pinned: !data.pinned });
+                          } catch (e) {
+                            alert('更新に失敗しました（権限不足の可能性）: ' + (e.code || e.message));
+                            console.error(e);
+                          }
+                        };
                         li.appendChild(pinBtn);
 
                         // 編集ボタン
