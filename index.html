@@ -472,6 +472,7 @@
             <label><input type="checkbox" id="toggle-furigana"> ふりがな</label>
             <label><input type="checkbox" id="toggle-circle"> サークル</label>
             <label><input type="checkbox" id="toggle-dorm"> 寮</label>
+            <label><input type="checkbox" id="toggle-sort-name"> 名前順</label>
         </div>
     </div>
 
@@ -797,6 +798,7 @@
             toggleFurigana: document.getElementById('toggle-furigana'),
             toggleCircle: document.getElementById('toggle-circle'),
             toggleDorm  : document.getElementById('toggle-dorm'),
+            toggleSortName      : document.getElementById('toggle-sort-name'),
             dormSelector: document.getElementById('dorm-selector'),
             topControls: document.querySelector('.top-controls'),
             middleControls: document.querySelector('.middle-controls'),
@@ -1148,12 +1150,22 @@
             const baseList = sohmuOn
               ? allResidents
               : allResidents.filter(r => r.id === myId);
+            const sortByName = elements.toggleSortName && elements.toggleSortName.checked;
             if (sohmuOn) {
-              // 庶務モード ON: 通常の部屋番号順
-              baseList.sort((a, b) => (parseInt(a.roomNumber) || 0) - (parseInt(b.roomNumber) || 0));
+              if (sortByName) {
+                // 名前順（かな漢字混在でも localeCompare で素直にソート）
+                baseList.sort(function(a, b){
+                  var an = (a.name || '');
+                  var bn = (b.name || '');
+                  return an.localeCompare(bn);
+                });
+              } else {
+                // 部屋番号順（従来）
+                baseList.sort(function(a, b){ return (parseInt(a.roomNumber) || 0) - (parseInt(b.roomNumber) || 0); });
+              }
             } else {
-              // 庶務モード OFF: 自分をトップに、以降部屋番号順
-              baseList.sort((a, b) => {
+              // 庶務モード OFF: 自分だけ表示（元の動作を維持）
+              baseList.sort(function(a, b){
                 if (a.id === myId) return -1;
                 if (b.id === myId) return 1;
                 return (parseInt(a.roomNumber) || 0) - (parseInt(b.roomNumber) || 0);
@@ -1221,6 +1233,50 @@
             }
             updateDeleteButtonState();
         }
+        // ===== 表示トグルの初期化・保存・復元 =====
+        function initDisplayToggles() {
+            var f = localStorage.getItem('showFurigana') === '1';
+            var c = localStorage.getItem('showCircle') === '1';
+            var d = localStorage.getItem('showDorm') === '1';
+            var s = localStorage.getItem('sortName') === '1';
+            if (elements.toggleFurigana) elements.toggleFurigana.checked = f;
+            if (elements.toggleCircle) elements.toggleCircle.checked = c;
+            if (elements.toggleDorm) elements.toggleDorm.checked = d;
+            if (elements.toggleSortName) elements.toggleSortName.checked = s;
+            if (elements.toggleFurigana) {
+                elements.toggleFurigana.addEventListener('change', function(e){
+                    var on = !!e.target.checked;
+                    try { localStorage.setItem('showFurigana', on ? '1' : '0'); } catch(_){}
+                    document.body.classList.toggle('show-furigana', on);
+                });
+                document.body.classList.toggle('show-furigana', f);
+            }
+            if (elements.toggleCircle) {
+                elements.toggleCircle.addEventListener('change', function(e){
+                    var on = !!e.target.checked;
+                    try { localStorage.setItem('showCircle', on ? '1' : '0'); } catch(_){}
+                    document.body.classList.toggle('show-circle', on);
+                });
+                document.body.classList.toggle('show-circle', c);
+            }
+            if (elements.toggleDorm) {
+                elements.toggleDorm.addEventListener('change', function(e){
+                    var on = !!e.target.checked;
+                    try { localStorage.setItem('showDorm', on ? '1' : '0'); } catch(_){}
+                    document.body.classList.toggle('show-dorm', on);
+                });
+                document.body.classList.toggle('show-dorm', d);
+            }
+            if (elements.toggleSortName) {
+                elements.toggleSortName.addEventListener('change', function(e){
+                    var on = !!e.target.checked;
+                    try { localStorage.setItem('sortName', on ? '1' : '0'); } catch(_){}
+                    if (typeof renderTable === 'function') renderTable();
+                });
+            }
+        }
+        // ===== 表示トグル初期化呼び出し =====
+        initDisplayToggles();
         
 
         function renderLogs(snapshot){
