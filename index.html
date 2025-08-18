@@ -417,19 +417,13 @@
             margin: 0 6px;
           }
         }
-   /* minimal styles for crazy nav */
-   .crazy-nav{display:flex;gap:8px;align-items:center;position:sticky;top:0;z-index:1500;padding:10px;border-radius:12px;background:rgba(255,255,255,.65);backdrop-filter:blur(10px);border:1px solid rgba(0,0,0,.05);margin-bottom:12px}
-   .crazy-nav .nav-btn{appearance:none;border:0;padding:10px 14px;border-radius:10px;font-weight:700;cursor:pointer;background:#ecf0f1;color:#34495e}
-   .crazy-nav .nav-btn.active{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.12);background:linear-gradient(135deg,#6dd5fa,#ff758c);color:#fff}
-   .fab{display:none;width:48px;height:48px;border-radius:50%;align-items:center;justify-content:center;font-size:24px;font-weight:900;background:linear-gradient(135deg,#ff758c,#ff7eb3);color:#fff;border:none;cursor:pointer;box-shadow:0 10px 20px rgba(255,120,160,.3)}
-</style>
+   </style>
 </head>
-
-<body>
 
 <div id="loading-overlay" style="display:none; position:fixed; inset:0; background:rgba(255,255,255,0.8); z-index:3000; align-items:center; justify-content:center;">
   <div>読み込み中...</div>
 </div>
+<body>
 
 <div class="container">
     <div class="header-area">
@@ -444,13 +438,6 @@
             <span id="sohmu-label" style="margin-left:4px; font-weight:bold; color:var(--header-text);">庶務</span>
         </div>
     </div>
-    <nav id="crazy-nav" class="crazy-nav">
-      <button class="nav-btn active" data-view="residents">📦 寮生</button>
-      <button class="nav-btn" data-view="announcements">📣 お知らせ</button>
-      <div class="spacer"></div>
-      <button id="fab-post" class="fab" title="お知らせ投稿">＋</button>
-    </nav>
-    <section id="view-residents">
     
     <div class="controls-container">
         <div id="dorm-selector" class="dorm-selector">
@@ -506,7 +493,6 @@
         </table>
     </div>
     <!-- ===== お知らせ欄 (庶務モードOFF で表示) ===== -->
-    <section id="view-announcements" style="display:none;">
     <div id="announcement-container" class="announcement" style="display:none;">
         <div class="announcement-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
             <h2 style="margin:0;font-size:1.2em;">お知らせ</h2>
@@ -516,9 +502,7 @@
             <li>お知らせはありません。</li>
         </ul>
     </div>
-    </section>
     <!-- ===== お知らせ欄ここまで ===== -->
-    </section>
     <div style="text-align:center; margin-top:20px;">
       <button id="change-resident-btn" class="header-btn" style="background:#3498db;">寮生変更</button>
     </div>
@@ -723,7 +707,6 @@
     let allResidents = []; 
     let unsubscribe; 
     let logUnsubscribe = null;  // 操作履歴 listener
-    let currentView = 'residents';
 
     // 全ての関数をグローバルスコープに配置
     async function addLog(action, details){
@@ -785,38 +768,6 @@
                     .catch(()=>{});  // doc 不存在や権限エラーは無視
         }
     }
-
-    function switchViewAnimated(view){
-      if (currentView === view) return;
-      const res = document.getElementById('view-residents');
-      const ann = document.getElementById('view-announcements');
-      const from = currentView === 'residents' ? res : ann;
-      const to   = view === 'residents' ? res : ann;
-
-      if (from && to){
-        // cancel previous
-        from.classList.remove('view-enter','view-exit');
-        to.classList.remove('view-enter','view-exit');
-
-        // show target and play enter
-        to.style.display = 'block';
-        to.classList.add('view-enter');
-        to.addEventListener('animationend', ()=> to.classList.remove('view-enter'), { once:true });
-
-        // play exit on current then hide
-        from.classList.add('view-exit');
-        from.addEventListener('animationend', ()=>{ from.classList.remove('view-exit'); from.style.display = 'none'; }, { once:true });
-      }
-
-      currentView = view;
-      document.querySelectorAll('#crazy-nav .nav-btn').forEach(btn=>{
-        btn.classList.toggle('active', btn.dataset.view === view);
-      });
-      const fab = document.getElementById('fab-post');
-      const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
-      if (fab) fab.style.display = (view==='announcements' && isAdmin) ? 'inline-flex' : 'none';
-    }
-    function switchView(view){ switchViewAnimated(view); }
 
     document.addEventListener('DOMContentLoaded', () => {
         // Show standalone-mode alert only once
@@ -1564,7 +1515,6 @@
         setMode('view-mode');
         updateLoginStatus();
         repositionAnnouncement(sessionStorage.getItem('isAdminLoggedIn')==='true');
-        switchView('residents');
         elements.searchInput.addEventListener('input', renderTable);
         elements.addResidentBtn.addEventListener('click', showAddResidentModal);
         elements.addBulkBtn.addEventListener('click', showBulkAddModal);
@@ -1677,22 +1627,63 @@
         });
         elements.toggleFurigana.addEventListener('change', e => document.body.classList.toggle('show-furigana', e.target.checked));
         elements.toggleCircle.addEventListener('change', e => document.body.classList.toggle('show-circle', e.target.checked));
-// Insert crazy-nav event delegation for view switching
-const crazyNav = document.getElementById('crazy-nav');
-if (crazyNav){
-  crazyNav.addEventListener('click', (e)=>{
-    const btn = e.target.closest('.nav-btn');
-    if (!btn) return;
-    e.preventDefault();
-    switchView(btn.dataset.view);
-  });
-}
-</style>
-    /* PARTY gradient background */
-    body {
-      background: radial-gradient(1200px 600px at 20% -10%, #ffe680 0%, transparent 60%),
-                  radial-gradient(1200px 600px at 120% 10%, #a8e6ff 0%, transparent 60%),
-                  linear-gradient(120deg, #fffcfe 0%, #f7faff 100%);
-    }
-    .crazy-nav .spacer { flex: 1; }
-    .fab:active { transform: translateY(1px) scale(.98); }
+        // Restore dorm marker toggle state
+        if (localStorage.getItem('showDorm') === 'true') {
+            elements.toggleDorm.checked = true;
+            document.body.classList.add('show-dorm');
+        }
+        // Dorm marker toggle with persistence
+        elements.toggleDorm.addEventListener('change', e => {
+            document.body.classList.toggle('show-dorm', e.target.checked);
+            localStorage.setItem('showDorm', e.target.checked);
+        });
+
+        elements.logViewBtn.addEventListener('click', showLogModal);
+        elements.modalCloseBtn.addEventListener('click', hideLogModal);
+        elements.logModal.addEventListener('click', e=>{ if(e.target===elements.logModal) hideLogModal(); });
+
+        // 寮生変更ボタン：毎回リストを再取得してモーダルを開く
+        elements.changeResidentBtn.addEventListener('click', async () => {
+          // Reset stored ID and reload list each time
+          localStorage.removeItem('myResidentId');
+          await populateSelfSelectOptions();
+          document.getElementById('self-select-modal').classList.add('active');
+          // Setup self-select-btn handler again (with loading overlay)
+          const btn = document.getElementById('self-select-btn');
+          btn.onclick = async () => {
+            // Show loading overlay
+            document.getElementById('loading-overlay').style.display = 'flex';
+            btn.disabled = true;
+            btn.textContent = '読み込み中...';
+            document.querySelector('#resident-table tbody').innerHTML = '<tr><td colspan="5">読み込み中...</td></tr>';
+            const select = document.getElementById('self-select');
+            const id = select.value;
+            localStorage.setItem('myResidentId', id);
+            const selectedDorm = select.options[select.selectedIndex].getAttribute('data-dorm');
+            switchDorm(selectedDorm);
+            if (!currentDeviceToken) {
+              await requestNotificationPermission();
+            }
+            if (currentDeviceToken) {
+              await db.collection('fcm_tokens')
+                      .doc(currentDeviceToken)
+                      .set({ residentId: id }, { merge: true });
+              console.log('residentId saved to Firestore:', id);
+            }
+            document.getElementById('self-select-modal').classList.remove('active');
+            document.getElementById('self-select-modal').style.pointerEvents = 'none';
+            renderTable();
+            btn.disabled = false;
+            btn.textContent = '決定';
+            // Hide loading overlay
+            document.getElementById('loading-overlay').style.display = 'none';
+          };
+        });
+    });
+
+// --- 削除CSSブロック: .name-stack{ ... } ---
+// --- 削除CSSブロック: .furigana-text{ ... } と body.show-furigana .furigana-text{ ... } ---
+</script>
+
+</body>
+</html>
