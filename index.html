@@ -1688,6 +1688,52 @@
         // Initial hide/show for controls in off-mode
         elements.topControls.style.display = elements.sohmuToggle.checked ? 'flex' : 'none';
         elements.middleControls.style.display = elements.sohmuToggle.checked ? 'flex' : 'none';
+
+        // ===== 表示設定トグル（古い端末対応） =====
+        function setBodyClass(cls, on){
+            if (on) document.body.classList.add(cls);
+            else document.body.classList.remove(cls);
+        }
+        function initDisplayToggles(){
+            // 保存された状態を復元（'1' を ON とする）
+            var f = localStorage.getItem('showFurigana') === '1';
+            var c = localStorage.getItem('showCircle') === '1';
+            var d = localStorage.getItem('showDorm') === '1';
+            if (elements.toggleFurigana) elements.toggleFurigana.checked = f;
+            if (elements.toggleCircle)   elements.toggleCircle.checked = c;
+            if (elements.toggleDorm)     elements.toggleDorm.checked = d;
+            setBodyClass('show-furigana', f);
+            setBodyClass('show-circle',   c);
+            setBodyClass('show-dorm',     d);
+            // 変更イベント（古いブラウザ対応で function を使用）
+            if (elements.toggleFurigana) {
+                elements.toggleFurigana.addEventListener('change', function(e){
+                    var on = !!e.target.checked;
+                    setBodyClass('show-furigana', on);
+                    try { localStorage.setItem('showFurigana', on ? '1' : '0'); } catch(_){}
+                    // テーブルの再描画で表示が即反映されるように
+                    if (typeof renderTable === 'function') renderTable();
+                });
+            }
+            if (elements.toggleCircle) {
+                elements.toggleCircle.addEventListener('change', function(e){
+                    var on = !!e.target.checked;
+                    setBodyClass('show-circle', on);
+                    try { localStorage.setItem('showCircle', on ? '1' : '0'); } catch(_){}
+                    if (typeof renderTable === 'function') renderTable();
+                });
+            }
+            if (elements.toggleDorm) {
+                elements.toggleDorm.addEventListener('change', function(e){
+                    var on = !!e.target.checked;
+                    setBodyClass('show-dorm', on);
+                    try { localStorage.setItem('showDorm', on ? '1' : '0'); } catch(_){}
+                    if (typeof renderTable === 'function') renderTable();
+                });
+            }
+        }
+        initDisplayToggles();
+        // ===== 表示設定トグルここまで =====
         // Hide ops container initially if 庶務モード is OFF
         elements.opsContainer.style.display = elements.sohmuToggle.checked ? '' : 'none';
         // Initial display setting for "寮生変更" button
