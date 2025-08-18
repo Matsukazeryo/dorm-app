@@ -447,15 +447,6 @@
         </div>
         <div class="top-controls">
             <input type="search" id="search-input" placeholder="部屋番号, 名前, ふりがなで検索...">
-            <div class="sorter" style="display:flex; align-items:center; gap:6px;">
-                <label for="sort-selector">並び替え:</label>
-                <select id="sort-selector">
-                  <option value="room">部屋番号順</option>
-                  <option value="furigana">名前順（ふりがな）</option>
-                  <option value="name">名前順（漢字）</option>
-                  <option value="circle">サークル → 名前</option>
-                </select>
-            </div>
             <div class="mode-selector">
                 <input type="radio" id="view-mode" name="mode" checked>
                 <label for="view-mode">閲覧</label>
@@ -794,7 +785,6 @@
         const elements = {
             tableBody: document.querySelector("#resident-table tbody"),
             searchInput: document.getElementById('search-input'),
-            sortSelector: document.getElementById('sort-selector'),
             addResidentBtn: document.getElementById('add-resident-btn'),
             addBulkBtn: document.getElementById('add-bulk-btn'),
             deleteSelectedBtn: document.getElementById('delete-selected-btn'),
@@ -1159,55 +1149,14 @@
               ? allResidents
               : allResidents.filter(r => r.id === myId);
             if (sohmuOn) {
-              var key = elements.sortSelector ? elements.sortSelector.value : 'room';
-              var dormOrder = { shofu: 0, meizen: 1 };
-              baseList.sort(function(a, b){
-                function toNum(x){ var n = parseInt(x, 10); return isNaN(n) ? 0 : n; }
-                function cmpStr(aa, bb){
-                  aa = (aa || '').toString().toLowerCase();
-                  bb = (bb || '').toString().toLowerCase();
-                  if (aa < bb) return -1; if (aa > bb) return 1; return 0;
-                }
-                if (key === 'room'){
-                  if (currentCollectionName === 'all'){
-                    var da = (a.dorm in dormOrder) ? dormOrder[a.dorm] : 99;
-                    var db = (b.dorm in dormOrder) ? dormOrder[b.dorm] : 99;
-                    if (da !== db) return da - db;  
-                  }
-                  return toNum(a.roomNumber) - toNum(b.roomNumber);
-                }
-                if (key === 'furigana'){
-                  var sa = (a.furigana && a.furigana.toString()) || (a.name || '');
-                  var sb = (b.furigana && b.furigana.toString()) || (b.name || '');
-                  var c1 = cmpStr(sa, sb); if (c1) return c1;
-                  return toNum(a.roomNumber) - toNum(b.roomNumber);
-                }
-                if (key === 'name'){
-                  var c2 = cmpStr(a.name || '', b.name || ''); if (c2) return c2;
-                  return toNum(a.roomNumber) - toNum(b.roomNumber);
-                }
-                if (key === 'circle'){
-                  var ca = (a.circle || '').trim();
-                  var cb = (b.circle || '').trim();
-                  var aEmpty = ca === '';
-                  var bEmpty = cb === '';
-                  if (aEmpty && !bEmpty) return 1;   
-                  if (!aEmpty && bEmpty) return -1;
-                  var c3 = cmpStr(ca, cb); if (c3) return c3;
-                  var sa2 = (a.furigana && a.furigana.toString()) || (a.name || '');
-                  var sb2 = (b.furigana && b.furigana.toString()) || (b.name || '');
-                  var c4 = cmpStr(sa2, sb2); if (c4) return c4;
-                  return toNum(a.roomNumber) - toNum(b.roomNumber);
-                }
-                return 0;
-              });
+              // 庶務モード ON: 通常の部屋番号順
+              baseList.sort((a, b) => (parseInt(a.roomNumber) || 0) - (parseInt(b.roomNumber) || 0));
             } else {
-              baseList.sort(function(a, b){
+              // 庶務モード OFF: 自分をトップに、以降部屋番号順
+              baseList.sort((a, b) => {
                 if (a.id === myId) return -1;
                 if (b.id === myId) return 1;
-                var na = parseInt(a.roomNumber, 10); if (isNaN(na)) na = 0;
-                var nb = parseInt(b.roomNumber, 10); if (isNaN(nb)) nb = 0;
-                return na - nb;
+                return (parseInt(a.roomNumber) || 0) - (parseInt(b.roomNumber) || 0);
               });
             }
             const filteredResidents = baseList.filter(r => 
@@ -1733,18 +1682,6 @@
         elements.postAnnouncementModal.addEventListener('click', e=>{
             if(e.target === elements.postAnnouncementModal) closePostModal();
         });
-        // ===== 並び替え: 初期化とイベント登録 =====
-        (function(){
-          var saved = localStorage.getItem('sortKey') || 'room';
-          if (elements.sortSelector) elements.sortSelector.value = saved;
-          if (elements.sortSelector) {
-            elements.sortSelector.addEventListener('change', function(){
-              try { localStorage.setItem('sortKey', elements.sortSelector.value); } catch(_){}
-              if (typeof renderTable === 'function') renderTable();
-            });
-          }
-        })();
-        // ===== 並び替えここまで =====
         // 初期表示設定
         // Initial hide/show for dorm selector
         elements.dormSelector.style.display = elements.sohmuToggle.checked ? 'flex' : 'none';
