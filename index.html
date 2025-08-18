@@ -737,7 +737,7 @@
             const snap = await t.get(docRef);
             if (!snap.exists) return;
 
-            const current = snap.data()[type] ?? 0;
+            const current = (snap.data()[type] != null) ? snap.data()[type] : 0;
             let next      = current + value;
             if (next < 0) next = 0;          // 0 未満は禁止
 
@@ -883,7 +883,8 @@
           if (tbody) tbody.innerHTML = '<tr><td colspan="5">読み込み中...</td></tr>';
           const id = select.value;
           localStorage.setItem('myResidentId', id);
-          const selectedDorm = select.options[select.selectedIndex]?.getAttribute('data-dorm') || 'shofu';
+          var opt = select.options[select.selectedIndex];
+          const selectedDorm = (opt && opt.getAttribute('data-dorm')) || 'shofu';
           switchDorm(selectedDorm);
           try {
             if (!currentDeviceToken) { await requestNotificationPermission(); }
@@ -911,19 +912,26 @@
             elements.announcementList.innerHTML = '';
             const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
             // ---- sort: pinned first, then newest ----
-            const docs = snap.docs.sort((a,b)=>{
+            const docs = snap.docs.sort(function(a,b){
               const aPin = a.data().pinned ? 1 : 0;
               const bPin = b.data().pinned ? 1 : 0;
-              if(aPin !== bPin) return bPin - aPin;                // pinned=true が先
-              return (b.data().timestamp?.toMillis?.()||0) - (a.data().timestamp?.toMillis?.()||0);
+              if (aPin !== bPin) return bPin - aPin; // pinned=true が先
+              var aTs = (a.data().timestamp && typeof a.data().timestamp.toMillis === 'function') ? a.data().timestamp.toMillis() : 0;
+              var bTs = (b.data().timestamp && typeof b.data().timestamp.toMillis === 'function') ? b.data().timestamp.toMillis() : 0;
+              return bTs - aTs;
             });
 
-            docs.forEach(doc=>{
+            docs.forEach(function(doc){
               const data = doc.data();
               const li   = document.createElement('li');
-              const timeText = data.timestamp && data.timestamp.toDate
-                 ? data.timestamp.toDate().toLocaleString('ja-JP',{ dateStyle:'medium', timeStyle:'short' })
-                 : '';
+              let timeText = '';
+              if (data.timestamp && data.timestamp.toDate) {
+                try {
+                  timeText = data.timestamp.toDate().toLocaleString('ja-JP');
+                } catch (e) {
+                  timeText = String(data.timestamp.toDate());
+                }
+              }
               li.innerHTML = `
                   <div>${data.pinned ? '<span class="pin-tag">📌</span>' : ''}<span class="announce-title">${data.title || '(無題)'}</span></div>
                   <div class="announce-body">${data.body || data.text || ''}</div>
@@ -934,7 +942,7 @@
                   const delBtn = document.createElement('button');
                   delBtn.textContent = '削除';
                   delBtn.style.marginLeft = '8px';
-                  delBtn.onclick = async () => {
+                  delBtn.onclick = async function() {
                     if (!confirm('本当に削除しますか？')) return;
                     try {
                       await doc.ref.delete();
@@ -949,7 +957,7 @@
                   const pinBtn = document.createElement('button');
                   pinBtn.textContent = data.pinned ? 'ピン解除' : 'ピン留め';
                   pinBtn.style.marginLeft = '4px';
-                  pinBtn.onclick = async () => {
+                  pinBtn.onclick = async function() {
                     try {
                       await doc.ref.update({ pinned: !data.pinned });
                     } catch (e) {
@@ -963,7 +971,7 @@
                   const editBtn = document.createElement('button');
                   editBtn.textContent = '編集';
                   editBtn.style.marginLeft = '4px';
-                  editBtn.onclick = () => {
+                  editBtn.onclick = function() {
                       editingDocRef = doc.ref;
                       elements.postTitleInput.value = data.title || '';
                       elements.postBodyInput.value  = data.body  || data.text || '';
@@ -1234,7 +1242,7 @@
 
         // ===== お知らせリストを現在の管理者状態で再描画 =====
         function rebuildAnnouncementList(){
-            announcementsRef.get().then(snap=>{
+            announcementsRef.get().then(function(snap){
                 if(!snap) return;
                 const docs = snap.docs;
                 if (docs.length === 0){
@@ -1245,20 +1253,27 @@
                 const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
 
                 // ピン留め優先 → 新しい順
-                const sorted = docs.slice().sort((a,b)=>{
+                const sorted = docs.slice().sort(function(a,b){
                     const aPin = a.data().pinned ? 1 : 0;
                     const bPin = b.data().pinned ? 1 : 0;
-                    if(aPin !== bPin) return bPin - aPin;
-                    return (b.data().timestamp?.toMillis?.()||0) - (a.data().timestamp?.toMillis?.()||0);
+                    if (aPin !== bPin) return bPin - aPin;
+                    var aTs = (a.data().timestamp && typeof a.data().timestamp.toMillis === 'function') ? a.data().timestamp.toMillis() : 0;
+                    var bTs = (b.data().timestamp && typeof b.data().timestamp.toMillis === 'function') ? b.data().timestamp.toMillis() : 0;
+                    return bTs - aTs;
                 });
 
-                sorted.forEach(doc=>{
+                sorted.forEach(function(doc){
                     const data = doc.data();
                     const li = document.createElement('li');
 
-                    const timeText = data.timestamp && data.timestamp.toDate
-                       ? data.timestamp.toDate().toLocaleString('ja-JP',{ dateStyle:'medium', timeStyle:'short' })
-                       : '';
+                    let timeText = '';
+                    if (data.timestamp && data.timestamp.toDate) {
+                        try {
+                            timeText = data.timestamp.toDate().toLocaleString('ja-JP');
+                        } catch (e) {
+                            timeText = String(data.timestamp.toDate());
+                        }
+                    }
 
                     li.innerHTML = `
                         <div>${data.pinned ? '<span class="pin-tag">📌</span>' : ''}<span class="announce-title">${data.title || '(無題)'}</span></div>
@@ -1271,7 +1286,7 @@
                         const delBtn = document.createElement('button');
                         delBtn.textContent = '削除';
                         delBtn.style.marginLeft = '8px';
-                        delBtn.onclick = async () => {
+                        delBtn.onclick = async function() {
                           if (!confirm('本当に削除しますか？')) return;
                           try {
                             await doc.ref.delete();
@@ -1286,7 +1301,7 @@
                         const pinBtn = document.createElement('button');
                         pinBtn.textContent = data.pinned ? 'ピン解除' : 'ピン留め';
                         pinBtn.style.marginLeft = '4px';
-                        pinBtn.onclick = async () => {
+                        pinBtn.onclick = async function() {
                           try {
                             await doc.ref.update({ pinned: !data.pinned });
                           } catch (e) {
@@ -1300,7 +1315,7 @@
                         const editBtn = document.createElement('button');
                         editBtn.textContent = '編集';
                         editBtn.style.marginLeft = '4px';
-                        editBtn.onclick = () => {
+                        editBtn.onclick = function() {
                             editingDocRef = doc.ref;
                             elements.postTitleInput.value = data.title || '';
                             elements.postBodyInput.value  = data.body  || data.text || '';
@@ -1314,7 +1329,7 @@
 
                     elements.announcementList.appendChild(li);
                 });
-            }).catch(err=>console.error('rebuildAnnouncementList',err));
+            }).catch(function(err){console.error('rebuildAnnouncementList',err);});
         }
 
         function showLogModal(){
