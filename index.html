@@ -314,8 +314,8 @@
         /* ===== 庶務モードOFF専用レイアウトここまで ===== */
         /* ===== お知らせ欄 ===== */
         /* === 新レイアウト: お知らせカード === */
-        .announce-item { padding:10px 12px; background: var(--announce-item-bg); border-radius:6px; }
-        .announce-item.pinned { background: var(--announce-pinned-bg); padding:12px 14px; }
+        .announce-item { padding:8px 10px; background: var(--announce-item-bg); border-radius:6px; }
+        .announce-item.pinned { background: var(--announce-pinned-bg); }
         .announce-head { display:flex; align-items:center; gap:6px; }
         .announce-head .announce-title { flex: 1 1 auto; min-width: 0; }
         .announce-head .announce-time { flex: 0 0 auto; margin-left:8px; white-space: nowrap; }
@@ -324,20 +324,18 @@
         .announcement{
           border:1px solid var(--header-border);
           background:var(--container-bg);
-          padding:10px 12px;         /* 枠と文字の間を少し広げる */
+          padding:6px 10px;          /* さらに詰める */
           margin:8px 0 12px 0;       /* さらに詰める */
           border-radius:6px;
         }
         @media (max-width:600px){
           .announcement{
-            padding:8px 10px;  /* 枠と文字の間をモバイルでも少し広げる */
+            padding:4px 8px;
             margin:6px 0 10px 0;
           }
           .announce-title{ font-size:0.92em; }
           .announce-body{  font-size:0.88em; line-height:1.2; }
           .announce-time{  font-size:0.60em; }
-          .announce-item{ padding:9px 11px; }
-          .announce-item.pinned{ padding:11px 13px; }
           /* 全体の文字サイズを少し縮小 */
           body{ font-size:14px; }
           /* タイトル見出しを少し小さく */
