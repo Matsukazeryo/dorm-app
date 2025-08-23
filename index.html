@@ -276,16 +276,18 @@
 
              /* カウント部分もコンパクトに */
              .count-cell{
-               gap: 4px;            /* ボタンと数字の間隔を半分に */
+               gap: 2px;            /* さらに詰める */
+               white-space: nowrap;   /* 折り返し防止 */
              }
              .count-span{
-               min-width: 18px;     /* 幅を少し縮める */
-               font-size: 1rem;
+               min-width: 16px;     /* さらに縮める */
+               font-size: 0.95rem;
              }
              .count-cell button{
-               width: 22px;         /* ボタンを少しだけ小さく */
-               height: 22px;
-               font-size: 14px;
+               width: 20px;         /* さらに小さく */
+               height: 20px;
+               font-size: 12px;
+               border-width: 1px;   /* 枠も細く */
              }
         }
 
@@ -780,30 +782,38 @@
         .replace(/'/g, '&#39;');
     }
 
-    // [color=#ff0000]テキスト[/color] だけを赤強調として解釈（それ以外の色指定はタグを剥がす）
+    // [color=#ff0000]...[/color] だけ赤に。古い端末や表記ゆれも吸収。
     function renderColoredText(input){
       if (!input) return '';
+      var src = String(input);
+      // 全角カッコ → 半角
+      src = src.replace(/\uFF3B/g, '[').replace(/\uFF3D/g, ']');
+      // ショートハンド [red]...[/red], [em]...[/em], [赤]...[/赤] を正規化
+      src = src.replace(/\[(red|em)\]([\s\S]*?)\[\/\1\]/gi, '[color=#ff0000]$2[/color]');
+      src = src.replace(/\[赤\]([\s\S]*?)\[\/赤\]/g, '[color=#ff0000]$1[/color]');
+      // 末尾の閉じ忘れ ([color=#ff0000] だけで終わっている) を自動補完
+      src = src.replace(/\[color=\s*#?(?:ff0000|f{3})\s*\]([\s\S]*?)$/i, '[color=#ff0000]$1[/color]');
+
       var out = '';
       var lastIndex = 0;
-      var re = /\[color=\s*#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})\s*\]([\s\S]*?)\[\/color\]/g;
+      // color タグ名は大小無視でマッチ
+      var re = /\[color=\s*#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})\s*\]([\s\S]*?)\[\/color\]/gi;
       var m;
-      while ((m = re.exec(input)) !== null){
-        // マッチ前のプレーンテキスト
-        out += escapeHtml(input.slice(lastIndex, m.index));
-        var raw = m[1];
-        var inner = m[2];
-        var col = sanitizeColor(raw);
+      while ((m = re.exec(src)) !== null){
+        // マッチ前のプレーンテキストをエスケープして出力
+        out += escapeHtml(src.slice(lastIndex, m.index));
+        var col = sanitizeColor(m[1]);
         var isRed = (col === '#ff0000' || col === '#f00');
         if (isRed){
-          out += '<span style="color:#ff0000">' + escapeHtml(inner) + '</span>';
+          out += '<span style="color:#ff0000">' + escapeHtml(m[2]) + '</span>';
         } else {
-          // 他色は無効化：タグは剥がして素のテキストのみ表示
-          out += escapeHtml(inner);
+          // 他色はタグを剥がす（中身のみ）
+          out += escapeHtml(m[2]);
         }
         lastIndex = re.lastIndex;
       }
-      // 残りのプレーンテキスト
-      out += escapeHtml(input.slice(lastIndex));
+      // 残りのテキスト
+      out += escapeHtml(src.slice(lastIndex));
       return out;
     }
 
