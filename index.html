@@ -376,7 +376,7 @@
         }
         .announce-body{
           white-space:pre-wrap;
-          margin-top:0;
+          margin-top:6px;
           margin-bottom:0;    /* 本文と日付の余白を縮める */
           line-height:1.25;
         }
@@ -391,7 +391,7 @@
         /* ==== さらに縦方向を圧縮（本文と日付を横並び） ==== */
         .announce-body{
         display:block;       /* 本文を左端に揃えて改行 */
-        margin:0;            /* 余白ゼロ */
+        margin:6px 0 0 0;    /* タイトルとの間に6px */
         line-height:1.25;    /* 適度に詰めた行高 */
         }
         .announce-time{
@@ -746,6 +746,38 @@
         return '';
     }
 
+    // HTMLを安全にエスケープ
+    function escapeHtml(str){
+      if (str == null) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    // [color=#RRGGBB]テキスト[/color] を <span style="color:#...">テキスト</span> に変換（その他はエスケープ）
+    function renderColoredText(input){
+      if (!input) return '';
+      var out = '';
+      var lastIndex = 0;
+      var re = /\[color=([#0-9a-fA-F]{3,6})\]([\s\S]*?)\[\/color\]/g;
+      var m;
+      while ((m = re.exec(input)) !== null){
+        // マッチ前の素のテキストをエスケープして追加
+        out += escapeHtml(input.slice(lastIndex, m.index));
+        // 色をサニタイズ
+        var col = sanitizeColor(m[1]);
+        // 内側テキストもエスケープ
+        out += '<span style="color:'+ (col || '#000') +'">' + escapeHtml(m[2]) + '</span>';
+        lastIndex = re.lastIndex;
+      }
+      // 残りのテキスト
+      out += escapeHtml(input.slice(lastIndex));
+      return out;
+    }
+
     // 荷物/郵便の個数を ±1 する（0 未満にならないように制御）
     function updateCount(residentId, residentName, type, value) {
         // Determine target collection for “all” mode
@@ -953,6 +985,8 @@
               var col = sanitizeColor(data.color);
               var titleStyle = col ? ' style="color:'+col+'"' : '';
               var bodyStyle  = col ? ' style="color:'+col+'"' : '';
+              var titleHtml = renderColoredText(data.title || '(無題)');
+              var bodyHtml  = renderColoredText(data.body || data.text || '');
               let timeText = '';
               if (data.timestamp && data.timestamp.toDate) {
                 try {
@@ -965,10 +999,10 @@
               li.innerHTML =
                 '<div class="announce-head">' +
                   (data.pinned ? '<span class="pin-tag">📌</span>' : '') +
-                  '<span class="announce-title"' + titleStyle + '>' + (data.title || '(無題)') + '</span>' +
+                  '<span class="announce-title"' + titleStyle + '>' + titleHtml + '</span>' +
                   '<span class="announce-time">' + timeText + '</span>' +
                 '</div>' +
-                '<div class="announce-body"' + bodyStyle + '>' + (data.body || data.text || '') + '</div>';
+                '<div class="announce-body"' + bodyStyle + '>' + bodyHtml + '</div>';
               if (isAdmin) {
                   // 削除ボタン
                   const delBtn = document.createElement('button');
@@ -1306,6 +1340,8 @@
                     var col = sanitizeColor(data.color);
                     var titleStyle = col ? ' style="color:'+col+'"' : '';
                     var bodyStyle  = col ? ' style="color:'+col+'"' : '';
+                    var titleHtml = renderColoredText(data.title || '(無題)');
+                    var bodyHtml  = renderColoredText(data.body || data.text || '');
 
                     let timeText = '';
                     if (data.timestamp && data.timestamp.toDate) {
@@ -1320,10 +1356,10 @@
                     li.innerHTML =
                         '<div class="announce-head">' +
                           (data.pinned ? '<span class="pin-tag">📌</span>' : '') +
-                          '<span class="announce-title"' + titleStyle + '>' + (data.title || '(無題)') + '</span>' +
+                          '<span class="announce-title"' + titleStyle + '>' + titleHtml + '</span>' +
                           '<span class="announce-time">' + timeText + '</span>' +
                         '</div>' +
-                        '<div class="announce-body"' + bodyStyle + '>' + (data.body || data.text || '') + '</div>';
+                        '<div class="announce-body"' + bodyStyle + '>' + bodyHtml + '</div>';
 
                     if(isAdmin){
                         // 削除ボタン
