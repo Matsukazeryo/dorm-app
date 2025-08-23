@@ -307,6 +307,14 @@
         }
         /* ===== 庶務モードOFF専用レイアウトここまで ===== */
         /* ===== お知らせ欄 ===== */
+        /* === 新レイアウト: お知らせカード === */
+        .announce-item { padding:8px 10px; }
+        .announce-item.pinned { background: rgba(255,215,0,0.08); border-left: 3px solid #f1c40f; }
+        .announce-head { display:flex; align-items:center; gap:6px; }
+        .announce-head .announce-title { flex: 1 1 auto; min-width: 0; }
+        .announce-head .announce-time { flex: 0 0 auto; margin-left:8px; white-space: nowrap; }
+        .announce-actions { display:flex; gap:6px; margin-top:6px; }
+        .announce-actions button { font-size: 12px; padding: 4px 8px; }
         .announcement{
           border:1px solid var(--header-border);
           background:var(--container-bg);
@@ -595,6 +603,11 @@
         <label for="post-body">本文</label>
         <textarea id="post-body" rows="6" placeholder="本文を入力（改行可）"></textarea>
       </div>
+      <div class="form-group">
+        <label for="post-color">文字色</label>
+        <input type="color" id="post-color" value="#333333">
+        <input type="text" id="post-color-hex" placeholder="#RRGGBB" style="width:120px; margin-left:8px;">
+      </div>
       <div class="form-actions">
         <button type="button" id="post-cancel-btn" class="header-btn" style="background-color:#e74c3c;">キャンセル</button>
         <button type="submit" class="header-btn" style="background-color:#27ae60;">投稿</button>
@@ -723,6 +736,16 @@
         }
     }
 
+    // 安全なカラーコード (#RGB / #RRGGBB) のみ許可
+    function sanitizeColor(c){
+        if (!c) return '';
+        var s = String(c).trim();
+        if (s.charAt(0) !== '#') s = '#' + s;
+        s = s.replace(/[^#0-9a-fA-F]/g, '');
+        if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s)) return s.toLowerCase();
+        return '';
+    }
+
     // 荷物/郵便の個数を ±1 する（0 未満にならないように制御）
     function updateCount(residentId, residentName, type, value) {
         // Determine target collection for “all” mode
@@ -824,6 +847,8 @@
             postCancelBtn         : document.getElementById('post-cancel-btn'),
             postModalTitle        : document.querySelector('#post-announcement-modal h2'),
             postSubmitBtn         : document.querySelector('#post-announcement-form button[type="submit"]'),
+            postColorInput       : document.getElementById('post-color'),
+            postColorHexInput    : document.getElementById('post-color-hex'),
         };
 
         // 編集中の announcement ドキュメント参照（null = 新規投稿モード）
@@ -924,6 +949,10 @@
             docs.forEach(function(doc){
               const data = doc.data();
               const li   = document.createElement('li');
+              // Color styling
+              var col = sanitizeColor(data.color);
+              var titleStyle = col ? ' style="color:'+col+'"' : '';
+              var bodyStyle  = col ? ' style="color:'+col+'"' : '';
               let timeText = '';
               if (data.timestamp && data.timestamp.toDate) {
                 try {
@@ -932,16 +961,18 @@
                   timeText = String(data.timestamp.toDate());
                 }
               }
-              li.innerHTML = `
-                  <div>${data.pinned ? '<span class="pin-tag">📌</span>' : ''}<span class="announce-title">${data.title || '(無題)'}</span></div>
-                  <div class="announce-body">${data.body || data.text || ''}</div>
-                  <span class="announce-time">${timeText}</span>
-              `;
+              li.className = 'announce-item' + (data.pinned ? ' pinned' : '');
+              li.innerHTML =
+                '<div class="announce-head">' +
+                  (data.pinned ? '<span class="pin-tag">📌</span>' : '') +
+                  '<span class="announce-title"' + titleStyle + '>' + (data.title || '(無題)') + '</span>' +
+                  '<span class="announce-time">' + timeText + '</span>' +
+                '</div>' +
+                '<div class="announce-body"' + bodyStyle + '>' + (data.body || data.text || '') + '</div>';
               if (isAdmin) {
                   // 削除ボタン
                   const delBtn = document.createElement('button');
                   delBtn.textContent = '削除';
-                  delBtn.style.marginLeft = '8px';
                   delBtn.onclick = async function() {
                     if (!confirm('本当に削除しますか？')) return;
                     try {
@@ -951,12 +982,10 @@
                       console.error(e);
                     }
                   };
-                  li.appendChild(delBtn);
 
                   // ピン/解除ボタン
                   const pinBtn = document.createElement('button');
                   pinBtn.textContent = data.pinned ? 'ピン解除' : 'ピン留め';
-                  pinBtn.style.marginLeft = '4px';
                   pinBtn.onclick = async function() {
                     try {
                       await doc.ref.update({ pinned: !data.pinned });
@@ -965,22 +994,29 @@
                       console.error(e);
                     }
                   };
-                  li.appendChild(pinBtn);
 
                   // 編集ボタン
                   const editBtn = document.createElement('button');
                   editBtn.textContent = '編集';
-                  editBtn.style.marginLeft = '4px';
                   editBtn.onclick = function() {
                       editingDocRef = doc.ref;
                       elements.postTitleInput.value = data.title || '';
                       elements.postBodyInput.value  = data.body  || data.text || '';
+                      var col = sanitizeColor(data.color) || '#333333';
+                      if (elements.postColorInput) elements.postColorInput.value = col;
+                      if (elements.postColorHexInput) elements.postColorHexInput.value = col;
                       elements.postModalTitle.textContent = 'お知らせを編集';
                       elements.postSubmitBtn.textContent  = '更新';
                       elements.postAnnouncementModal.classList.add('active');
                       elements.postTitleInput.focus();
                   };
-                  li.appendChild(editBtn);
+
+                  var actions = document.createElement('div');
+                  actions.className = 'announce-actions';
+                  actions.appendChild(delBtn);
+                  actions.appendChild(pinBtn);
+                  actions.appendChild(editBtn);
+                  li.appendChild(actions);
               }
               elements.announcementList.appendChild(li);
             });
@@ -1266,6 +1302,11 @@
                     const data = doc.data();
                     const li = document.createElement('li');
 
+                    // Color styling
+                    var col = sanitizeColor(data.color);
+                    var titleStyle = col ? ' style="color:'+col+'"' : '';
+                    var bodyStyle  = col ? ' style="color:'+col+'"' : '';
+
                     let timeText = '';
                     if (data.timestamp && data.timestamp.toDate) {
                         try {
@@ -1275,17 +1316,19 @@
                         }
                     }
 
-                    li.innerHTML = `
-                        <div>${data.pinned ? '<span class="pin-tag">📌</span>' : ''}<span class="announce-title">${data.title || '(無題)'}</span></div>
-                        <div class="announce-body">${data.body || data.text || ''}</div>
-                        <span class="announce-time">${timeText}</span>
-                    `;
+                    li.className = 'announce-item' + (data.pinned ? ' pinned' : '');
+                    li.innerHTML =
+                        '<div class="announce-head">' +
+                          (data.pinned ? '<span class="pin-tag">📌</span>' : '') +
+                          '<span class="announce-title"' + titleStyle + '>' + (data.title || '(無題)') + '</span>' +
+                          '<span class="announce-time">' + timeText + '</span>' +
+                        '</div>' +
+                        '<div class="announce-body"' + bodyStyle + '>' + (data.body || data.text || '') + '</div>';
 
                     if(isAdmin){
                         // 削除ボタン
                         const delBtn = document.createElement('button');
                         delBtn.textContent = '削除';
-                        delBtn.style.marginLeft = '8px';
                         delBtn.onclick = async function() {
                           if (!confirm('本当に削除しますか？')) return;
                           try {
@@ -1295,12 +1338,10 @@
                             console.error(e);
                           }
                         };
-                        li.appendChild(delBtn);
 
                         // ピン留め / 解除ボタン
                         const pinBtn = document.createElement('button');
                         pinBtn.textContent = data.pinned ? 'ピン解除' : 'ピン留め';
-                        pinBtn.style.marginLeft = '4px';
                         pinBtn.onclick = async function() {
                           try {
                             await doc.ref.update({ pinned: !data.pinned });
@@ -1309,22 +1350,29 @@
                             console.error(e);
                           }
                         };
-                        li.appendChild(pinBtn);
 
                         // 編集ボタン
                         const editBtn = document.createElement('button');
                         editBtn.textContent = '編集';
-                        editBtn.style.marginLeft = '4px';
                         editBtn.onclick = function() {
                             editingDocRef = doc.ref;
                             elements.postTitleInput.value = data.title || '';
                             elements.postBodyInput.value  = data.body  || data.text || '';
+                            var col = sanitizeColor(data.color) || '#333333';
+                            if (elements.postColorInput) elements.postColorInput.value = col;
+                            if (elements.postColorHexInput) elements.postColorHexInput.value = col;
                             elements.postModalTitle.textContent = 'お知らせを編集';
                             elements.postSubmitBtn.textContent  = '更新';
                             elements.postAnnouncementModal.classList.add('active');
                             elements.postTitleInput.focus();
                         };
-                        li.appendChild(editBtn);
+
+                        var actions = document.createElement('div');
+                        actions.className = 'announce-actions';
+                        actions.appendChild(delBtn);
+                        actions.appendChild(pinBtn);
+                        actions.appendChild(editBtn);
+                        li.appendChild(actions);
                     }
 
                     elements.announcementList.appendChild(li);
@@ -1644,9 +1692,22 @@
             elements.postSubmitBtn.textContent  = '投稿';
             elements.postTitleInput.value = '';
             elements.postBodyInput.value  = '';
+            if (elements.postColorInput) elements.postColorInput.value = '#333333';
+            if (elements.postColorHexInput) elements.postColorHexInput.value = '#333333';
             elements.postAnnouncementModal.classList.add('active');
             elements.postTitleInput.focus();
         });
+
+        // カラー入力の同期（カラーピッカー ⇄ 16進テキスト）
+        if (elements.postColorInput && elements.postColorHexInput) {
+            elements.postColorInput.addEventListener('input', function(e){
+                elements.postColorHexInput.value = e.target.value;
+            });
+            elements.postColorHexInput.addEventListener('input', function(e){
+                var s = sanitizeColor(e.target.value);
+                if (s) elements.postColorInput.value = s;
+            });
+        }
 
         // Enter キーで送信しない（タイトル入力）
         elements.postTitleInput.addEventListener('keydown', e=>{
@@ -1660,19 +1721,32 @@
             const body  = elements.postBodyInput.value.trim();
             if(!title && !body) return;
 
-            if(editingDocRef){
-                // ---- 既存ドキュメントを更新 ----
-                await editingDocRef.update({ title: title || '(無題)', body });
-            }else{
-                // ---- 新規追加 ----
-                await db.collection('announcements').add({
-                    title : title || '(無題)',
-                    body,
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                    pinned:false
-                });
+            var colorInputVal = elements.postColorHexInput ? elements.postColorHexInput.value : (elements.postColorInput ? elements.postColorInput.value : '');
+            var safeColor = sanitizeColor(colorInputVal);
+            try{
+                if(editingDocRef){
+                    // 既存ドキュメント更新
+                    var payloadU = { title: title || '(無題)', body: body };
+                    if (safeColor) payloadU.color = safeColor; else payloadU.color = firebase.firestore.FieldValue.delete();
+                    await editingDocRef.update(payloadU);
+                }else{
+                    // 新規作成
+                    var payloadA = {
+                        title : title || '(無題)',
+                        body,
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                        pinned:false
+                    };
+                    if (safeColor) payloadA.color = safeColor;
+                    await db.collection('announcements').add(payloadA);
+                }
+            }catch(err){
+                alert('保存に失敗しました: ' + (err && (err.code || err.message || err)));
+                return;
             }
             elements.postAnnouncementModal.classList.remove('active');
+            // 即時反映（listener でも更新されるが、明示的に再描画）
+            rebuildAnnouncementList();
         });
 
         // モーダル閉じる
