@@ -443,10 +443,19 @@
         /* モバイル向け微調整 */
         @media (max-width: 600px) {
           .off-mode-container .off-counts button {
-            width: 32px;
-            height: 32px;
-            font-size: 1.1em;
-            margin: 0 6px;
+            width: 28px;
+            height: 28px;
+            font-size: 1.0em;
+            margin: 0 4px;
+          }
+          .off-mode-container .off-counts > div{
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap; /* 折り返し防止 */
+          }
+          .off-mode-container .off-count-number{
+            font-size: 2.2em; /* 2.5em → 少しだけ縮小 */
           }
         }
    </style>
