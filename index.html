@@ -297,7 +297,7 @@
           padding: 20px;
         }
         .off-name {
-          font-size: 1.5em;
+          font-size: 2em;
           font-weight: bold;
           margin-bottom: 10px;
         }
@@ -377,7 +377,7 @@
           border-bottom:1px solid var(--border-color);
           padding:0;                /* ぴったり詰める */
           white-space:pre-wrap;
-          margin:4px 0;
+          margin:10px 0;
         }
         .announce-time{
           display:block;
@@ -802,6 +802,11 @@
       src = src.replace(/\[赤\]([\s\S]*?)\[\/赤\]/g, '[color=#ff0000]$1[/color]');
       // 末尾の閉じ忘れ ([color=#ff0000] だけで終わっている) を自動補完
       src = src.replace(/\[color=\s*#?(?:ff0000|f{3})\s*\]([\s\S]*?)$/i, '[color=#ff0000]$1[/color]');
+
+      // 余った閉じタグを除去（ペアになっていない [/color] / [/red] / [/em] / [/赤] を消す）
+      src = src.replace(/\[\/\s*color\s*\]/gi, '');
+      src = src.replace(/\[\/\s*(red|em)\s*\]/gi, '');
+      src = src.replace(/\[\/赤\]/g, '');
 
       var out = '';
       var lastIndex = 0;
