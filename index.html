@@ -803,11 +803,6 @@
       // 末尾の閉じ忘れ ([color=#ff0000] だけで終わっている) を自動補完
       src = src.replace(/\[color=\s*#?(?:ff0000|f{3})\s*\]([\s\S]*?)$/i, '[color=#ff0000]$1[/color]');
 
-      // 余った閉じタグを除去（ペアになっていない [/color] / [/red] / [/em] / [/赤] を消す）
-      src = src.replace(/\[\/\s*color\s*\]/gi, '');
-      src = src.replace(/\[\/\s*(red|em)\s*\]/gi, '');
-      src = src.replace(/\[\/赤\]/g, '');
-
       var out = '';
       var lastIndex = 0;
       // color タグ名は大小無視でマッチ
@@ -815,7 +810,11 @@
       var m;
       while ((m = re.exec(src)) !== null){
         // マッチ前のプレーンテキストをエスケープして出力
-        out += escapeHtml(src.slice(lastIndex, m.index));
+        var pre = src.slice(lastIndex, m.index);
+        pre = pre.replace(/\[\/\s*color\s*\]/gi, '')
+                 .replace(/\[\/\s*(red|em)\s*\]/gi, '')
+                 .replace(/\[\/赤\]/g, '');
+        out += escapeHtml(pre);
         var col = sanitizeColor(m[1]);
         var isRed = (col === '#ff0000' || col === '#f00');
         if (isRed){
@@ -827,7 +826,11 @@
         lastIndex = re.lastIndex;
       }
       // 残りのテキスト
-      out += escapeHtml(src.slice(lastIndex));
+      var tail = src.slice(lastIndex);
+      tail = tail.replace(/\[\/\s*color\s*\]/gi, '')
+                 .replace(/\[\/\s*(red|em)\s*\]/gi, '')
+                 .replace(/\[\/赤\]/g, '');
+      out += escapeHtml(tail);
       return out;
     }
 
