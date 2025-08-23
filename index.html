@@ -21,12 +21,16 @@
             --controls-bg: #ecf0f1; --mode-selector-border: #bdc3c7; --mode-label-bg: #fff;
             --mode-label-text: #34495e; --mode-label-checked-bg: #3498db;
             --mode-label-checked-text: white; --admin-mode-bg: #e74c3c;
+            --announce-item-bg: transparent;        /* light: containerが白なので透明 */
+            --announce-pinned-bg: rgba(255,215,0,0.08);
         }
         body.dark-theme {
             --bg-color: #2c3e50; --container-bg: #34495e; --text-color: #ecf0f1;
             --border-color: #7f8c8d; --header-border: #5dade2; --header-text: #ecf0f1;
             --controls-bg: #2c3e50; --mode-selector-border: #95a5a6;
             --mode-label-bg: #7f8c8d; --mode-label-text: #ecf0f1;
+            --announce-item-bg: rgba(255,255,255,0.06);   /* dark: うっすら面を付ける */
+            --announce-pinned-bg: rgba(255,215,0,0.18);
         }
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
@@ -308,8 +312,8 @@
         /* ===== 庶務モードOFF専用レイアウトここまで ===== */
         /* ===== お知らせ欄 ===== */
         /* === 新レイアウト: お知らせカード === */
-        .announce-item { padding:8px 10px; }
-        .announce-item.pinned { background: rgba(255,215,0,0.08); border-left: 3px solid #f1c40f; }
+        .announce-item { padding:8px 10px; background: var(--announce-item-bg); border-radius:6px; }
+        .announce-item.pinned { background: var(--announce-pinned-bg); border-left: 3px solid #f1c40f; }
         .announce-head { display:flex; align-items:center; gap:6px; }
         .announce-head .announce-title { flex: 1 1 auto; min-width: 0; }
         .announce-head .announce-time { flex: 0 0 auto; margin-left:8px; white-space: nowrap; }
@@ -354,6 +358,7 @@
           border-bottom:1px solid var(--border-color);
           padding:0;                /* ぴったり詰める */
           white-space:pre-wrap;
+          margin:4px 0;
         }
         .announce-time{
           display:block;
@@ -603,10 +608,11 @@
         <label for="post-body">本文</label>
         <textarea id="post-body" rows="6" placeholder="本文を入力（改行可）"></textarea>
       </div>
-      <div class="form-group">
-        <label for="post-color">文字色</label>
-        <input type="color" id="post-color" value="#333333">
-        <input type="text" id="post-color-hex" placeholder="#RRGGBB" style="width:120px; margin-left:8px;">
+      <div class="form-group" id="emphasis-tools">
+        <label>強調</label>
+        <button type="button" id="apply-red" class="header-btn" style="background:#c0392b;">選択部分を赤で強調</button>
+        <button type="button" id="remove-emphasis" class="header-btn" style="background:#7f8c8d; margin-left:8px;">強調解除</button>
+        <small id="inline-color-target" style="margin-left:8px; opacity:.8;">対象: 本文</small>
       </div>
       <div class="form-actions">
         <button type="button" id="post-cancel-btn" class="header-btn" style="background-color:#e74c3c;">キャンセル</button>
@@ -757,7 +763,7 @@
         .replace(/'/g, '&#39;');
     }
 
-    // [color=#RRGGBB]テキスト[/color] を <span style="color:#...">テキスト</span> に変換（その他はエスケープ）
+    // [color=#ff0000]テキスト[/color] だけを赤強調として解釈（それ以外の色指定はタグを剥がす）
     function renderColoredText(input){
       if (!input) return '';
       var out = '';
@@ -765,15 +771,21 @@
       var re = /\[color=\s*#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})\s*\]([\s\S]*?)\[\/color\]/g;
       var m;
       while ((m = re.exec(input)) !== null){
-        // マッチ前の素のテキストをエスケープして追加
+        // マッチ前のプレーンテキスト
         out += escapeHtml(input.slice(lastIndex, m.index));
-        // 色をサニタイズ
-        var col = sanitizeColor(m[1]);
-        // 内側テキストもエスケープ
-        out += '<span style="color:'+ (col || '#000') +'">' + escapeHtml(m[2]) + '</span>';
+        var raw = m[1];
+        var inner = m[2];
+        var col = sanitizeColor(raw);
+        var isRed = (col === '#ff0000' || col === '#f00');
+        if (isRed){
+          out += '<span style="color:#ff0000">' + escapeHtml(inner) + '</span>';
+        } else {
+          // 他色は無効化：タグは剥がして素のテキストのみ表示
+          out += escapeHtml(inner);
+        }
         lastIndex = re.lastIndex;
       }
-      // 残りのテキスト
+      // 残りのプレーンテキスト
       out += escapeHtml(input.slice(lastIndex));
       return out;
     }
@@ -879,10 +891,72 @@
             postCancelBtn         : document.getElementById('post-cancel-btn'),
             postModalTitle        : document.querySelector('#post-announcement-modal h2'),
             postSubmitBtn         : document.querySelector('#post-announcement-form button[type="submit"]'),
-            postColorInput       : document.getElementById('post-color'),
-            postColorHexInput    : document.getElementById('post-color-hex'),
+            applyRedBtn          : document.getElementById('apply-red'),
+            removeEmphasisBtn    : document.getElementById('remove-emphasis'),
+            inlineColorTarget    : document.getElementById('inline-color-target'),
         };
 
+        // ===== 強調（赤のみ）ツール =====
+        var currentColorTarget = elements.postBodyInput; // 初期は本文
+        if (elements.inlineColorTarget) elements.inlineColorTarget.textContent = '対象: 本文';
+        if (elements.postTitleInput) {
+          elements.postTitleInput.addEventListener('focus', function(){
+            currentColorTarget = elements.postTitleInput;
+            if (elements.inlineColorTarget) elements.inlineColorTarget.textContent = '対象: タイトル';
+          });
+        }
+        if (elements.postBodyInput) {
+          elements.postBodyInput.addEventListener('focus', function(){
+            currentColorTarget = elements.postBodyInput;
+            if (elements.inlineColorTarget) elements.inlineColorTarget.textContent = '対象: 本文';
+          });
+        }
+        function applyColorToSelection(targetEl){
+          if (!targetEl) return;
+          var start = targetEl.selectionStart;
+          var end   = targetEl.selectionEnd;
+          if (typeof start !== 'number' || typeof end !== 'number') return;
+          var v = targetEl.value || '';
+          var color = '#ff0000';
+          if (start === end) {
+            var insert = '[color=' + color + '][/color]';
+            targetEl.value = v.slice(0, start) + insert + v.slice(end);
+            var caret = start + insert.length - '[/color]'.length;
+            targetEl.focus();
+            try { targetEl.setSelectionRange(caret, caret); } catch(_) {}
+            return;
+          }
+          var selected = v.slice(start, end);
+          var wrapped = '[color=' + color + ']' + selected + '[/color]';
+          targetEl.value = v.slice(0, start) + wrapped + v.slice(end);
+          targetEl.focus();
+          try { targetEl.setSelectionRange(start, start + wrapped.length); } catch(_) {}
+        }
+        function removeColorTagsInSelection(targetEl){
+          if (!targetEl) return;
+          var start = targetEl.selectionStart;
+          var end   = targetEl.selectionEnd;
+          var v = targetEl.value || '';
+          var re = /\[color=\s*#?[0-9a-fA-F]{3,6}\]([\s\S]*?)\[\/color\]/g;
+          if (typeof start !== 'number' || typeof end !== 'number' || start === end){
+            // 選択なし → 全文から除去
+            targetEl.value = v.replace(re, '$1');
+            targetEl.focus();
+            return;
+          }
+          var selected = v.slice(start, end);
+          var cleaned  = selected.replace(re, '$1');
+          targetEl.value = v.slice(0, start) + cleaned + v.slice(end);
+          targetEl.focus();
+          try { targetEl.setSelectionRange(start, start + cleaned.length); } catch(_) {}
+        }
+        if (elements.applyRedBtn) {
+          elements.applyRedBtn.addEventListener('click', function(){ applyColorToSelection(currentColorTarget); });
+        }
+        if (elements.removeEmphasisBtn) {
+          elements.removeEmphasisBtn.addEventListener('click', function(){ removeColorTagsInSelection(currentColorTarget); });
+        }
+        // ===== 強調ツールここまで =====
         // 編集中の announcement ドキュメント参照（null = 新規投稿モード）
         // === 寮生選択用プルダウンを最新データで埋め直す ===
         async function populateSelfSelectOptions(){
@@ -981,10 +1055,6 @@
             docs.forEach(function(doc){
               const data = doc.data();
               const li   = document.createElement('li');
-              // Color styling
-              var col = sanitizeColor(data.color);
-              var titleStyle = col ? ' style="color:'+col+'"' : '';
-              var bodyStyle  = col ? ' style="color:'+col+'"' : '';
               var titleHtml = renderColoredText(data.title || '(無題)');
               var bodyHtml  = renderColoredText(data.body || data.text || '');
               let timeText = '';
@@ -999,10 +1069,10 @@
               li.innerHTML =
                 '<div class="announce-head">' +
                   (data.pinned ? '<span class="pin-tag">📌</span>' : '') +
-                  '<span class="announce-title"' + titleStyle + '>' + titleHtml + '</span>' +
+                  '<span class="announce-title">' + titleHtml + '</span>' +
                   '<span class="announce-time">' + timeText + '</span>' +
                 '</div>' +
-                '<div class="announce-body"' + bodyStyle + '>' + bodyHtml + '</div>';
+                '<div class="announce-body">' + bodyHtml + '</div>';
               if (isAdmin) {
                   // 削除ボタン
                   const delBtn = document.createElement('button');
@@ -1036,9 +1106,6 @@
                       editingDocRef = doc.ref;
                       elements.postTitleInput.value = data.title || '';
                       elements.postBodyInput.value  = data.body  || data.text || '';
-                      var col = sanitizeColor(data.color) || '#333333';
-                      if (elements.postColorInput) elements.postColorInput.value = col;
-                      if (elements.postColorHexInput) elements.postColorHexInput.value = col;
                       elements.postModalTitle.textContent = 'お知らせを編集';
                       elements.postSubmitBtn.textContent  = '更新';
                       elements.postAnnouncementModal.classList.add('active');
@@ -1335,11 +1402,6 @@
                 sorted.forEach(function(doc){
                     const data = doc.data();
                     const li = document.createElement('li');
-
-                    // Color styling
-                    var col = sanitizeColor(data.color);
-                    var titleStyle = col ? ' style="color:'+col+'"' : '';
-                    var bodyStyle  = col ? ' style="color:'+col+'"' : '';
                     var titleHtml = renderColoredText(data.title || '(無題)');
                     var bodyHtml  = renderColoredText(data.body || data.text || '');
 
@@ -1356,10 +1418,10 @@
                     li.innerHTML =
                         '<div class="announce-head">' +
                           (data.pinned ? '<span class="pin-tag">📌</span>' : '') +
-                          '<span class="announce-title"' + titleStyle + '>' + titleHtml + '</span>' +
+                          '<span class="announce-title">' + titleHtml + '</span>' +
                           '<span class="announce-time">' + timeText + '</span>' +
                         '</div>' +
-                        '<div class="announce-body"' + bodyStyle + '>' + bodyHtml + '</div>';
+                        '<div class="announce-body">' + bodyHtml + '</div>';
 
                     if(isAdmin){
                         // 削除ボタン
@@ -1394,9 +1456,6 @@
                             editingDocRef = doc.ref;
                             elements.postTitleInput.value = data.title || '';
                             elements.postBodyInput.value  = data.body  || data.text || '';
-                            var col = sanitizeColor(data.color) || '#333333';
-                            if (elements.postColorInput) elements.postColorInput.value = col;
-                            if (elements.postColorHexInput) elements.postColorHexInput.value = col;
                             elements.postModalTitle.textContent = 'お知らせを編集';
                             elements.postSubmitBtn.textContent  = '更新';
                             elements.postAnnouncementModal.classList.add('active');
