@@ -382,7 +382,7 @@
         }
         /* タイトル行と本文行の間隔をさらに縮める */
         .announcement-list li > div:first-of-type{
-          margin-bottom:0;          /* 余白ゼロ */
+          margin-bottom:6px;          /* タイトルと本文の間に余白 */
           line-height:1.25;    /* 行高も詰める */
         }
         .announcement-list li > *{
@@ -762,7 +762,7 @@
       if (!input) return '';
       var out = '';
       var lastIndex = 0;
-      var re = /\[color=([#0-9a-fA-F]{3,6})\]([\s\S]*?)\[\/color\]/g;
+      var re = /\[color=\s*#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})\s*\]([\s\S]*?)\[\/color\]/g;
       var m;
       while ((m = re.exec(input)) !== null){
         // マッチ前の素のテキストをエスケープして追加
