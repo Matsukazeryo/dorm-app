@@ -265,7 +265,7 @@
             .name-cell{
              padding-left: 4px;   /* 左余白ちょっとだけ残す */
               min-width: 120px;    /* ← 元が 180px なので 120px に短縮 */
-               font-size: 0.9rem;   /* 文字も気持ち小さく */
+               font-size: 0.85rem;   /* 文字も気持ち小さく */
              }
 
              /* 部屋番号の文字サイズをさらに小さく */
@@ -331,9 +331,23 @@
             padding:4px 8px;
             margin:6px 0 10px 0;
           }
-          .announce-title{ font-size:0.95em; }
-          .announce-body{  font-size:0.90em; line-height:1.2; }
-          .announce-time{  font-size:0.62em; }
+          .announce-title{ font-size:0.92em; }
+          .announce-body{  font-size:0.88em; line-height:1.2; }
+          .announce-time{  font-size:0.60em; }
+          /* 全体の文字サイズを少し縮小 */
+          body{ font-size:14px; }
+          /* タイトル見出しを少し小さく */
+          h1{ font-size:1.2em; padding-bottom:6px; }
+          /* ヘッダーボタンを小さく */
+          .header-btn{ padding:5px 10px; font-size:11px; }
+          /* 検索・モード切替を小さく */
+          #search-input{ padding:8px; font-size:14px; }
+          .mode-selector label{ padding:8px 10px; font-size:12px; }
+          .dorm-selector button{ padding:8px 10px; font-size:14px; }
+          /* テーブルのセルを詰める */
+          .cell-content{ min-height:34px; padding:4px 6px; font-size:0.95em; }
+          /* モーダルの余白を少し詰める */
+          .modal-content{ padding:16px; }
         }
         .announcement h2{
           margin:0 0 6px 0;
