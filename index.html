@@ -951,13 +951,21 @@
 
         // 庶務モードOFF時のUI適用（上部ボックスを隠す）
         function applySohmuUI(){
-          document.body.classList.toggle('sohmu-off', !elements.sohmuToggle.checked);
-          updateAnnouncementVisibility();
-          renderTable();
+          var toggle = elements && elements.sohmuToggle;
+          document.body.classList.toggle('sohmu-off', !(toggle && toggle.checked));
+          // まだ未定義の段階でも落ちないようにガード
+          if (typeof updateAnnouncementVisibility === 'function') {
+            try { updateAnnouncementVisibility(); } catch(_) {}
+          }
+          if (typeof window.renderTable === 'function') {
+            try { window.renderTable(); } catch(_) {}
+          }
         }
-        // 初期適用 & 変更監視
+        // 初期適用 & 変更監視（renderTable未定義の段階でも例外を出さない）
         applySohmuUI();
-        elements.sohmuToggle.addEventListener('change', applySohmuUI);
+        if (elements.sohmuToggle) {
+          elements.sohmuToggle.addEventListener('change', applySohmuUI);
+        }
 
         // ===== 強調（赤のみ）ツール =====
         var currentColorTarget = elements.postBodyInput; // 初期は本文
