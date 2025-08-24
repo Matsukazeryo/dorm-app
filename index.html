@@ -458,7 +458,12 @@
             font-size: 2.2em; /* 2.5em → 少しだけ縮小 */
           }
         }
-   </style>
+</style>
+  /* === 庶務モードOFF: 上部のコントロールを非表示にする === */
+  body.sohmu-off .controls-container,
+  body.sohmu-off .middle-controls{
+    display: none !important;
+  }
 </head>
 
 <div id="loading-overlay" style="display:none; position:fixed; inset:0; background:rgba(255,255,255,0.8); z-index:3000; align-items:center; justify-content:center;">
@@ -943,6 +948,16 @@
             previewBody          : document.getElementById('preview-body'),
             postPreview          : document.getElementById('post-preview'),
         };
+
+        // 庶務モードOFF時のUI適用（上部ボックスを隠す）
+        function applySohmuUI(){
+          document.body.classList.toggle('sohmu-off', !elements.sohmuToggle.checked);
+          updateAnnouncementVisibility();
+          renderTable();
+        }
+        // 初期適用 & 変更監視
+        applySohmuUI();
+        elements.sohmuToggle.addEventListener('change', applySohmuUI);
 
         // ===== 強調（赤のみ）ツール =====
         var currentColorTarget = elements.postBodyInput; // 初期は本文
