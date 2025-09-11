@@ -1682,34 +1682,20 @@
                 const d = bulkDormSel.value;
                 elements.bulkFormEntries.querySelectorAll('.bulk-circle').forEach(sel => setCircleOptions(sel, d, true));
             };
-
-            // 追加/減らすボタンの設定（重複バインド防止のため onclick にする）
-            const addBtn = document.getElementById('add-form-entry-btn');
-            const removeBtn = document.getElementById('remove-form-entry-btn');
-
-            function updateBulkRemoveButton(){
-                const n = elements.bulkFormEntries.querySelectorAll('.bulk-add-entry').length;
-                if (removeBtn) removeBtn.disabled = n <= 1;
-            }
-
-            if (addBtn) {
-                addBtn.onclick = () => {
-                    elements.bulkFormEntries.appendChild(createBulkFormEntry());
-                    updateBulkRemoveButton();
-                };
-            }
-            if (removeBtn) {
-                removeBtn.onclick = () => {
-                    const entries = elements.bulkFormEntries.querySelectorAll('.bulk-add-entry');
-                    if (entries.length > 1) {
-                        entries[entries.length - 1].remove();
-                    }
-                    updateBulkRemoveButton();
-                };
-            }
-
-            updateBulkRemoveButton();
             elements.addBulkModal.classList.add('active');
+        }
+
+        // ===== 一括追加: エントリーを減らす（末尾を削除） =====
+        if (elements.removeFormEntryBtn) {
+          elements.removeFormEntryBtn.addEventListener('click', function () {
+            if (!elements.bulkFormEntries) return;
+            const entries = elements.bulkFormEntries.querySelectorAll('.bulk-add-entry');
+            if (entries.length > 1) {
+              entries[entries.length - 1].remove();
+            } else {
+              // 1件は最低限残す（何もしない）
+            }
+          });
         }
         
         function hideBulkAddModal() {
