@@ -870,9 +870,24 @@
     }
 
     function deleteResident(residentId, residentName) {
+        // Resolve the correct collection even when "all" view is active
+        let targetCollection = currentCollectionName;
+        if (currentCollectionName === 'all') {
+            const res = allResidents.find(r => r.id === residentId);
+            if (!res) {
+                alert('対象の寮生が見つかりません。');
+                return;
+            }
+            targetCollection = `residents_${res.dorm}`; // residents_shofu or residents_meizen
+        }
+        const dormKey = (targetCollection.split('_')[1] || '').trim();
+
         if (confirm(`本当に「${residentName}」さんをリストから削除しますか？`)) {
-            db.collection(currentCollectionName).doc(residentId).delete().then(() => {
-                addLog('寮生削除', `[${currentCollectionName.split('_')[1]}] ${residentName} を削除`);
+            db.collection(targetCollection).doc(residentId).delete().then(() => {
+                addLog('寮生削除', `[${dormKey}] ${residentName} を削除`);
+            }).catch(e => {
+                console.error('deleteResident error', e);
+                alert('削除に失敗しました。権限やネットワークを確認してください。');
             });
         }
     }
@@ -1672,14 +1687,37 @@
         function deleteSelectedResidents() {
             const selectedCheckboxes = document.querySelectorAll('.resident-checkbox:checked');
             if (selectedCheckboxes.length === 0) return;
-            if (confirm(`選択した ${selectedCheckboxes.length} 人の寮生を本当に削除しますか？`)) {
-                const batch = db.batch();
-                selectedCheckboxes.forEach(checkbox => batch.delete(db.collection(currentCollectionName).doc(checkbox.dataset.id)));
-                batch.commit().then(() => {
-                    alert(`${selectedCheckboxes.length}人の寮生を削除しました。`);
-                    addLog('寮生一括削除', `[${currentCollectionName}] ${selectedCheckboxes.length}人を削除`);
-                });
-            }
+
+            if (!confirm(`選択した ${selectedCheckboxes.length} 人の寮生を本当に削除しますか？`)) return;
+
+            const batch = db.batch();
+            let count = 0;
+
+            selectedCheckboxes.forEach(checkbox => {
+                const id = checkbox.dataset.id;
+                let coll = currentCollectionName;
+                if (currentCollectionName === 'all') {
+                    const res = allResidents.find(r => r.id === id);
+                    if (!res) return; // 念のため見つからなければスキップ
+                    coll = `residents_${res.dorm}`;
+                }
+                batch.delete(db.collection(coll).doc(id));
+                count++;
+            });
+
+            if (count === 0) return;
+
+            batch.commit().then(() => {
+                const scopeLabel =
+                    currentCollectionName === 'all'
+                        ? '松風寮・明善寮'
+                        : (currentCollectionName === 'residents_shofu' ? '松風寮' : '明善寮');
+                alert(`${count}人の寮生を削除しました。`);
+                addLog('寮生一括削除', `[${scopeLabel}] ${count}人を削除`);
+            }).catch(e => {
+                console.error('bulk delete error', e);
+                alert('一括削除に失敗しました。権限やネットワークを確認してください。');
+            });
         }
 
         function resetAllCounts() {
