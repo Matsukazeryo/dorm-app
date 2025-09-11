@@ -617,6 +617,53 @@
         </form>
     </div>
 </div>
+<div id="edit-resident-modal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>寮生情報の編集</h2>
+      <button id="edit-modal-close-btn" class="modal-close-btn">&times;</button>
+    </div>
+    <form id="edit-resident-form">
+      <input type="hidden" id="edit-resident-id">
+      <div class="form-group">
+        <label>寮</label>
+        <input type="text" id="edit-dorm-label" readonly>
+      </div>
+      <div class="form-group">
+        <label for="edit-name">名前 (必須)</label>
+        <input type="text" id="edit-name" required>
+      </div>
+      <div class="form-group">
+        <label for="edit-room">部屋番号</label>
+        <input type="text" id="edit-room">
+      </div>
+      <div class="form-group">
+        <label for="edit-furigana">ふりがな</label>
+        <input type="text" id="edit-furigana">
+      </div>
+      <div class="form-group">
+        <label for="edit-circle">サークル</label>
+        <select id="edit-circle"></select>
+      </div>
+      <div class="form-group">
+        <label>荷物/郵便</label>
+        <div style="display:flex; gap:10px;">
+          <input type="number" id="edit-luggage" min="0" placeholder="荷物">
+          <input type="number" id="edit-mail" min="0" placeholder="郵便">
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="confirm-name">確認のため、変更対象の「名前」を入力してください</label>
+        <input type="text" id="confirm-name" placeholder="例: 山田太郎">
+        <small id="confirm-hint" style="opacity:.8;">一致すると保存ボタンが有効化される</small>
+      </div>
+      <div class="form-actions">
+        <button type="button" id="edit-cancel-btn" class="header-btn" style="background:#e74c3c;">キャンセル</button>
+        <button type="submit" id="edit-save-btn" class="header-btn" style="background:#27ae60;" disabled>保存</button>
+      </div>
+    </form>
+  </div>
+</div>
 <div id="add-bulk-modal" class="modal-overlay">
     <div class="modal-content">
         <div class="modal-header">
@@ -989,6 +1036,21 @@
             previewTitle         : document.getElementById('preview-title'),
             previewBody          : document.getElementById('preview-body'),
             postPreview          : document.getElementById('post-preview'),
+            // === 寮生編集モーダル用 ===
+            editResidentModal    : document.getElementById('edit-resident-modal'),
+            editModalCloseBtn    : document.getElementById('edit-modal-close-btn'),
+            editResidentForm     : document.getElementById('edit-resident-form'),
+            editResidentIdInput  : document.getElementById('edit-resident-id'),
+            editDormLabel        : document.getElementById('edit-dorm-label'),
+            editNameInput        : document.getElementById('edit-name'),
+            editRoomInput        : document.getElementById('edit-room'),
+            editFuriganaInput    : document.getElementById('edit-furigana'),
+            editCircleSelect     : document.getElementById('edit-circle'),
+            editLuggageInput     : document.getElementById('edit-luggage'),
+            editMailInput        : document.getElementById('edit-mail'),
+            confirmNameInput     : document.getElementById('confirm-name'),
+            editSaveBtn          : document.getElementById('edit-save-btn'),
+            editCancelBtn        : document.getElementById('edit-cancel-btn'),
         };
 
         // 庶務モードOFF時のUI適用（上部ボックスを隠す）
@@ -1463,7 +1525,12 @@
                           </td>
                           <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1)">-</button><span class="count-span">${resident.luggage}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1)">+</button></div></td>
                           <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', -1)">-</button><span class="count-span">${resident.mail}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', 1)">+</button></div></td>
-                          <td class="edit-op-cell"><div class="cell-content"><button class="delete-btn" onclick="deleteResident('${resident.id}', '${resident.name}')">削除</button></div></td>
+                          <td class="edit-op-cell">
+                            <div class="cell-content">
+                              <button class="edit-btn" onclick="openEditResidentModal('${resident.id}')">編集</button>
+                              <button class="delete-btn" onclick="deleteResident('${resident.id}', '${resident.name}')">削除</button>
+                            </div>
+                          </td>
                         `;
                     }
                     elements.tableBody.appendChild(row);
