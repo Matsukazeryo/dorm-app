@@ -592,7 +592,10 @@
             <div class="form-group"><label for="form-name">名前 (必須)</label><input type="text" id="form-name" required></div>
             <div class="form-group"><label for="form-room">部屋番号</label><input type="text" id="form-room"></div>
             <div class="form-group"><label for="form-furigana">ふりがな</label><input type="text" id="form-furigana"></div>
-             <div class="form-group"><label for="form-circle">サークル</label><input type="text" id="form-circle"></div>
+            <div class="form-group">
+              <label for="form-circle">サークル</label>
+              <select id="form-circle"></select>
+            </div>
             <div class="form-group">
                 <label>初期の荷物/郵便 (任意)</label>
                 <div style="display: flex; gap: 10px;">
@@ -703,6 +706,11 @@
     const messaging = firebase.messaging();
     const auth = firebase.auth();
 
+    const CIRCLE_OPTIONS = {
+      shofu : ['養','L','と','タ','酒','美','よ','台','キ'],
+      meizen: ['秀','や','五','P','Q','新','ゆ','エ','轍','山','ハ','歴'],
+    };
+
 
     let currentDeviceToken = null;   // このデバイスの FCM トークンを保持
 
@@ -794,6 +802,13 @@
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+    }
+
+    function setCircleOptions(selectEl, dorm, includeEmpty = true){
+        if (!selectEl) return;
+        const opts = CIRCLE_OPTIONS[dorm] || [];
+        const head = includeEmpty ? '<option value="">(未選択)</option>' : '';
+        selectEl.innerHTML = head + opts.map(o => `<option value="${o}">${o}</option>`).join('');
     }
 
     // [color=#ff0000]...[/color] だけ赤に。古い端末や表記ゆれも吸収。
@@ -1601,7 +1616,13 @@
         
         function showAddResidentModal() {
             elements.addResidentForm.reset();
-            document.getElementById('form-dorm').value = currentCollectionName.split('_')[1];
+            const dormKeyRaw = currentCollectionName.split('_')[1];
+            const dormKey = (dormKeyRaw === 'all' || !dormKeyRaw) ? 'shofu' : dormKeyRaw;
+            const dormSel = document.getElementById('form-dorm');
+            const circleSel = document.getElementById('form-circle');
+            dormSel.value = dormKey;
+            setCircleOptions(circleSel, dormKey, true);
+            dormSel.onchange = (e) => setCircleOptions(circleSel, e.target.value, true);
             elements.addResidentModal.classList.add('active');
         }
         
@@ -1636,15 +1657,29 @@
                 <div class="form-group"><label>部屋番号</label><input type="text" class="bulk-room"></div>
                 <div class="form-group"><label>名前 (必須)</label><input type="text" class="bulk-name" required></div>
                 <div class="form-group"><label>ふりがな</label><input type="text" class="bulk-furigana"></div>
-                <div class="form-group"><label>サークル</label><input type="text" class="bulk-circle"></div>
+                <div class="form-group"><label>サークル</label><select class="bulk-circle"></select></div>
             `;
+            const bulkDormSel = document.getElementById('bulk-form-dorm');
+            const dormKey = bulkDormSel ? bulkDormSel.value : 'shofu';
+            const circleSel = entryDiv.querySelector('.bulk-circle');
+            setCircleOptions(circleSel, dormKey, true);
             return entryDiv;
         }
         
         function showBulkAddModal() {
             elements.bulkFormEntries.innerHTML = '';
             elements.bulkFormEntries.appendChild(createBulkFormEntry());
-            document.getElementById('bulk-form-dorm').value = currentCollectionName.split('_')[1];
+            const bulkDormSel = document.getElementById('bulk-form-dorm');
+            const raw = currentCollectionName.split('_')[1];
+            const dormKey = (raw === 'all' || !raw) ? 'shofu' : raw;
+            bulkDormSel.value = dormKey;
+            // 初期反映
+            elements.bulkFormEntries.querySelectorAll('.bulk-circle').forEach(sel => setCircleOptions(sel, dormKey, true));
+            // 寮切替時に既存エントリーを更新
+            bulkDormSel.onchange = () => {
+                const d = bulkDormSel.value;
+                elements.bulkFormEntries.querySelectorAll('.bulk-circle').forEach(sel => setCircleOptions(sel, d, true));
+            };
             elements.addBulkModal.classList.add('active');
         }
         
