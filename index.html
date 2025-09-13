@@ -964,6 +964,121 @@
             });
         }
     }
+
+    // ====== 編集モーダル: グローバル関数 ======
+    let __editingResidentDorm = null;  // 'shofu' or 'meizen'
+
+    function openEditResidentModal(residentId){
+        try{
+            const r = (Array.isArray(allResidents) ? allResidents.find(x => x.id === residentId) : null);
+            if (!r) { alert('対象の寮生が見つかりません。'); return; }
+            __editingResidentDorm = r.dorm || (currentCollectionName.split('_')[1] || 'shofu');
+
+            const idInput   = document.getElementById('edit-resident-id');
+            const dormLabel = document.getElementById('edit-dorm-label');
+            const nameInput = document.getElementById('edit-name');
+            const roomInput = document.getElementById('edit-room');
+            const furiInput = document.getElementById('edit-furigana');
+            const circleSel = document.getElementById('edit-circle');
+            const lugInput  = document.getElementById('edit-luggage');
+            const mailInput = document.getElementById('edit-mail');
+            const confirmIn = document.getElementById('confirm-name');
+            const saveBtn   = document.getElementById('edit-save-btn');
+
+            if (!idInput || !nameInput) { alert('編集フォームの初期化に失敗しました。'); return; }
+
+            idInput.value      = r.id;
+            (dormLabel) && (dormLabel.value = (r.dorm === 'shofu' ? '松風寮' : '明善寮'));
+            nameInput.value    = r.name || '';
+            roomInput && (roomInput.value = r.roomNumber || '');
+            furiInput && (furiInput.value = r.furigana || '');
+            if (circleSel) {
+                setCircleOptions(circleSel, __editingResidentDorm, true);
+                circleSel.value = r.circle || '';
+            }
+            lugInput  && (lugInput.value  = (typeof r.luggage === 'number' ? r.luggage : (parseInt(r.luggage)||0)));
+            mailInput && (mailInput.value = (typeof r.mail    === 'number' ? r.mail    : (parseInt(r.mail)||0)));
+
+            // Guard: 名前が一致しないと保存不可
+            window.editOriginalName = r.name || '';
+            if (confirmIn) confirmIn.value = '';
+            if (saveBtn) saveBtn.disabled = true;
+
+            const modal = document.getElementById('edit-resident-modal');
+            if (modal) {
+                modal.classList.add('active');
+                modal.style.pointerEvents = 'auto';
+            }
+        }catch(e){
+            console.error('openEditResidentModal error', e);
+            alert('編集モーダルの表示でエラーが発生しました。');
+        }
+    }
+
+    function saveEditedResident(evt){
+        if (evt && typeof evt.preventDefault === 'function') evt.preventDefault();
+
+        const idInput   = document.getElementById('edit-resident-id');
+        const nameInput = document.getElementById('edit-name');
+        const roomInput = document.getElementById('edit-room');
+        const furiInput = document.getElementById('edit-furigana');
+        const circleSel = document.getElementById('edit-circle');
+        const lugInput  = document.getElementById('edit-luggage');
+        const mailInput = document.getElementById('edit-mail');
+        const confirmIn = document.getElementById('confirm-name');
+        const saveBtn   = document.getElementById('edit-save-btn');
+
+        if (!idInput || !nameInput) return;
+
+        const originalName = (window.editOriginalName || '').trim();
+        const confirmed    = (confirmIn && confirmIn.value.trim() === originalName);
+        if (!confirmed) {
+            alert('確認欄に正しい名前を入力してください。');
+            return;
+        }
+
+        const updated = {
+            name: (nameInput.value || '').trim(),
+            roomNumber: roomInput ? (roomInput.value || '').trim() : '',
+            furigana: furiInput ? (furiInput.value || '').trim() : '',
+            circle: circleSel ? (circleSel.value || '').trim() : '',
+            luggage: Math.max(0, parseInt(lugInput && lugInput.value, 10) || 0),
+            mail:    Math.max(0, parseInt(mailInput && mailInput.value, 10) || 0),
+        };
+        if (!updated.name) { alert('名前は必須です。'); return; }
+
+        const dormKey = __editingResidentDorm || (currentCollectionName.split('_')[1] || 'shofu');
+        const docRef = db.collection(`residents_${dormKey}`).doc(idInput.value);
+
+        if (saveBtn) saveBtn.disabled = true;
+
+        db.runTransaction(async (t) => {
+            const snap = await t.get(docRef);
+            if (!snap.exists) throw new Error('対象のドキュメントが存在しません。');
+            const prev = snap.data() || {};
+            t.update(docRef, updated);
+            try {
+                const diffParts = [];
+                const fields = ['name','roomNumber','furigana','circle','luggage','mail'];
+                fields.forEach(k => {
+                    const before = (prev[k] != null ? String(prev[k]) : '');
+                    const after  = (updated[k] != null ? String(updated[k]) : '');
+                    if (before !== after) diffParts.push(`${k}: "${before}" → "${after}"`);
+                });
+                const summary = diffParts.length ? diffParts.join(', ') : '(値に変更なし)';
+                addLog('寮生編集', `[${dormKey}] ${originalName} の編集: ${summary}`);
+            } catch(_) {}
+        }).then(() => {
+            alert('保存しました。');
+            const modal = document.getElementById('edit-resident-modal');
+            if (modal) modal.classList.remove('active');
+        }).catch(e => {
+            console.error('saveEditedResident error', e);
+            alert('更新に失敗しました。権限やネットワークを確認してください。');
+        }).finally(() => {
+            if (saveBtn) saveBtn.disabled = false;
+        });
+    }
     
     // --- 最終利用時刻を定期的にアップデート ---
     async function updateLastSeen() {
@@ -1052,6 +1167,51 @@
             editSaveBtn          : document.getElementById('edit-save-btn'),
             editCancelBtn        : document.getElementById('edit-cancel-btn'),
         };
+
+        // ===== 寮生編集モーダル: ガードとイベント =====
+        (function(){
+          function bindEditModalGuards(){
+            if(!elements.confirmNameInput || !elements.editSaveBtn) return;
+            const check = ()=>{
+              const ok = (elements.confirmNameInput.value.trim() === (window.editOriginalName || ''));
+              elements.editSaveBtn.disabled = !ok;
+            };
+            elements.confirmNameInput.addEventListener('input', check);
+          }
+          bindEditModalGuards();
+
+          if(elements.editModalCloseBtn){
+            elements.editModalCloseBtn.addEventListener('click', ()=>{
+              elements.editResidentModal.classList.remove('active');
+            });
+          }
+          if(elements.editCancelBtn){
+            elements.editCancelBtn.addEventListener('click', ()=>{
+              elements.editResidentModal.classList.remove('active');
+            });
+          }
+          if(elements.editResidentForm){
+            elements.editResidentForm.addEventListener('submit', saveEditedResident);
+          }
+
+          // クリック時に最終ガード（管理者 + 寮生編集モード）
+          document.addEventListener('click', function(e){
+            const target = e.target;
+            if(target && target.matches('button.edit-btn')){
+              if(sessionStorage.getItem('isAdminLoggedIn') !== 'true'){
+                e.preventDefault();
+                alert('管理者ログインが必要です。');
+                return false;
+              }
+              const residentEditRadio = document.getElementById('resident-edit-mode');
+              if(!residentEditRadio || !residentEditRadio.checked){
+                e.preventDefault();
+                alert('「寮生編集」モードを選択してください。');
+                return false;
+              }
+            }
+          }, true);
+        })();
 
         // 庶務モードOFF時のUI適用（上部ボックスを隠す）
         function applySohmuUI(){
