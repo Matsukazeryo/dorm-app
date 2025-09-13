@@ -625,6 +625,7 @@
     </div>
     <form id="edit-resident-form">
       <input type="hidden" id="edit-resident-id">
+      <input type="hidden" id="edit-dorm-key">
       <div class="form-group">
         <label>寮</label>
         <input type="text" id="edit-dorm-label" readonly>
@@ -979,10 +980,12 @@
             const mailInput = document.getElementById('edit-mail');
             const confirmIn = document.getElementById('confirm-name');
             const saveBtn   = document.getElementById('edit-save-btn');
+            const dormKeyInput = document.getElementById('edit-dorm-key');
 
             if (!idInput || !nameInput) { alert('編集フォームの初期化に失敗しました。'); return; }
 
             idInput.value      = r.id;
+            if (dormKeyInput) dormKeyInput.value = __editingResidentDorm;
             (dormLabel) && (dormLabel.value = (r.dorm === 'shofu' ? '松風寮' : '明善寮'));
             nameInput.value    = r.name || '';
             roomInput && (roomInput.value = r.roomNumber || '');
@@ -1026,6 +1029,7 @@
         const mailInput = document.getElementById('edit-mail');
         const confirmIn = document.getElementById('confirm-name');
         const saveBtn   = document.getElementById('edit-save-btn');
+        const dormKeyInput = document.getElementById('edit-dorm-key');
 
         if (!idInput || !nameInput) return;
 
@@ -1046,10 +1050,13 @@
         };
         if (!updated.name) { alert('名前は必須です。'); return; }
 
-        const dormKey = __editingResidentDorm || (currentCollectionName.split('_')[1] || 'shofu');
+        const dormKey = (dormKeyInput && dormKeyInput.value) || __editingResidentDorm || (currentCollectionName.split('_')[1] || 'shofu');
         const docRef = db.collection(`residents_${dormKey}`).doc(idInput.value);
 
         if (saveBtn) saveBtn.disabled = true;
+        try {
+          console.log('Editing doc path:', `residents_${dormKey}/${idInput.value}`, 'payload:', updated);
+        } catch(_) {}
 
         db.runTransaction(async (t) => {
             const snap = await t.get(docRef);
@@ -1073,7 +1080,8 @@
             if (modal) modal.classList.remove('active');
         }).catch(e => {
             console.error('saveEditedResident error', e);
-            alert('更新に失敗しました。権限やネットワークを確認してください。');
+            const detail = (e && (e.code || e.message)) ? `\n[${e.code || 'error'}] ${e.message}` : '';
+            alert('更新に失敗しました。' + detail + '\n権限やネットワークを確認してください。');
         }).finally(() => {
             if (saveBtn) saveBtn.disabled = false;
         });
