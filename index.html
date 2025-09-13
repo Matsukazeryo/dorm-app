@@ -994,10 +994,14 @@
             lugInput  && (lugInput.value  = (typeof r.luggage === 'number' ? r.luggage : (parseInt(r.luggage)||0)));
             mailInput && (mailInput.value = (typeof r.mail    === 'number' ? r.mail    : (parseInt(r.mail)||0)));
 
-            // Guard: 名前が一致しないと保存不可
+            // Guard: 名前が一致しないと保存不可（確認欄がある場合のみ）
             window.editOriginalName = r.name || '';
-            if (confirmIn) confirmIn.value = '';
-            if (saveBtn) saveBtn.disabled = true;
+            if (confirmIn) {
+              confirmIn.value = '';
+              if (saveBtn) saveBtn.disabled = true;
+            } else {
+              if (saveBtn) saveBtn.disabled = false;
+            }
 
             const modal = document.getElementById('edit-resident-modal');
             if (modal) {
@@ -1026,8 +1030,8 @@
         if (!idInput || !nameInput) return;
 
         const originalName = (window.editOriginalName || '').trim();
-        const confirmed    = (confirmIn && confirmIn.value.trim() === originalName);
-        if (!confirmed) {
+        // 確認欄がある場合のみチェックする
+        if (confirmIn && (confirmIn.value.trim() !== originalName)) {
             alert('確認欄に正しい名前を入力してください。');
             return;
         }
