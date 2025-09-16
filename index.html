@@ -44,9 +44,6 @@
         /* 管理者以外には操作履歴ボタンを非表示 */
         #log-view-btn{ display:none; }
         body.admin-logged-in #log-view-btn{ display:inline-block; }
-        /* 管理者以外にはパスワード変更ボタンを非表示 */
-        #change-password-btn{ display:none; }
-        body.admin-logged-in #change-password-btn{ display:inline-block; }
         #login-logout-btn { background-color: #3498db; }
         #login-logout-btn.logout { background-color: #e74c3c; }
 
@@ -490,7 +487,6 @@
         <div class="header-buttons">
             <button id="login-logout-btn" class="header-btn">管理者ログイン</button>
             <button id="log-view-btn" class="header-btn" style="background:#8e44ad;">操作履歴</button>
-            <button id="change-password-btn" class="header-btn" style="background:#16a085;">パスワード変更</button>
             <label class="switch" style="margin-left:8px;">
               <input type="checkbox" id="sohmu-toggle">
               <span class="slider round"></span>
@@ -717,35 +713,6 @@
 </div>
 <!-- ==== お知らせ投稿モーダル ここまで ==== -->
 
-<!-- ==== 管理者パスワード変更モーダル ==== -->
-<div id="change-password-modal" class="modal-overlay">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h2>管理者パスワードの変更</h2>
-      <button id="pwd-modal-close-btn" class="modal-close-btn">&times;</button>
-    </div>
-    <form id="change-password-form">
-      <div class="form-group">
-        <label for="current-admin-password">現在のパスワード</label>
-        <input type="password" id="current-admin-password" required>
-      </div>
-      <div class="form-group">
-        <label for="new-admin-password">新しいパスワード（6文字以上）</label>
-        <input type="password" id="new-admin-password" minlength="6" required>
-      </div>
-      <div class="form-group">
-        <label for="confirm-admin-password">新しいパスワード（確認）</label>
-        <input type="password" id="confirm-admin-password" minlength="6" required>
-      </div>
-      <div class="form-actions">
-        <button type="button" id="pwd-cancel-btn" class="header-btn" style="background:#e74c3c;">キャンセル</button>
-        <button type="submit" class="header-btn" style="background:#16a085;">変更する</button>
-      </div>
-    </form>
-  </div>
-</div>
-<!-- ==== 管理者パスワード変更モーダル ここまで ==== -->
-
 
 <footer class="footer">
     <span>表示テーマ:</span>
@@ -777,43 +744,7 @@
           })
           .catch(console.error);
     }
-    // Firestore に保存されたパスワード（平文）を使う。無ければこの初期値。
-    let ADMIN_PASSWORD = "Password";
-    const ADMIN_PASSWORD_REF_PATH = 'config/admin';
-    // ===== 管理者パスワードの読み込み・保存 =====
-    async function loadAdminPasswordFromFirestore(){
-      try{
-        const ref = firebase.firestore().doc(ADMIN_PASSWORD_REF_PATH);
-        const snap = await ref.get();
-        if (snap.exists && snap.data() && typeof snap.data().password === 'string'){
-          ADMIN_PASSWORD = snap.data().password;
-        } else {
-          // 初期化（ドキュメントが無ければ現在の値で作成）
-          await ref.set({
-            password : ADMIN_PASSWORD,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-          }, { merge:true });
-        }
-      }catch(e){ console.warn('管理者パスワードの読み込みに失敗:', e); }
-    }
-
-    async function saveAdminPasswordToFirestore(newPassword){
-      const ref = firebase.firestore().doc(ADMIN_PASSWORD_REF_PATH);
-      await ref.set({
-        password : newPassword,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge:true });
-      ADMIN_PASSWORD = newPassword;
-    }
-
-    // 変更があればリアルタイムで同期
-    try{
-      firebase.firestore().doc(ADMIN_PASSWORD_REF_PATH).onSnapshot(snap => {
-        if (snap.exists && snap.data() && typeof snap.data().password === 'string'){
-          ADMIN_PASSWORD = snap.data().password;
-        }
-      });
-    }catch(_){/* ignore */}
+    const ADMIN_PASSWORD = "Password";
     const firebaseConfig = {
       apiKey: "AIzaSyDUevNVtZEycMZ7jl9xSimUqg0PB5SbheY",
       authDomain: "dorm-manager-30ce8.firebaseapp.com",
@@ -1167,8 +1098,6 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-        // 管理者パスワードを Firestore から読み込む
-        loadAdminPasswordFromFirestore();
         // Show standalone-mode alert only once
         const suppressAlert = localStorage.getItem('suppressStandaloneAlert');
         const isiOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
@@ -1244,14 +1173,6 @@
             confirmNameInput     : document.getElementById('confirm-name'),
             editSaveBtn          : document.getElementById('edit-save-btn'),
             editCancelBtn        : document.getElementById('edit-cancel-btn'),
-            changePasswordBtn       : document.getElementById('change-password-btn'),
-            changePasswordModal     : document.getElementById('change-password-modal'),
-            changePasswordForm      : document.getElementById('change-password-form'),
-            pwdModalCloseBtn        : document.getElementById('pwd-modal-close-btn'),
-            pwdCancelBtn            : document.getElementById('pwd-cancel-btn'),
-            currentAdminPwdInput    : document.getElementById('current-admin-password'),
-            newAdminPwdInput        : document.getElementById('new-admin-password'),
-            confirmAdminPwdInput    : document.getElementById('confirm-admin-password'),
         };
 
         // ===== 寮生編集モーダル: ガードとイベント =====
@@ -2485,63 +2406,3 @@
 
 </body>
 </html>
-
-        // ===== パスワード変更モーダルの制御 =====
-        function openChangePwdModal(){
-          if(!elements.changePasswordModal) return;
-          // 初期化
-          if (elements.currentAdminPwdInput) elements.currentAdminPwdInput.value = '';
-          if (elements.newAdminPwdInput) elements.newAdminPwdInput.value = '';
-          if (elements.confirmAdminPwdInput) elements.confirmAdminPwdInput.value = '';
-          elements.changePasswordModal.classList.add('active');
-          elements.changePasswordModal.style.pointerEvents = 'auto';
-        }
-        function closeChangePwdModal(){
-          if(!elements.changePasswordModal) return;
-          elements.changePasswordModal.classList.remove('active');
-          elements.changePasswordModal.style.pointerEvents = 'none';
-        }
-        if (elements.changePasswordBtn){
-          elements.changePasswordBtn.addEventListener('click', () => {
-            // 管理者のみ変更可能
-            if (sessionStorage.getItem('isAdminLoggedIn') !== 'true'){
-              alert('管理者ログインが必要です。');
-              return;
-            }
-            openChangePwdModal();
-          });
-        }
-        if (elements.pwdModalCloseBtn){ elements.pwdModalCloseBtn.addEventListener('click', closeChangePwdModal); }
-        if (elements.pwdCancelBtn){ elements.pwdCancelBtn.addEventListener('click', closeChangePwdModal); }
-
-        if (elements.changePasswordForm){
-          elements.changePasswordForm.addEventListener('submit', async (ev) => {
-            ev.preventDefault();
-            const cur = (elements.currentAdminPwdInput && elements.currentAdminPwdInput.value) || '';
-            const npw = (elements.newAdminPwdInput && elements.newAdminPwdInput.value) || '';
-            const cpw = (elements.confirmAdminPwdInput && elements.confirmAdminPwdInput.value) || '';
-
-            if (cur !== ADMIN_PASSWORD){
-              alert('現在のパスワードが違います。');
-              return;
-            }
-            if (npw.length < 6){
-              alert('新しいパスワードは6文字以上にしてください。');
-              return;
-            }
-            if (npw !== cpw){
-              alert('確認用のパスワードが一致しません。');
-              return;
-            }
-            try{
-              await saveAdminPasswordToFirestore(npw);
-              try{ addLog('設定変更', '管理者パスワードを変更'); }catch(_){/* noop */}
-              alert('パスワードを変更しました。');
-              closeChangePwdModal();
-            }catch(e){
-              console.error('saveAdminPasswordToFirestore error', e);
-              const detail = (e && (e.code || e.message)) ? `\n[${e.code || 'error'}] ${e.message}` : '';
-              alert('パスワードの変更に失敗しました。権限やネットワークを確認してください。' + detail);
-            }
-          });
-        }
