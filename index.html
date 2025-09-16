@@ -44,6 +44,8 @@
         /* 管理者以外には操作履歴ボタンを非表示 */
         #log-view-btn{ display:none; }
         body.admin-logged-in #log-view-btn{ display:inline-block; }
+        #change-password-btn{ display:none; }
+        body.admin-logged-in #change-password-btn{ display:inline-block; }
         #login-logout-btn { background-color: #3498db; }
         #login-logout-btn.logout { background-color: #e74c3c; }
 
@@ -487,6 +489,7 @@
         <div class="header-buttons">
             <button id="login-logout-btn" class="header-btn">管理者ログイン</button>
             <button id="log-view-btn" class="header-btn" style="background:#8e44ad;">操作履歴</button>
+            <button id="change-password-btn" class="header-btn" style="background:#16a085;">パスワード変更</button>
             <label class="switch" style="margin-left:8px;">
               <input type="checkbox" id="sohmu-toggle">
               <span class="slider round"></span>
@@ -713,6 +716,35 @@
 </div>
 <!-- ==== お知らせ投稿モーダル ここまで ==== -->
 
+<!-- ==== 管理者パスワード変更モーダル ==== -->
+<div id="change-password-modal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>管理者パスワードを変更</h2>
+      <button id="pwd-modal-close-btn" class="modal-close-btn">&times;</button>
+    </div>
+    <form id="change-password-form">
+      <div class="form-group">
+        <label for="current-password">現在のパスワード</label>
+        <input type="password" id="current-password" required>
+      </div>
+      <div class="form-group">
+        <label for="new-password">新しいパスワード</label>
+        <input type="password" id="new-password" required minlength="4">
+      </div>
+      <div class="form-group">
+        <label for="confirm-password">新しいパスワード（確認）</label>
+        <input type="password" id="confirm-password" required>
+      </div>
+      <div class="form-actions">
+        <button type="button" id="pwd-cancel-btn" class="header-btn" style="background:#e74c3c;">キャンセル</button>
+        <button type="submit" class="header-btn" style="background:#27ae60;">保存</button>
+      </div>
+    </form>
+  </div>
+</div>
+<!-- ==== 管理者パスワード変更モーダル ここまで ==== -->
+
 
 <footer class="footer">
     <span>表示テーマ:</span>
@@ -744,7 +776,22 @@
           })
           .catch(console.error);
     }
-    const ADMIN_PASSWORD = "Password";
+    let ADMIN_PASSWORD = "Password";
+    // ==== Admin Password (dynamic, stored in Firestore) ====
+    async function initAdminPassword(){
+      try{
+        const ref = db.collection('settings').doc('admin');
+        const snap = await ref.get();
+        if(snap.exists && snap.data() && typeof snap.data().adminPassword === 'string' && snap.data().adminPassword){
+          ADMIN_PASSWORD = String(snap.data().adminPassword);
+        }else{
+          await ref.set({
+            adminPassword: ADMIN_PASSWORD,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+        }
+      }catch(e){ console.error('initAdminPassword error', e); }
+    }
     const firebaseConfig = {
       apiKey: "AIzaSyDUevNVtZEycMZ7jl9xSimUqg0PB5SbheY",
       authDomain: "dorm-manager-30ce8.firebaseapp.com",
@@ -1109,71 +1156,130 @@
         // ページ読み込み時に通知許可をリクエスト
         requestNotificationPermission();
         const elements = {
-            tableBody: document.querySelector("#resident-table tbody"),
-            searchInput: document.getElementById('search-input'),
-            addResidentBtn: document.getElementById('add-resident-btn'),
-            addBulkBtn: document.getElementById('add-bulk-btn'),
-            deleteSelectedBtn: document.getElementById('delete-selected-btn'),
-            resetAllBtn: document.getElementById('reset-all-btn'),
-            selectAllCheckbox: document.getElementById('select-all-checkbox'),
-            modeSelectors: document.querySelectorAll('input[name="mode"]'),
-            loginLogoutBtn: document.getElementById('login-logout-btn'),
-            sohmuToggle: document.getElementById('sohmu-toggle'),
-            themeSelector: document.getElementById('theme-selector'),
-            toggleFurigana: document.getElementById('toggle-furigana'),
-            toggleCircle: document.getElementById('toggle-circle'),
-            toggleDorm  : document.getElementById('toggle-dorm'),
-            dormSelector: document.getElementById('dorm-selector'),
-            topControls: document.querySelector('.top-controls'),
-            middleControls: document.querySelector('.middle-controls'),
-            opsContainer: document.querySelector('.ops-container'),
-            changeResidentBtn: document.getElementById('change-resident-btn'),
-            addResidentModal: document.getElementById('add-resident-modal'),
-            addModalCloseBtn: document.getElementById('add-modal-close-btn'),
-            addResidentForm: document.getElementById('add-resident-form'),
-            addBulkModal: document.getElementById('add-bulk-modal'),
-            addBulkModalCloseBtn: document.getElementById('add-bulk-modal-close-btn'),
-            addBulkForm: document.getElementById('add-bulk-form'),
-            addFormEntryBtn: document.getElementById('add-form-entry-btn'),
-            removeFormEntryBtn: document.getElementById('remove-form-entry-btn'),
-            bulkFormEntries: document.getElementById('bulk-form-entries'),
-            logViewBtn: document.getElementById('log-view-btn'),
-            logModal: document.getElementById('log-modal'),
-            modalCloseBtn: document.getElementById('modal-close-btn'),
-            announcementContainer: document.getElementById('announcement-container'),
-            postAnnouncementBtn : document.getElementById('post-announcement-btn'),
-            announcementList    : document.getElementById('announcement-list'),
-            postAnnouncementModal : document.getElementById('post-announcement-modal'),
-            postModalCloseBtn     : document.getElementById('post-modal-close-btn'),
-            postAnnouncementForm  : document.getElementById('post-announcement-form'),
-            postTitleInput        : document.getElementById('post-title'),
-            postBodyInput         : document.getElementById('post-body'),
-            postCancelBtn         : document.getElementById('post-cancel-btn'),
-            postModalTitle        : document.querySelector('#post-announcement-modal h2'),
-            postSubmitBtn         : document.querySelector('#post-announcement-form button[type="submit"]'),
-            applyRedBtn          : document.getElementById('apply-red'),
-            removeEmphasisBtn    : document.getElementById('remove-emphasis'),
-            inlineColorTarget    : document.getElementById('inline-color-target'),
-            // Fixed preview references
-            previewTitle         : document.getElementById('preview-title'),
-            previewBody          : document.getElementById('preview-body'),
-            postPreview          : document.getElementById('post-preview'),
-            // === 寮生編集モーダル用 ===
-            editResidentModal    : document.getElementById('edit-resident-modal'),
-            editModalCloseBtn    : document.getElementById('edit-modal-close-btn'),
-            editResidentForm     : document.getElementById('edit-resident-form'),
-            editResidentIdInput  : document.getElementById('edit-resident-id'),
-            editDormLabel        : document.getElementById('edit-dorm-label'),
-            editNameInput        : document.getElementById('edit-name'),
-            editRoomInput        : document.getElementById('edit-room'),
-            editFuriganaInput    : document.getElementById('edit-furigana'),
-            editCircleSelect     : document.getElementById('edit-circle'),
-            editLuggageInput     : document.getElementById('edit-luggage'),
-            editMailInput        : document.getElementById('edit-mail'),
-            confirmNameInput     : document.getElementById('confirm-name'),
-            editSaveBtn          : document.getElementById('edit-save-btn'),
-            editCancelBtn        : document.getElementById('edit-cancel-btn'),
+          changePasswordBtn: document.getElementById('change-password-btn'),
+          changePasswordModal: document.getElementById('change-password-modal'),
+          pwdModalCloseBtn: document.getElementById('pwd-modal-close-btn'),
+          changePasswordForm: document.getElementById('change-password-form'),
+          pwdCancelBtn: document.getElementById('pwd-cancel-btn'),
+          currentPwdInput: document.getElementById('current-password'),
+          newPwdInput: document.getElementById('new-password'),
+          confirmPwdInput: document.getElementById('confirm-password'),
+
+          tableBody: document.querySelector("#resident-table tbody"),
+          searchInput: document.getElementById('search-input'),
+          addResidentBtn: document.getElementById('add-resident-btn'),
+          addBulkBtn: document.getElementById('add-bulk-btn'),
+          deleteSelectedBtn: document.getElementById('delete-selected-btn'),
+          resetAllBtn: document.getElementById('reset-all-btn'),
+          selectAllCheckbox: document.getElementById('select-all-checkbox'),
+          modeSelectors: document.querySelectorAll('input[name="mode"]'),
+          loginLogoutBtn: document.getElementById('login-logout-btn'),
+          sohmuToggle: document.getElementById('sohmu-toggle'),
+          themeSelector: document.getElementById('theme-selector'),
+          toggleFurigana: document.getElementById('toggle-furigana'),
+          toggleCircle: document.getElementById('toggle-circle'),
+          toggleDorm  : document.getElementById('toggle-dorm'),
+          dormSelector: document.getElementById('dorm-selector'),
+          topControls: document.querySelector('.top-controls'),
+          middleControls: document.querySelector('.middle-controls'),
+          opsContainer: document.querySelector('.ops-container'),
+          changeResidentBtn: document.getElementById('change-resident-btn'),
+          addResidentModal: document.getElementById('add-resident-modal'),
+          addModalCloseBtn: document.getElementById('add-modal-close-btn'),
+          addResidentForm: document.getElementById('add-resident-form'),
+          addBulkModal: document.getElementById('add-bulk-modal'),
+          addBulkModalCloseBtn: document.getElementById('add-bulk-modal-close-btn'),
+          addBulkForm: document.getElementById('add-bulk-form'),
+          addFormEntryBtn: document.getElementById('add-form-entry-btn'),
+          removeFormEntryBtn: document.getElementById('remove-form-entry-btn'),
+          bulkFormEntries: document.getElementById('bulk-form-entries'),
+          logViewBtn: document.getElementById('log-view-btn'),
+          logModal: document.getElementById('log-modal'),
+          modalCloseBtn: document.getElementById('modal-close-btn'),
+          announcementContainer: document.getElementById('announcement-container'),
+          postAnnouncementBtn : document.getElementById('post-announcement-btn'),
+          announcementList    : document.getElementById('announcement-list'),
+          postAnnouncementModal : document.getElementById('post-announcement-modal'),
+          postModalCloseBtn     : document.getElementById('post-modal-close-btn'),
+          postAnnouncementForm  : document.getElementById('post-announcement-form'),
+          postTitleInput        : document.getElementById('post-title'),
+          postBodyInput         : document.getElementById('post-body'),
+          postCancelBtn         : document.getElementById('post-cancel-btn'),
+          postModalTitle        : document.querySelector('#post-announcement-modal h2'),
+          postSubmitBtn         : document.querySelector('#post-announcement-form button[type="submit"]'),
+          applyRedBtn          : document.getElementById('apply-red'),
+          removeEmphasisBtn    : document.getElementById('remove-emphasis'),
+          inlineColorTarget    : document.getElementById('inline-color-target'),
+          // Fixed preview references
+          previewTitle         : document.getElementById('preview-title'),
+          previewBody          : document.getElementById('preview-body'),
+          postPreview          : document.getElementById('post-preview'),
+          // === 寮生編集モーダル用 ===
+          editResidentModal    : document.getElementById('edit-resident-modal'),
+          editModalCloseBtn    : document.getElementById('edit-modal-close-btn'),
+          editResidentForm     : document.getElementById('edit-resident-form'),
+          editResidentIdInput  : document.getElementById('edit-resident-id'),
+          editDormLabel        : document.getElementById('edit-dorm-label'),
+          editNameInput        : document.getElementById('edit-name'),
+          editRoomInput        : document.getElementById('edit-room'),
+          editFuriganaInput    : document.getElementById('edit-furigana'),
+          editCircleSelect     : document.getElementById('edit-circle'),
+          editLuggageInput     : document.getElementById('edit-luggage'),
+          editMailInput        : document.getElementById('edit-mail'),
+          confirmNameInput     : document.getElementById('confirm-name'),
+          editSaveBtn          : document.getElementById('edit-save-btn'),
+          editCancelBtn        : document.getElementById('edit-cancel-btn'),
         };
+
+// Initialize dynamic admin password from Firestore
+initAdminPassword();
+
+// ===== パスワード変更モーダルの挙動 =====
+function openChangePasswordModal(){
+  if(!elements.changePasswordModal) return;
+  elements.currentPwdInput && (elements.currentPwdInput.value = '');
+  elements.newPwdInput && (elements.newPwdInput.value = '');
+  elements.confirmPwdInput && (elements.confirmPwdInput.value = '');
+  elements.changePasswordModal.classList.add('active');
+  elements.changePasswordModal.style.pointerEvents = 'auto';
+}
+function closeChangePasswordModal(){
+  if(!elements.changePasswordModal) return;
+  elements.changePasswordModal.classList.remove('active');
+  elements.changePasswordModal.style.pointerEvents = 'none';
+}
+if(elements.changePasswordBtn){
+  elements.changePasswordBtn.addEventListener('click', openChangePasswordModal);
+}
+if(elements.pwdModalCloseBtn){
+  elements.pwdModalCloseBtn.addEventListener('click', closeChangePasswordModal);
+}
+if(elements.pwdCancelBtn){
+  elements.pwdCancelBtn.addEventListener('click', closeChangePasswordModal);
+}
+if(elements.changePasswordForm){
+  elements.changePasswordForm.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const cur = (elements.currentPwdInput && elements.currentPwdInput.value) || '';
+    const npw = (elements.newPwdInput && elements.newPwdInput.value) || '';
+    const cfw = (elements.confirmPwdInput && elements.confirmPwdInput.value) || '';
+    if(!npw){ alert('新しいパスワードを入力してください。'); return; }
+    if(npw !== cfw){ alert('新しいパスワードが一致しません。'); return; }
+    if(cur !== ADMIN_PASSWORD){ alert('現在のパスワードが違います。'); return; }
+    try{
+      await db.collection('settings').doc('admin').set({
+        adminPassword: npw,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge:true });
+      ADMIN_PASSWORD = npw; // 既存のロジックで参照される値を更新
+      alert('パスワードを変更しました。');
+      closeChangePasswordModal();
+    }catch(err){
+      console.error('change password error', err);
+      alert('変更に失敗しました。通信状況や権限を確認してください。');
+    }
+  });
+}
 
         // ===== 寮生編集モーダル: ガードとイベント =====
         (function(){
