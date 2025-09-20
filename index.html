@@ -814,7 +814,31 @@
     };
 
 
-    let currentDeviceToken = null;   // このデバイスの FCM トークンを保持
+let currentDeviceToken = null;   // このデバイスの FCM トークンを保持
+// === Helper: save token to primary (fcmtokens) with fallback to legacy (fcm_tokens) ===
+async function saveFcmTokenDoc(token, data){
+  const primary = 'fcmtokens';       // 現行想定のコレクション名
+  const fallback = 'fcm_tokens';     // 互換: 以前のコレクション名
+  try{
+    await db.collection(primary).doc(token).set(data, { merge:true });
+    window.__fcmCollectionUsed = primary;
+    window.__fcmSaveError = null;
+    return primary;
+  }catch(e1){
+    window.__fcmSaveError = e1;
+    try{
+      await db.collection(fallback).doc(token).set(data, { merge:true });
+      console.warn('Saved FCM token to fallback collection:', fallback, e1 && (e1.code || e1.message));
+      window.__fcmCollectionUsed = fallback;
+      window.__fcmSaveError = null;
+      return fallback;
+    }catch(e2){
+      window.__fcmSaveError = e2;
+      console.warn('Token save failed on both collections:', (e2 && (e2.code || e2.message)) || e2);
+      throw e2;
+    }
+  }
+}
 
     /* ==== FCM Push Notification Setup ==== */
     let __notifInFlight = null;
@@ -857,22 +881,19 @@
             const platform = /iPhone|iPad/.test(navigator.userAgent) ? 'ios'
                               : /Android/.test(navigator.userAgent)    ? 'android'
                               : 'desktop';
-            try {
-              await db.collection('fcm_tokens')
-                      .doc(token)
-                      .set({
-                        residentId: localStorage.getItem('myResidentId') || null,
-                        dorm     : (currentCollectionName === 'all' ? null : currentCollectionName.split('_')[1]),
-                        lastSeen : firebase.firestore.FieldValue.serverTimestamp(),
-                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                        platform,
-                        ua       : navigator.userAgent
-                      }, { merge: true });
-              console.log('Token saved to Firestore');
-              window.__fcmSaveError = null;
-            } catch (e) {
-              window.__fcmSaveError = e;
-              console.warn('Token NOT saved to Firestore (will retry):', (e && (e.code || e.message)) || e);
+            const payload = {
+              residentId: localStorage.getItem('myResidentId') || null,
+              dorm     : (currentCollectionName === 'all' ? null : currentCollectionName.split('_')[1]),
+              lastSeen : firebase.firestore.FieldValue.serverTimestamp(),
+              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+              platform,
+              ua       : navigator.userAgent
+            };
+            try{
+              const col = await saveFcmTokenDoc(token, payload);
+              console.log('Token saved to Firestore in:', col);
+            }catch(e){
+              console.warn('Token NOT saved (both collections failed):', (e && (e.code || e.message)) || e);
             }
           }
           return token || null;
@@ -893,21 +914,18 @@
       const platform = /iPhone|iPad/.test(navigator.userAgent) ? 'ios'
                         : /Android/.test(navigator.userAgent)    ? 'android'
                         : 'desktop';
-      try {
-        await db.collection('fcm_tokens')
-                .doc(token)
-                .set({
-                  residentId: localStorage.getItem('myResidentId') || null,
-                  dorm     : (currentCollectionName === 'all' ? null : currentCollectionName.split('_')[1]),
-                  lastSeen : firebase.firestore.FieldValue.serverTimestamp(),
-                  createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                  platform,
-                  ua       : navigator.userAgent
-                }, { merge: true });
-        console.log('FCM token re-synced.');
-        window.__fcmSaveError = null;
-      } catch(e){
-        window.__fcmSaveError = e;
+      const payload = {
+        residentId: localStorage.getItem('myResidentId') || null,
+        dorm     : (currentCollectionName === 'all' ? null : currentCollectionName.split('_')[1]),
+        lastSeen : firebase.firestore.FieldValue.serverTimestamp(),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        platform,
+        ua       : navigator.userAgent
+      };
+      try{
+        const col = await saveFcmTokenDoc(token, payload);
+        console.log('FCM token re-synced to:', col);
+      }catch(e){
         console.warn('FCM token re-sync failed:', (e && (e.code || e.message)) || e);
       }
     }
@@ -1190,12 +1208,11 @@
     
     // --- 最終利用時刻を定期的にアップデート ---
     async function updateLastSeen() {
-        if (currentDeviceToken) {
-            await db.collection('fcm_tokens')
-                    .doc(currentDeviceToken)
-                    .update({ lastSeen: firebase.firestore.FieldValue.serverTimestamp() })
-                    .catch(()=>{});  // doc 不存在や権限エラーは無視
-        }
+      const token = currentDeviceToken || localStorage.getItem('fcm_token');
+      if (!token) return;
+      try{
+        await saveFcmTokenDoc(token, { lastSeen: firebase.firestore.FieldValue.serverTimestamp() });
+      }catch(_){ /* ignore */ }
     }
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -1522,7 +1539,7 @@ if(elements.changePasswordForm){
           try {
             if (!currentDeviceToken) { await requestNotificationPermission(); }
             if (currentDeviceToken) {
-              await db.collection('fcm_tokens').doc(currentDeviceToken).set({ residentId: id }, { merge: true });
+              try { await saveFcmTokenDoc(currentDeviceToken, { residentId: id }); } catch(_) {}
             }
           } catch(e) { console.warn('save token failed', e); }
           closeSelfSelectModal();
@@ -1697,13 +1714,10 @@ if(elements.changePasswordForm){
                         }
                         if (currentDeviceToken) {
                           try {
-                            await db.collection('fcm_tokens')
-                                    .doc(currentDeviceToken)
-                                    .set({ residentId: id }, { merge: true });
-                            console.log('residentId saved to Firestore:', id);
+                            const col = await saveFcmTokenDoc(currentDeviceToken, { residentId: id });
+                            console.log('residentId saved in:', col, id);
                           } catch (e) {
-                            console.warn('residentId save skipped due to permission error:', (e && (e.code || e.message)) || e);
-                            // 非致命扱い: 通知トークンは取得済み。後から権限を直して再紐づけできる。
+                            console.warn('residentId save skipped (both collections failed):', (e && (e.code || e.message)) || e);
                           }
                         } else {
                           console.warn('No device token available (skipping token save).');
