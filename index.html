@@ -1664,10 +1664,15 @@ if(elements.changePasswordForm){
                           await requestNotificationPermission();
                         }
                         if (currentDeviceToken) {
-                          await db.collection('fcm_tokens')
-                                  .doc(currentDeviceToken)
-                                  .set({ residentId: id }, { merge: true });
-                          console.log('residentId saved to Firestore:', id);
+                          try {
+                            await db.collection('fcm_tokens')
+                                    .doc(currentDeviceToken)
+                                    .set({ residentId: id }, { merge: true });
+                            console.log('residentId saved to Firestore:', id);
+                          } catch (e) {
+                            console.warn('residentId save skipped due to permission error:', (e && (e.code || e.message)) || e);
+                            // 非致命扱い: 通知トークンは取得済み。後から権限を直して再紐づけできる。
+                          }
                         } else {
                           console.warn('No device token available (skipping token save).');
                         }
