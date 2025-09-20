@@ -816,54 +816,76 @@
     let currentDeviceToken = null;   // このデバイスの FCM トークンを保持
 
     /* ==== FCM Push Notification Setup ==== */
-    async function requestNotificationPermission() {
-        if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
+    let __notifInFlight = null;
+    async function requestNotificationPermission(){
+      // make idempotent & safe in unsupported environments
+      if (__notifInFlight) return __notifInFlight;
+      __notifInFlight = (async () => {
+        if (!('Notification' in window) || !('serviceWorker' in navigator)) return null;
+        // Guard for browsers / iOS versions where Firebase Messaging isn't supported
+        try {
+          if (typeof firebase !== 'undefined' && firebase.messaging && typeof firebase.messaging.isSupported === 'function'){
+            if (!firebase.messaging.isSupported()) {
+              console.warn('Firebase Messaging not supported in this browser.');
+              return null;
+            }
+          }
+        } catch(_) {}
 
         try {
-            // Register Firebase Messaging service worker
-            const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+          // Always register (or reuse) the root-scoped SW and wait until it's ready
+          const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+          // iOS/Safari requires a user gesture; if called without one, this may just return 'default'
+          const permission = await Notification.requestPermission();
+          if (permission !== 'granted') return null;
 
-            // Ask user for permission
-            const permission = await Notification.requestPermission();
-            if (permission !== 'granted') return;
+          // Ensure the active worker is ready before asking FCM for a token
+          let readyReg;
+          try { readyReg = await navigator.serviceWorker.ready; } catch(_) { readyReg = registration; }
 
-            // Get the FCM token
-            const token = await messaging.getToken({
-                vapidKey: 'BP-A4DPeS4EWGjWtRUBYPLExlhQXq-4l_te7txwJa8qAR7RxQnbaaabUKpX3akGRFxwAeg9IpUjM1w0Nmrq77KQ',
-                serviceWorkerRegistration: registration
-            });
-            currentDeviceToken = token;   // ← グローバル変数に保存
-            console.log('FCM token:', token);
-            if (token) {
-                // プラットフォーム判定
-                const platform = /iPhone|iPad/.test(navigator.userAgent) ? 'ios'
-                              : /Android/.test(navigator.userAgent)    ? 'android'
-                              : 'desktop';
+          // Some environments hang on getToken; protect with a timeout so UI doesn't freeze
+          const token = await Promise.race([
+            messaging.getToken({
+              vapidKey: 'BP-A4DPeS4EWGjWtRUBYPLExlhQXq-4l_te7txwJa8qAR7RxQnbaaabUKpX3akGRFxwAeg9IpUjM1w0Nmrq77KQ',
+              serviceWorkerRegistration: readyReg
+            }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('getToken timeout')), 8000))
+          ]);
 
-                await db.collection('fcm_tokens')
-                        .doc(token)          // token = ドキュメントID
-                        .set({
-                            residentId: localStorage.getItem('myResidentId'),
-                            dorm     : currentCollectionName.split('_')[1],   // 'shofu' or 'meizen'
-                            lastSeen : firebase.firestore.FieldValue.serverTimestamp(),
-                            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                            platform,
-                            ua       : navigator.userAgent
-                        }, { merge: true });
-                console.log('Token saved to Firestore');
-            }
+          currentDeviceToken = token || null;
+          console.log('FCM token:', token);
+          if (token) {
+            const platform = /iPhone|iPad/.test(navigator.userAgent) ? 'ios'
+                          : /Android/.test(navigator.userAgent)    ? 'android'
+                          : 'desktop';
+            await db.collection('fcm_tokens')
+                    .doc(token)
+                    .set({
+                      residentId: localStorage.getItem('myResidentId') || null,
+                      dorm     : (currentCollectionName === 'all' ? null : currentCollectionName.split('_')[1]),
+                      lastSeen : firebase.firestore.FieldValue.serverTimestamp(),
+                      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                      platform,
+                      ua       : navigator.userAgent
+                    }, { merge: true });
+            console.log('Token saved to Firestore');
+          }
+          return token || null;
         } catch (err) {
-            console.error('FCM initialization failed', err);
+          console.error('FCM initialization failed', err);
+          return null;
+        } finally {
+          __notifInFlight = null;
         }
-
-        // フォアグラウンド受信時: OS通知は出さない（重複防止）
-        // ここでは必要なら画面内トースト等で知らせる実装にする
-        messaging.onMessage(payload => {
-            console.log('Foreground FCM message received:', payload);
-            // 重複防止のため、ここで new Notification(...) は呼ばない
-            // TODO: 画面内バナー/トーストを出したい場合はここに実装
-        });
+      })();
+      return __notifInFlight;
     }
+    
+    // Foreground messages: avoid duplicating OS notifications
+    messaging.onMessage(payload => {
+      console.log('Foreground FCM message received:', payload);
+      // (Intentionally do not call new Notification(...) here to avoid duplicates)
+    });
     /* ===================================== */
 
     let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_shofu';
@@ -1621,38 +1643,45 @@ if(elements.changePasswordForm){
                     selectModal.classList.add('active');
                     selectModal.style.pointerEvents = 'auto';
                     document.getElementById('self-select-btn').onclick = async () => {
-                      // Show loading overlay
-                      document.getElementById('loading-overlay').style.display = 'flex';
-                      // Show loading state
+                      const overlayEl = document.getElementById('loading-overlay');
                       const btn = document.getElementById('self-select-btn');
-                      btn.disabled = true;
-                      btn.textContent = '読み込み中...';
-                      // Optionally show loading in table
-                      document.querySelector('#resident-table tbody').innerHTML = '<tr><td colspan="5">読み込み中...</td></tr>';
-                      const id = select.value;
-                      localStorage.setItem('myResidentId', id);
-                      // Switch dorm view to match selected resident
-                      const selectedDorm = select.options[select.selectedIndex].getAttribute('data-dorm');
-                      switchDorm(selectedDorm);
-                      // Ensure we have a token; request permission if needed
-                      if (!currentDeviceToken) {
-                        await requestNotificationPermission();
+                      try {
+                        if (overlayEl) overlayEl.style.display = 'flex';
+                        if (btn) { btn.disabled = true; btn.textContent = '読み込み中...'; }
+
+                        const tbody = document.querySelector('#resident-table tbody');
+                        if (tbody) tbody.innerHTML = '<tr><td colspan="5">読み込み中...</td></tr>';
+
+                        const id = select.value;
+                        localStorage.setItem('myResidentId', id);
+
+                        // Switch dorm view to match selected resident
+                        const selectedDorm = select.options[select.selectedIndex].getAttribute('data-dorm');
+                        switchDorm(selectedDorm);
+
+                        // Acquire or refresh push token (now idempotent & timeout-protected)
+                        if (!currentDeviceToken) {
+                          await requestNotificationPermission();
+                        }
+                        if (currentDeviceToken) {
+                          await db.collection('fcm_tokens')
+                                  .doc(currentDeviceToken)
+                                  .set({ residentId: id }, { merge: true });
+                          console.log('residentId saved to Firestore:', id);
+                        } else {
+                          console.warn('No device token available (skipping token save).');
+                        }
+
+                        selectModal.classList.remove('active');
+                        selectModal.style.pointerEvents = 'none';
+                        renderTable();
+                      } catch (e) {
+                        console.error('self-select confirm failed', e);
+                        alert('初期化に失敗しました。電波状況や通知設定を確認して、もう一度お試しください。');
+                      } finally {
+                        if (btn) { btn.disabled = false; btn.textContent = '決定'; }
+                        if (overlayEl) overlayEl.style.display = 'none';
                       }
-                      // Save residentId to this device's token document
-                      if (currentDeviceToken) {
-                        await db.collection('fcm_tokens')
-                                .doc(currentDeviceToken)
-                                .set({ residentId: id }, { merge: true });
-                        console.log('residentId saved to Firestore:', id);
-                      }
-                      selectModal.classList.remove('active');
-                      selectModal.style.pointerEvents = 'none';
-                      renderTable();
-                      // Reset the button back to its original state
-                      btn.disabled = false;
-                      btn.textContent = '決定';
-                      // Hide loading overlay
-                      document.getElementById('loading-overlay').style.display = 'none';
                     };
                     document.getElementById('self-cancel-btn').addEventListener('click', () => {
                       const selectModal = document.getElementById('self-select-modal');
