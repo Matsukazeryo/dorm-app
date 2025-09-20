@@ -813,7 +813,8 @@
     };
 
 
-    let currentDeviceToken = null;   // このデバイスの FCM トークンを保持
+let currentDeviceToken = null;   // このデバイスの FCM トークンを保持
+let currentWebPushSubId = null;   // Web Push (Safari/iOS等) の購読ID（endpointのbase64）
 
     /* ==== FCM Push Notification Setup ==== */
     let __notifInFlight = null;
@@ -823,56 +824,89 @@
       __notifInFlight = (async () => {
         if (!('Notification' in window) || !('serviceWorker' in navigator)) return null;
         // Guard for browsers / iOS versions where Firebase Messaging isn't supported
+        let fcmSupported = true;
         try {
           if (typeof firebase !== 'undefined' && firebase.messaging && typeof firebase.messaging.isSupported === 'function'){
-            if (!firebase.messaging.isSupported()) {
-              console.warn('Firebase Messaging not supported in this browser.');
-              return null;
-            }
+            fcmSupported = !!firebase.messaging.isSupported();
+            if (!fcmSupported) console.warn('Firebase Messaging not supported in this browser. Falling back to Web Push.');
           }
         } catch(_) {}
 
         try {
           // Always register (or reuse) the root-scoped SW and wait until it's ready
           const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-          // iOS/Safari requires a user gesture; if called without one, this may just return 'default'
           const permission = await Notification.requestPermission();
           if (permission !== 'granted') return null;
 
-          // Ensure the active worker is ready before asking FCM for a token
+          // Ensure the active worker is ready before asking for tokens/subscriptions
           let readyReg;
           try { readyReg = await navigator.serviceWorker.ready; } catch(_) { readyReg = registration; }
 
-          // Some environments hang on getToken; protect with a timeout so UI doesn't freeze
-          const token = await Promise.race([
-            messaging.getToken({
-              vapidKey: 'BP-A4DPeS4EWGjWtRUBYPLExlhQXq-4l_te7txwJa8qAR7RxQnbaaabUKpX3akGRFxwAeg9IpUjM1w0Nmrq77KQ',
-              serviceWorkerRegistration: readyReg
-            }),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('getToken timeout')), 8000))
-          ]);
-
-          currentDeviceToken = token || null;
-          console.log('FCM token:', token);
-          if (token) {
-            const platform = /iPhone|iPad/.test(navigator.userAgent) ? 'ios'
-                          : /Android/.test(navigator.userAgent)    ? 'android'
-                          : 'desktop';
-            await db.collection('fcm_tokens')
-                    .doc(token)
-                    .set({
-                      residentId: localStorage.getItem('myResidentId') || null,
-                      dorm     : (currentCollectionName === 'all' ? null : currentCollectionName.split('_')[1]),
-                      lastSeen : firebase.firestore.FieldValue.serverTimestamp(),
-                      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                      platform,
-                      ua       : navigator.userAgent
-                    }, { merge: true });
-            console.log('Token saved to Firestore');
+          // --- First, try FCM token if supported ---
+          if (fcmSupported) {
+            try {
+              const token = await Promise.race([
+                messaging.getToken({
+                  vapidKey: 'BP-A4DPeS4EWGjWtRUBYPLExlhQXq-4l_te7txwJa8qAR7RxQnbaaabUKpX3akGRFxwAeg9IpUjM1w0Nmrq77KQ',
+                  serviceWorkerRegistration: readyReg
+                }),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('getToken timeout')), 8000))
+              ]);
+              if (token) {
+                currentDeviceToken = token;
+                console.log('FCM token:', token);
+                const platform = /iPhone|iPad/.test(navigator.userAgent) ? 'ios'
+                                : /Android/.test(navigator.userAgent)    ? 'android'
+                                : 'desktop';
+                await db.collection('fcm_tokens')
+                        .doc(token)
+                        .set({
+                          residentId: localStorage.getItem('myResidentId') || null,
+                          dorm     : (currentCollectionName === 'all' ? null : currentCollectionName.split('_')[1]),
+                          lastSeen : firebase.firestore.FieldValue.serverTimestamp(),
+                          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                          platform,
+                          ua       : navigator.userAgent
+                        }, { merge: true });
+                console.log('Token saved to Firestore');
+                return token;
+              }
+            } catch (e) {
+              console.warn('FCM getToken failed, will try Web Push fallback:', e && (e.code || e.message) || e);
+            }
           }
-          return token || null;
+
+          // --- Fallback: Web Push (Push API) subscription ---
+          try {
+            const sub = await ensureWebPushSubscription(readyReg);
+            if (sub) {
+              const subObj = (typeof sub.toJSON === 'function') ? sub.toJSON() : { endpoint: sub.endpoint };
+              currentWebPushSubId = btoa(subObj.endpoint);
+              const platform = /iPhone|iPad/.test(navigator.userAgent) ? 'ios'
+                              : /Android/.test(navigator.userAgent)    ? 'android'
+                              : 'desktop';
+              await db.collection('webpush_subs')
+                      .doc(currentWebPushSubId)
+                      .set({
+                        endpoint : subObj.endpoint,
+                        keys     : (subObj.keys || null),
+                        residentId: localStorage.getItem('myResidentId') || null,
+                        dorm     : (currentCollectionName === 'all' ? null : currentCollectionName.split('_')[1]),
+                        lastSeen : firebase.firestore.FieldValue.serverTimestamp(),
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        platform,
+                        ua       : navigator.userAgent
+                      }, { merge: true });
+              console.log('WebPush subscription saved to Firestore:', subObj.endpoint);
+            } else {
+              console.warn('Web Push subscription unavailable.');
+            }
+          } catch (e) {
+            console.warn('Web Push fallback failed:', e && (e.code || e.message) || e);
+          }
+          return null;
         } catch (err) {
-          console.error('FCM initialization failed', err);
+          console.error('Notification init failed', err);
           return null;
         } finally {
           __notifInFlight = null;
@@ -880,7 +914,6 @@
       })();
       return __notifInFlight;
     }
-    
     // Foreground messages: avoid duplicating OS notifications
     messaging.onMessage(payload => {
       console.log('Foreground FCM message received:', payload);
@@ -925,6 +958,30 @@
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+    }
+
+    // ==== Web Push fallback helpers ====
+    function urlBase64ToUint8Array(base64String){
+      const padding = '='.repeat((4 - base64String.length % 4) % 4);
+      const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const rawData = atob(base64);
+      const outputArray = new Uint8Array(rawData.length);
+      for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+      return outputArray;
+    }
+
+    async function ensureWebPushSubscription(reg){
+      try{
+        if (!reg || !reg.pushManager) return null;
+        let sub = await reg.pushManager.getSubscription();
+        if (sub) return sub;
+        const appServerKey = urlBase64ToUint8Array('BP-A4DPeS4EWGjWtRUBYPLExlhQXq-4l_te7txwJa8qAR7RxQnbaaabUKpX3akGRFxwAeg9IpUjM1w0Nmrq77KQ');
+        sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: appServerKey });
+        return sub;
+      }catch(e){
+        console.warn('ensureWebPushSubscription error', e);
+        return null;
+      }
     }
 
     function setCircleOptions(selectEl, dorm, includeEmpty = true){
@@ -1660,7 +1717,7 @@ if(elements.changePasswordForm){
                         switchDorm(selectedDorm);
 
                         // Acquire or refresh push token (now idempotent & timeout-protected)
-                        if (!currentDeviceToken) {
+                        if (!currentDeviceToken && !currentWebPushSubId) {
                           await requestNotificationPermission();
                         }
                         if (currentDeviceToken) {
@@ -1671,10 +1728,20 @@ if(elements.changePasswordForm){
                             console.log('residentId saved to Firestore:', id);
                           } catch (e) {
                             console.warn('residentId save skipped due to permission error:', (e && (e.code || e.message)) || e);
-                            // 非致命扱い: 通知トークンは取得済み。後から権限を直して再紐づけできる。
                           }
-                        } else {
-                          console.warn('No device token available (skipping token save).');
+                        }
+                        if (!currentDeviceToken && currentWebPushSubId) {
+                          try {
+                            await db.collection('webpush_subs')
+                                    .doc(currentWebPushSubId)
+                                    .set({ residentId: id }, { merge: true });
+                            console.log('residentId saved to WebPush sub:', id);
+                          } catch (e) {
+                            console.warn('residentId save to webpush_subs skipped:', (e && (e.code || e.message)) || e);
+                          }
+                        }
+                        if (!currentDeviceToken && !currentWebPushSubId) {
+                          console.warn('No device token or WebPush subscription (skipping save).');
                         }
 
                         selectModal.classList.remove('active');
@@ -1761,788 +1828,4 @@ if(elements.changePasswordForm){
             const searchTerm = elements.searchInput.value.toLowerCase();
             const sohmuOn = elements.sohmuToggle.checked;
             const myId = localStorage.getItem('myResidentId');
-            // Hide table header when 庶務モード is OFF
-            const tableHead = document.querySelector('#resident-table thead');
-            tableHead.style.display = sohmuOn ? '' : 'none';
-            const baseList = sohmuOn
-              ? allResidents
-              : allResidents.filter(r => r.id === myId);
-            if (sohmuOn) {
-              // 庶務モード ON: 通常の部屋番号順
-              baseList.sort((a, b) => (parseInt(a.roomNumber) || 0) - (parseInt(b.roomNumber) || 0));
-            } else {
-              // 庶務モード OFF: 自分をトップに、以降部屋番号順
-              baseList.sort((a, b) => {
-                if (a.id === myId) return -1;
-                if (b.id === myId) return 1;
-                return (parseInt(a.roomNumber) || 0) - (parseInt(b.roomNumber) || 0);
-              });
-            }
-            const filteredResidents = baseList.filter(r => 
-              (r.name && r.name.toLowerCase().includes(searchTerm)) ||
-              (r.roomNumber && r.roomNumber.includes(searchTerm)) ||
-              (r.furigana && r.furigana.toLowerCase().includes(searchTerm))
-            );
-            elements.tableBody.innerHTML = ''; 
-            if (filteredResidents.length === 0) {
-                elements.tableBody.innerHTML = '<tr><td colspan="5">該当する寮生が見つかりません。</td></tr>';
-            } else {
-                filteredResidents.forEach(resident => {
-                    const dorm = resident.dorm || currentCollectionName.split('_')[1];
-                    const dormMarker = dorm === 'shofu' ? '松' : '明';
-                    const row = document.createElement('tr');
-                    if (!elements.sohmuToggle.checked) {
-                        // 庶務モード OFF のときのレイアウト
-                        const dormMarker = resident.dorm === 'shofu' ? '松' : (resident.dorm === 'meizen' ? '明' : '');
-                        row.innerHTML = `
-                          <td colspan="5" style="border:none; padding:20px; text-align:center;">
-                            <div class="off-mode-container">
-                              <div class="off-name"><span class="dorm-marker">${dormMarker}</span>${resident.name}</div>
-                              <div class="off-counts">
-                                <div>
-                                  荷物:
-                                  <button onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1)">-</button>
-                                  <span class="off-count-number">${resident.luggage}</span>
-                                  <button onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1)">+</button>
-                                </div>
-                                <div style="margin-top:10px;">
-                                  郵便:
-                                  <button onclick="updateCount('${resident.id}', '${resident.name}', 'mail', -1)">-</button>
-                                  <span class="off-count-number">${resident.mail}</span>
-                                  <button onclick="updateCount('${resident.id}', '${resident.name}', 'mail', 1)">+</button>
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                        `;
-                    } else {
-                        // 庶務モード ON のときは通常レイアウト
-                        row.innerHTML = `
-                          <td class="checkbox-col"><div class="cell-content"><input type="checkbox" class="resident-checkbox" data-id="${resident.id}"></div></td>
-                          <td>
-                            <div class="cell-content name-cell">
-                              <span class="room-number">${resident.roomNumber}</span>
-                              <span class="dorm-marker">${dormMarker}</span>
-                              <span class="circle-badge">${resident.circle || ''}</span>
-                              <span class="name-stack">
-                                <span class="furigana-text${resident.furigana && resident.furigana.length > 6 ? ' furigana-small' : ''}">${resident.furigana || ''}</span>
-                                <span class="kanji-name">${resident.name}</span>
-                              </span>
-                            </div>
-                          </td>
-                          <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1)">-</button><span class="count-span">${resident.luggage}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1)">+</button></div></td>
-                          <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', -1)">-</button><span class="count-span">${resident.mail}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', 1)">+</button></div></td>
-                          <td class="edit-op-cell">
-                            <div class="cell-content">
-                              <button class="edit-btn" onclick="openEditResidentModal('${resident.id}')">編集</button>
-                              <button class="delete-btn" onclick="deleteResident('${resident.id}', '${resident.name}')">削除</button>
-                            </div>
-                          </td>
-                        `;
-                    }
-                    elements.tableBody.appendChild(row);
-                });
-            }
-            updateDeleteButtonState();
-        }
-        
-
-        function renderLogs(snapshot){
-            const list = document.getElementById('log-list');
-            if(snapshot.empty){
-                list.innerHTML = '<li>履歴はありません。</li>';
-                return;
-            }
-            list.innerHTML = '';
-            snapshot.forEach(doc=>{
-                const d = doc.data();
-                const date = d.timestamp ? d.timestamp.toDate().toLocaleString('ja-JP') : '日時不明';
-                const admin = d.isAdmin ? ' (管理者)' : '';
-                const li = document.createElement('li');
-                li.innerHTML = `${d.details}${admin}<span class="log-time">${date}</span>`;
-                list.appendChild(li);
-            });
-        }
-
-        // ===== お知らせリストを現在の管理者状態で再描画 =====
-        function rebuildAnnouncementList(){
-            announcementsRef.get().then(function(snap){
-                if(!snap) return;
-                const docs = snap.docs;
-                if (docs.length === 0){
-                    elements.announcementList.innerHTML = '<li>お知らせはありません。</li>';
-                    return;
-                }
-                elements.announcementList.innerHTML = '';
-                const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
-
-                // ピン留め優先 → 新しい順
-                const sorted = docs.slice().sort(function(a,b){
-                    const aPin = a.data().pinned ? 1 : 0;
-                    const bPin = b.data().pinned ? 1 : 0;
-                    if (aPin !== bPin) return bPin - aPin;
-                    var aTs = (a.data().timestamp && typeof a.data().timestamp.toMillis === 'function') ? a.data().timestamp.toMillis() : 0;
-                    var bTs = (b.data().timestamp && typeof b.data().timestamp.toMillis === 'function') ? b.data().timestamp.toMillis() : 0;
-                    return bTs - aTs;
-                });
-
-                sorted.forEach(function(doc){
-                    const data = doc.data();
-                    const li = document.createElement('li');
-                    var titleHtml = renderColoredText(data.title || '(無題)');
-                    var bodyHtml  = renderColoredText(data.body || data.text || '');
-
-                    let timeText = '';
-                    if (data.timestamp && data.timestamp.toDate) {
-                        try {
-                            timeText = data.timestamp.toDate().toLocaleString('ja-JP');
-                        } catch (e) {
-                            timeText = String(data.timestamp.toDate());
-                        }
-                    }
-
-                    li.className = 'announce-item' + (data.pinned ? ' pinned' : '');
-                    li.innerHTML =
-                        '<div class="announce-head">' +
-                          (data.pinned ? '<span class="pin-tag">📌</span>' : '') +
-                          '<span class="announce-title">' + titleHtml + '</span>' +
-                          '<span class="announce-time">' + timeText + '</span>' +
-                        '</div>' +
-                        '<div class="announce-body">' + bodyHtml + '</div>';
-
-                    if(isAdmin){
-                        // 削除ボタン
-                        const delBtn = document.createElement('button');
-                        delBtn.textContent = '削除';
-                        delBtn.onclick = async function() {
-                          if (!confirm('本当に削除しますか？')) return;
-                          try {
-                            await doc.ref.delete();
-                          } catch (e) {
-                            alert('削除に失敗しました（権限不足の可能性）: ' + (e.code || e.message));
-                            console.error(e);
-                          }
-                        };
-
-                        // ピン留め / 解除ボタン
-                        const pinBtn = document.createElement('button');
-                        pinBtn.textContent = data.pinned ? 'ピン解除' : 'ピン留め';
-                        pinBtn.onclick = async function() {
-                          try {
-                            await doc.ref.update({ pinned: !data.pinned });
-                          } catch (e) {
-                            alert('更新に失敗しました（権限不足の可能性）: ' + (e.code || e.message));
-                            console.error(e);
-                          }
-                        };
-
-                        // 編集ボタン
-                        const editBtn = document.createElement('button');
-                        editBtn.textContent = '編集';
-                        editBtn.onclick = function() {
-                            editingDocRef = doc.ref;
-                            elements.postTitleInput.value = data.title || '';
-                            elements.postBodyInput.value  = data.body  || data.text || '';
-                            elements.postModalTitle.textContent = 'お知らせを編集';
-                            elements.postSubmitBtn.textContent  = '更新';
-                            elements.postAnnouncementModal.classList.add('active');
-                            elements.postTitleInput.focus();
-                        };
-
-                        var actions = document.createElement('div');
-                        actions.className = 'announce-actions';
-                        actions.appendChild(delBtn);
-                        actions.appendChild(pinBtn);
-                        actions.appendChild(editBtn);
-                        li.appendChild(actions);
-                    }
-
-                    elements.announcementList.appendChild(li);
-                });
-            }).catch(function(err){console.error('rebuildAnnouncementList',err);});
-        }
-
-        function showLogModal(){
-            elements.logModal.classList.add('active');
-            if(logUnsubscribe) logUnsubscribe();
-            logUnsubscribe = db.collection('logs')
-                  .orderBy('timestamp','desc')
-                  .limit(50)
-                  .onSnapshot(renderLogs, err=>{
-                     console.error('logs listener',err);
-                     document.getElementById('log-list').innerHTML='<li>履歴の読み込みに失敗しました。</li>';
-                  });
-        }
-
-        function hideLogModal(){
-            elements.logModal.classList.remove('active');
-            if(logUnsubscribe){ logUnsubscribe(); logUnsubscribe=null; }
-        }
-
-
-        // async function fetchLogs() {
-        //     const logList = document.getElementById('log-list');
-        //     logList.innerHTML = '<li>読み込み中...</li>';
-        //     try {
-        //         const snapshot = await db.collection("logs").orderBy("timestamp", "desc").limit(50).get();
-        //         if (snapshot.empty) { logList.innerHTML = '<li>履歴はありません。</li>'; return; }
-        //         logList.innerHTML = '';
-        //         snapshot.forEach(doc => {
-        //             const log = doc.data();
-        //             const date = log.timestamp ? log.timestamp.toDate().toLocaleString('ja-JP') : '日時不明';
-        //             const adminBadge = log.isAdmin ? ' (管理者)' : '';
-        //             const li = document.createElement('li');
-        //             li.innerHTML = `${log.details}${adminBadge}<span class="log-time">${date}</span>`;
-        //             logList.appendChild(li);
-        //         });
-        //     } catch (error) {
-        //         logList.innerHTML = '<li>履歴の読み込みに失敗しました。</li>';
-        //     }
-        // }
-        
-        function showAddResidentModal() {
-            elements.addResidentForm.reset();
-            const dormKeyRaw = currentCollectionName.split('_')[1];
-            const dormKey = (dormKeyRaw === 'all' || !dormKeyRaw) ? 'shofu' : dormKeyRaw;
-            const dormSel = document.getElementById('form-dorm');
-            const circleSel = document.getElementById('form-circle');
-            dormSel.value = dormKey;
-            setCircleOptions(circleSel, dormKey, true);
-            dormSel.onchange = (e) => setCircleOptions(circleSel, e.target.value, true);
-            elements.addResidentModal.classList.add('active');
-        }
-        
-        function hideAddResidentModal() {
-            elements.addResidentModal.classList.remove('active');
-        }
-
-        function saveNewResident(event) {
-            event.preventDefault();
-            const dorm = document.getElementById('form-dorm').value;
-            const collection = `residents_${dorm}`;
-            const newResident = {
-                name: document.getElementById('form-name').value.trim(),
-                roomNumber: document.getElementById('form-room').value.trim() || '',
-                furigana: document.getElementById('form-furigana').value.trim() || '',
-                circle: document.getElementById('form-circle').value.trim() || '',
-                luggage: parseInt(document.getElementById('form-luggage').value) || 0,
-                mail: parseInt(document.getElementById('form-mail').value) || 0,
-            };
-            if (!newResident.name) { alert('名前は必須です。'); return; }
-            db.collection(collection).add(newResident).then(() => {
-                alert(`${newResident.name} さんを登録しました。`);
-                addLog('寮生追加', `[${dorm}] ${newResident.name} を追加`);
-                hideAddResidentModal();
-            });
-        }
-        
-        function createBulkFormEntry() {
-            const entryDiv = document.createElement('div');
-            entryDiv.className = 'bulk-add-entry';
-            entryDiv.innerHTML = `
-                <div class="form-group"><label>部屋番号</label><input type="text" class="bulk-room"></div>
-                <div class="form-group"><label>名前 (必須)</label><input type="text" class="bulk-name" required></div>
-                <div class="form-group"><label>ふりがな</label><input type="text" class="bulk-furigana"></div>
-                <div class="form-group"><label>サークル</label><select class="bulk-circle"></select></div>
-            `;
-            const bulkDormSel = document.getElementById('bulk-form-dorm');
-            const dormKey = bulkDormSel ? bulkDormSel.value : 'shofu';
-            const circleSel = entryDiv.querySelector('.bulk-circle');
-            setCircleOptions(circleSel, dormKey, true);
-            return entryDiv;
-        }
-        
-        function showBulkAddModal() {
-            elements.bulkFormEntries.innerHTML = '';
-            elements.bulkFormEntries.appendChild(createBulkFormEntry());
-            const bulkDormSel = document.getElementById('bulk-form-dorm');
-            const raw = currentCollectionName.split('_')[1];
-            const dormKey = (raw === 'all' || !raw) ? 'shofu' : raw;
-            bulkDormSel.value = dormKey;
-            // 初期反映
-            elements.bulkFormEntries.querySelectorAll('.bulk-circle').forEach(sel => setCircleOptions(sel, dormKey, true));
-            // 寮切替時に既存エントリーを更新
-            bulkDormSel.onchange = () => {
-                const d = bulkDormSel.value;
-                elements.bulkFormEntries.querySelectorAll('.bulk-circle').forEach(sel => setCircleOptions(sel, d, true));
-            };
-            elements.addBulkModal.classList.add('active');
-        }
-
-        // ===== 一括追加: エントリーを減らす（末尾を削除） =====
-        if (elements.removeFormEntryBtn) {
-          elements.removeFormEntryBtn.addEventListener('click', function () {
-            if (!elements.bulkFormEntries) return;
-            const entries = elements.bulkFormEntries.querySelectorAll('.bulk-add-entry');
-            if (entries.length > 1) {
-              entries[entries.length - 1].remove();
-            } else {
-              // 1件は最低限残す（何もしない）
-            }
-          });
-        }
-        
-        function hideBulkAddModal() {
-            elements.addBulkModal.classList.remove('active');
-        }
-
-        function handleBulkAddSubmit(event) {
-            event.preventDefault();
-            const dorm = document.getElementById('bulk-form-dorm').value;
-            const collection = `residents_${dorm}`;
-            const entries = document.querySelectorAll('.bulk-add-entry');
-            const batch = db.batch();
-            let addedNames = [];
-
-            entries.forEach(entry => {
-                const name = entry.querySelector('.bulk-name').value.trim();
-                if (name) {
-                    const newResidentRef = db.collection(collection).doc();
-                    batch.set(newResidentRef, { 
-                        roomNumber: entry.querySelector('.bulk-room').value.trim() || '',
-                        name: name,
-                        furigana: entry.querySelector('.bulk-furigana').value.trim() || '',
-                        circle: entry.querySelector('.bulk-circle').value.trim() || '',
-                        luggage: 0, mail: 0 
-                    });
-                    addedNames.push(name);
-                }
-            });
-
-            if (addedNames.length > 0) {
-                batch.commit().then(() => {
-                    alert(`${addedNames.length}人の寮生を追加しました。`);
-                    addLog('寮生一括追加', `[${dorm}] ${addedNames.join(', ')} を追加`);
-                    hideBulkAddModal();
-                });
-            }
-        }
-        
-        function deleteSelectedResidents() {
-            const selectedCheckboxes = document.querySelectorAll('.resident-checkbox:checked');
-            if (selectedCheckboxes.length === 0) return;
-
-            if (!confirm(`選択した ${selectedCheckboxes.length} 人の寮生を本当に削除しますか？`)) return;
-
-            const batch = db.batch();
-            let count = 0;
-
-            selectedCheckboxes.forEach(checkbox => {
-                const id = checkbox.dataset.id;
-                let coll = currentCollectionName;
-                if (currentCollectionName === 'all') {
-                    const res = allResidents.find(r => r.id === id);
-                    if (!res) return; // 念のため見つからなければスキップ
-                    coll = `residents_${res.dorm}`;
-                }
-                batch.delete(db.collection(coll).doc(id));
-                count++;
-            });
-
-            if (count === 0) return;
-
-            batch.commit().then(() => {
-                const scopeLabel =
-                    currentCollectionName === 'all'
-                        ? '松風寮・明善寮'
-                        : (currentCollectionName === 'residents_shofu' ? '松風寮' : '明善寮');
-                alert(`${count}人の寮生を削除しました。`);
-                addLog('寮生一括削除', `[${scopeLabel}] ${count}人を削除`);
-            }).catch(e => {
-                console.error('bulk delete error', e);
-                alert('一括削除に失敗しました。権限やネットワークを確認してください。');
-            });
-        }
-
-        function resetAllCounts() {
-            const targets = currentCollectionName === 'all'
-                ? ['residents_shofu', 'residents_meizen']
-                : [currentCollectionName];
-
-            const confirmMsg = currentCollectionName === 'all'
-                ? '本当に松風寮と明善寮の全ての荷物と郵便を0にしますか？'
-                : `本当に${currentCollectionName === 'residents_shofu' ? '松風寮' : '明善寮'}の全ての荷物と郵便の数を0にしますか？`;
-
-            if (!confirm(confirmMsg)) return;
-
-            targets.forEach(collectionName => {
-                const batch = db.batch();
-
-                const residentsForTarget = (currentCollectionName === 'all')
-                    ? allResidents.filter(r => `residents_${r.dorm}` === collectionName)
-                    : allResidents; // 単一寮ビューでは既にその寮の住人だけ
-
-                residentsForTarget.forEach(r => {
-                    batch.update(db.collection(collectionName).doc(r.id), { luggage: 0, mail: 0 });
-                });
-
-                batch.commit().then(() => {
-                    const dormLabel = collectionName === 'residents_shofu' ? '松風寮' : '明善寮';
-                    alert(`${dormLabel}の全てのカウントを0にリセットしました。`);
-                    addLog('全リセット', `[${collectionName.split('_')[1]}] の全カウントをリセット`);
-                    // UIの更新は onSnapshot に任せる（ここでは再描画しない）
-                }).catch(err => {
-                    console.error('resetAllCounts error', err);
-                    alert(`全リセットに失敗しました。権限やネットワークを確認してください。\n詳細: ${err && (err.code || err.message || err)}`);
-                });
-            });
-        }
-        
-        function updateDeleteButtonState() {
-            const selectedCheckboxes = document.querySelectorAll('.resident-checkbox:checked');
-            elements.deleteSelectedBtn.disabled = selectedCheckboxes.length === 0;
-        }
-
-        function handleLoginLogout() {
-            if (sessionStorage.getItem('isAdminLoggedIn') === 'true') logout();
-            else login();
-        }
-
-        function login() {
-            const password = prompt('管理者パスワードを入力してください:');
-            if (password === ADMIN_PASSWORD) {
-                auth.signInAnonymously().then(() => {
-                    sessionStorage.setItem('isAdminLoggedIn', 'true');
-                    alert('管理者としてログインしました。');
-                    updateLoginStatus();
-                    rebuildAnnouncementList();
-                }).catch(e => {
-                    console.error('auth signInAnonymously failed', e);
-                    alert('ログイン処理に失敗しました（認証）: ' + (e.code || e.message));
-                });
-            } else if (password) {
-                alert('パスワードが違います。');
-            }
-        }
-
-        function logout() {
-            sessionStorage.removeItem('isAdminLoggedIn');
-            alert('ログアウトしました。');
-            document.getElementById('view-mode').checked = true;
-            setMode('view-mode');
-            updateLoginStatus();
-            rebuildAnnouncementList();
-            if (auth.currentUser) { auth.signOut().catch(err => console.warn('auth signOut failed', err)); }
-        }
-
-        function updateLoginStatus() {
-            const isLoggedIn = sessionStorage.getItem('isAdminLoggedIn') === 'true';
-            document.body.classList.toggle('admin-logged-in', isLoggedIn);
-            if (isLoggedIn) {
-                elements.postAnnouncementBtn.style.display = 'inline-block';
-                repositionAnnouncement(true);
-                elements.loginLogoutBtn.textContent = 'ログアウト';
-                elements.loginLogoutBtn.classList.add('logout');
-                // 管理者は常に庶務モード ON、トグル無効化
-                elements.sohmuToggle.checked = true;
-                elements.sohmuToggle.disabled = true;
-                elements.sohmuToggle.dispatchEvent(new Event('change'));
-            } else {
-                elements.postAnnouncementBtn.style.display = 'none';
-                repositionAnnouncement(false);
-                elements.loginLogoutBtn.textContent = '管理者ログイン';
-                elements.loginLogoutBtn.classList.remove('logout');
-                // 管理者ログアウト時はトグル有効化
-                elements.sohmuToggle.disabled = false;
-            }
-        }
-
-        function setMode(mode) {
-            const keepFurigana = document.body.classList.contains('show-furigana');
-            const keepCircle   = document.body.classList.contains('show-circle');
-            const keepDorm     = document.body.classList.contains('show-dorm');
-            document.body.className = sessionStorage.getItem('isAdminLoggedIn') === 'true' ? 'admin-logged-in' : '';
-            document.body.classList.add(mode);
-            if (keepFurigana) document.body.classList.add('show-furigana');
-            if (keepCircle)   document.body.classList.add('show-circle');
-            if (keepDorm)     document.body.classList.add('show-dorm');
-            const currentTheme = localStorage.getItem('theme') || 'system';
-            handleThemeChange(currentTheme);
-            if (mode !== 'resident-edit-mode') elements.selectAllCheckbox.checked = false;
-            renderTable();
-        }
-
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
-
-        function applyTheme(theme) {
-            if (theme === 'dark') document.body.classList.add('dark-theme');
-            else document.body.classList.remove('dark-theme');
-        }
-
-        function handleThemeChange(selectedTheme) {
-            if (selectedTheme === 'system') applyTheme(prefersDark.matches ? 'dark' : 'light');
-            else applyTheme(selectedTheme);
-        }
-
-        function initializeTheme() {
-            const savedTheme = localStorage.getItem('theme') || 'system';
-            elements.themeSelector.value = savedTheme;
-            handleThemeChange(savedTheme);
-        }
-        
-        const savedDorm = localStorage.getItem('currentDorm') ? (localStorage.getItem('currentDorm').split('_')[1]) : 'shofu';
-        switchDorm(savedDorm);
-        
-        elements.dormSelector.addEventListener('click', (e) => {
-            if(e.target.tagName === 'BUTTON') switchDorm(e.target.dataset.dorm);
-        });
-        
-        elements.modeSelectors.forEach(input => 
-          input.addEventListener('change', () => {
-            if (input.checked) setMode(input.id);
-          })
-        );
-        elements.tableBody.addEventListener('change', e => { if (e.target.classList.contains('resident-checkbox')) updateDeleteButtonState(); });
-        setMode('view-mode');
-        updateLoginStatus();
-        repositionAnnouncement(sessionStorage.getItem('isAdminLoggedIn')==='true');
-        elements.searchInput.addEventListener('input', renderTable);
-        elements.addResidentBtn.addEventListener('click', showAddResidentModal);
-        elements.addBulkBtn.addEventListener('click', showBulkAddModal);
-        elements.deleteSelectedBtn.addEventListener('click', deleteSelectedResidents);
-        // 全リセットボタンのイベント登録
-        elements.resetAllBtn.addEventListener('click', resetAllCounts);
-        // 庶務モードに応じてコントロール表示を切り替え
-        elements.sohmuToggle.addEventListener('change', () => {
-            // Hide dorm selector when 庶務モード is OFF
-            elements.dormSelector.style.display = elements.sohmuToggle.checked ? 'flex' : 'none';
-            // Hide search bar and display settings when off
-            elements.topControls.style.display = elements.sohmuToggle.checked ? 'flex' : 'none';
-            elements.middleControls.style.display = elements.sohmuToggle.checked ? 'flex' : 'none';
-            // Hide ops container when 庶務モード is OFF
-            elements.opsContainer.style.display = elements.sohmuToggle.checked ? '' : 'none';
-            // If 庶務モード is OFF, always fall back to 閲覧モード
-            if (!elements.sohmuToggle.checked) {
-                document.getElementById('view-mode').checked = true;
-                setMode('view-mode');
-            }
-            // Hide "寮生変更" button when 庶務モード is ON
-            elements.changeResidentBtn.style.display = elements.sohmuToggle.checked ? 'none' : 'inline-block';
-            // Show or hide the announcement area
-            updateAnnouncementVisibility();
-            renderTable();
-        });
-
-        /* ===== お知らせ欄 投稿モーダル ===== */
-        elements.postAnnouncementBtn.addEventListener('click', () => {
-            editingDocRef = null;
-            elements.postModalTitle.textContent = 'お知らせを投稿';
-            elements.postSubmitBtn.textContent  = '投稿';
-            elements.postTitleInput.value = '';
-            elements.postBodyInput.value  = '';
-            if (elements.postColorInput) elements.postColorInput.value = '#333333';
-            if (elements.postColorHexInput) elements.postColorHexInput.value = '#333333';
-            elements.postAnnouncementModal.classList.add('active');
-            elements.postTitleInput.focus();
-        });
-
-        // カラー入力の同期（カラーピッカー ⇄ 16進テキスト）
-        if (elements.postColorInput && elements.postColorHexInput) {
-            elements.postColorInput.addEventListener('input', function(e){
-                elements.postColorHexInput.value = e.target.value;
-            });
-            elements.postColorHexInput.addEventListener('input', function(e){
-                var s = sanitizeColor(e.target.value);
-                if (s) elements.postColorInput.value = s;
-            });
-        }
-
-        // Enter キーで送信しない（タイトル入力）
-        elements.postTitleInput.addEventListener('keydown', e=>{
-            if(e.key === 'Enter') e.preventDefault();
-        });
-
-        // フォーム送信
-        elements.postAnnouncementForm.addEventListener('submit', async e=>{
-            e.preventDefault();
-            const title = elements.postTitleInput.value.trim();
-            const body  = elements.postBodyInput.value.trim();
-            if(!title && !body) return;
-
-            var colorInputVal = elements.postColorHexInput ? elements.postColorHexInput.value : (elements.postColorInput ? elements.postColorInput.value : '');
-            var safeColor = sanitizeColor(colorInputVal);
-            try{
-                if(editingDocRef){
-                    // 既存ドキュメント更新
-                    var payloadU = { title: title || '(無題)', body: body };
-                    if (safeColor) payloadU.color = safeColor; else payloadU.color = firebase.firestore.FieldValue.delete();
-                    await editingDocRef.update(payloadU);
-                }else{
-                    // 新規作成
-                    var payloadA = {
-                        title : title || '(無題)',
-                        body,
-                        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                        pinned:false
-                    };
-                    if (safeColor) payloadA.color = safeColor;
-                    await db.collection('announcements').add(payloadA);
-                }
-            }catch(err){
-                alert('保存に失敗しました: ' + (err && (err.code || err.message || err)));
-                return;
-            }
-            elements.postAnnouncementModal.classList.remove('active');
-            // 即時反映（listener でも更新されるが、明示的に再描画）
-            rebuildAnnouncementList();
-        });
-
-        // モーダル閉じる
-        function closePostModal(){ elements.postAnnouncementModal.classList.remove('active'); }
-        elements.postModalCloseBtn.addEventListener('click', closePostModal);
-        elements.postCancelBtn.addEventListener('click', closePostModal);
-        elements.postAnnouncementModal.addEventListener('click', e=>{
-            if(e.target === elements.postAnnouncementModal) closePostModal();
-        });
-        // 初期表示設定
-        // Initial hide/show for dorm selector
-        elements.dormSelector.style.display = elements.sohmuToggle.checked ? 'flex' : 'none';
-        // Initial hide/show for controls in off-mode
-        elements.topControls.style.display = elements.sohmuToggle.checked ? 'flex' : 'none';
-        elements.middleControls.style.display = elements.sohmuToggle.checked ? 'flex' : 'none';
-
-        // ===== 表示設定トグル（古い端末対応） =====
-        function setBodyClass(cls, on){
-            if (on) document.body.classList.add(cls);
-            else document.body.classList.remove(cls);
-        }
-        function initDisplayToggles(){
-            // 保存された状態を復元（'1' を ON とする）
-            var f = localStorage.getItem('showFurigana') === '1';
-            var c = localStorage.getItem('showCircle') === '1';
-            var d = localStorage.getItem('showDorm') === '1';
-            if (elements.toggleFurigana) elements.toggleFurigana.checked = f;
-            if (elements.toggleCircle)   elements.toggleCircle.checked = c;
-            if (elements.toggleDorm)     elements.toggleDorm.checked = d;
-            setBodyClass('show-furigana', f);
-            setBodyClass('show-circle',   c);
-            setBodyClass('show-dorm',     d);
-            // 変更イベント（古いブラウザ対応で function を使用）
-            if (elements.toggleFurigana) {
-                elements.toggleFurigana.addEventListener('change', function(e){
-                    var on = !!e.target.checked;
-                    setBodyClass('show-furigana', on);
-                    try { localStorage.setItem('showFurigana', on ? '1' : '0'); } catch(_){}
-                    // テーブルの再描画で表示が即反映されるように
-                    if (typeof renderTable === 'function') renderTable();
-                });
-            }
-            if (elements.toggleCircle) {
-                elements.toggleCircle.addEventListener('change', function(e){
-                    var on = !!e.target.checked;
-                    setBodyClass('show-circle', on);
-                    try { localStorage.setItem('showCircle', on ? '1' : '0'); } catch(_){}
-                    if (typeof renderTable === 'function') renderTable();
-                });
-            }
-            if (elements.toggleDorm) {
-                elements.toggleDorm.addEventListener('change', function(e){
-                    var on = !!e.target.checked;
-                    setBodyClass('show-dorm', on);
-                    try { localStorage.setItem('showDorm', on ? '1' : '0'); } catch(_){}
-                    if (typeof renderTable === 'function') renderTable();
-                });
-            }
-        }
-        initDisplayToggles();
-        // ===== 表示設定トグルここまで =====
-        // Hide ops container initially if 庶務モード is OFF
-        elements.opsContainer.style.display = elements.sohmuToggle.checked ? '' : 'none';
-        // Initial display setting for "寮生変更" button
-        elements.changeResidentBtn.style.display = elements.sohmuToggle.checked ? 'none' : 'inline-block';
-        // 寮生変更ボタンから開いた場合はキャンセルを非表示
-        elements.changeResidentBtn.addEventListener('click', () => {
-            const cancelBtn = document.getElementById('self-cancel-btn');
-            if (cancelBtn) cancelBtn.style.display = 'none';
-            openSelfSelectModal();
-        });
-        // 初期表示：お知らせ欄を庶務モードに応じて表示/非表示
-        updateAnnouncementVisibility();
-        elements.selectAllCheckbox.addEventListener('change', e => {
-            document.querySelectorAll('.resident-checkbox').forEach(cb => cb.checked = e.target.checked);
-            updateDeleteButtonState();
-        });
-        elements.loginLogoutBtn.addEventListener('click', handleLoginLogout);
-        elements.themeSelector.addEventListener('change', e => {
-            localStorage.setItem('theme', e.target.value);
-            handleThemeChange(e.target.value);
-        });
-        prefersDark.addEventListener('change', () => {
-            const savedTheme = localStorage.getItem('theme') || 'system';
-            if (savedTheme === 'system') handleThemeChange('system');
-        });
-        // ===== iOS Safari 対策：ユーザー操作で通知許可をリクエスト =====
-        initializeTheme();
-        // 30分ごとに lastSeen を更新
-        setInterval(updateLastSeen, 30 * 60 * 1000);
-        elements.addModalCloseBtn.addEventListener('click', hideAddResidentModal);
-        elements.addResidentModal.addEventListener('click', e => { if(e.target === elements.addResidentModal) hideAddResidentModal(); });
-        elements.addResidentForm.addEventListener('submit', saveNewResident);
-        elements.addBulkModalCloseBtn.addEventListener('click', hideBulkAddModal);
-        elements.addBulkModal.addEventListener('click', e => { if(e.target === elements.addBulkModal) hideBulkAddModal(); });
-        elements.addBulkForm.addEventListener('submit', handleBulkAddSubmit);
-        elements.addFormEntryBtn.addEventListener('click', () => {
-            elements.bulkFormEntries.appendChild(createBulkFormEntry());
-        });
-        elements.toggleFurigana.addEventListener('change', e => document.body.classList.toggle('show-furigana', e.target.checked));
-        elements.toggleCircle.addEventListener('change', e => document.body.classList.toggle('show-circle', e.target.checked));
-        // Restore dorm marker toggle state
-        if (localStorage.getItem('showDorm') === 'true') {
-            elements.toggleDorm.checked = true;
-            document.body.classList.add('show-dorm');
-        }
-        // Dorm marker toggle with persistence
-        elements.toggleDorm.addEventListener('change', e => {
-            document.body.classList.toggle('show-dorm', e.target.checked);
-            localStorage.setItem('showDorm', e.target.checked);
-        });
-
-        elements.logViewBtn.addEventListener('click', showLogModal);
-        elements.modalCloseBtn.addEventListener('click', hideLogModal);
-        elements.logModal.addEventListener('click', e=>{ if(e.target===elements.logModal) hideLogModal(); });
-
-        // 寮生変更ボタン：毎回リストを再取得してモーダルを開く
-        elements.changeResidentBtn.addEventListener('click', async () => {
-          // Reset stored ID and reload list each time
-          localStorage.removeItem('myResidentId');
-          await populateSelfSelectOptions();
-          document.getElementById('self-select-modal').classList.add('active');
-          // Setup self-select-btn handler again (with loading overlay)
-          const btn = document.getElementById('self-select-btn');
-          btn.onclick = async () => {
-            // Show loading overlay
-            document.getElementById('loading-overlay').style.display = 'flex';
-            btn.disabled = true;
-            btn.textContent = '読み込み中...';
-            document.querySelector('#resident-table tbody').innerHTML = '<tr><td colspan="5">読み込み中...</td></tr>';
-            const select = document.getElementById('self-select');
-            const id = select.value;
-            localStorage.setItem('myResidentId', id);
-            const selectedDorm = select.options[select.selectedIndex].getAttribute('data-dorm');
-            switchDorm(selectedDorm);
-            if (!currentDeviceToken) {
-              await requestNotificationPermission();
-            }
-            if (currentDeviceToken) {
-              await db.collection('fcm_tokens')
-                      .doc(currentDeviceToken)
-                      .set({ residentId: id }, { merge: true });
-              console.log('residentId saved to Firestore:', id);
-            }
-            document.getElementById('self-select-modal').classList.remove('active');
-            document.getElementById('self-select-modal').style.pointerEvents = 'none';
-            renderTable();
-            btn.disabled = false;
-            btn.textContent = '決定';
-            // Hide loading overlay
-            document.getElementById('loading-overlay').style.display = 'none';
-          };
-        });
-    });
-
-// --- 削除CSSブロック: .name-stack{ ... } ---
-// --- 削除CSSブロック: .furigana-text{ ... } と body.show-furigana .furigana-text{ ... } ---
-</script>
-
-</body>
-</html>
+ <truncated__content/>
