@@ -8,6 +8,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png">
     <link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="icons/icon-16.png">
+    <link rel="manifest" href="/manifest.webmanifest">
     <!-- ===== PWA / Standalone meta for iOS & others ===== -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -839,15 +840,12 @@
           const permission = await Notification.requestPermission();
           if (permission !== 'granted') return null;
 
-          // Ensure the active worker is ready before asking FCM for a token
-          let readyReg;
-          try { readyReg = await navigator.serviceWorker.ready; } catch(_) { readyReg = registration; }
-
+          // Use the registration we just created for getToken (avoid waiting on controller SW)
           // Some environments hang on getToken; protect with a timeout so UI doesn't freeze
           const token = await Promise.race([
             messaging.getToken({
               vapidKey: 'BP-A4DPeS4EWGjWtRUBYPLExlhQXq-4l_te7txwJa8qAR7RxQnbaaabUKpX3akGRFxwAeg9IpUjM1w0Nmrq77KQ',
-              serviceWorkerRegistration: readyReg
+              serviceWorkerRegistration: registration
             }),
             new Promise((_, reject) => setTimeout(() => reject(new Error('getToken timeout')), 20000))
           ]);
