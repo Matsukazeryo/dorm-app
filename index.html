@@ -491,6 +491,7 @@
             <button id="login-logout-btn" class="header-btn">管理者ログイン</button>
             <button id="log-view-btn" class="header-btn" style="background:#8e44ad;">操作履歴</button>
             <button id="change-password-btn" class="header-btn" style="background:#16a085;">パスワード変更</button>
+            <button id="enable-notif-btn" class="header-btn" style="background:#2ecc71; display:none;">通知をオンにする</button>
             <label class="switch" style="margin-left:8px;">
               <input type="checkbox" id="sohmu-toggle">
               <span class="slider round"></span>
@@ -844,12 +845,25 @@
         } catch(_) {}
 
         try {
+          // iOS/Safari requires a user gesture; Androidは自動呼出しだとQuiet UIで無視されることがある
+          // 既に拒否済みなら即案内
+          if (Notification.permission === 'denied') {
+            showNotificationUnblockHelp();
+            updateNotificationUI();
+            return null;
+          }
+
+          const permission = await Notification.requestPermission();
+          if (permission !== 'granted') {
+            if (permission === 'denied') showNotificationUnblockHelp();
+            updateNotificationUI();
+            return null;
+          }
+          updateNotificationUI();
+
           // Always register (or reuse) the root-scoped SW and wait until it's ready
           const swUrl = '/firebase-messaging-sw.js?v=20250928';
           const registration = await navigator.serviceWorker.register(swUrl, { scope: '/' });
-          // iOS/Safari requires a user gesture; if called without one, this may just return 'default'
-          const permission = await Notification.requestPermission();
-          if (permission !== 'granted') return null;
 
           // Use the registration we just created for getToken (avoid waiting on controller SW)
           // Some environments hang on getToken; protect with a timeout so UI doesn't freeze
@@ -895,6 +909,47 @@
         }
       })();
       return __notifInFlight;
+    }
+
+    // ===== 通知UIの更新 & アンブロック案内 =====
+    function updateNotificationUI(){
+      const btn = document.getElementById('enable-notif-btn');
+      if (!btn) return;
+      let supported = false;
+      try{
+        supported = (typeof firebase !== 'undefined' && firebase.messaging && typeof firebase.messaging.isSupported === 'function')
+          ? firebase.messaging.isSupported()
+          : (('Notification' in window) && ('serviceWorker' in navigator));
+      }catch(_){ supported = ('Notification' in window) && ('serviceWorker' in navigator); }
+
+      if (!supported) { btn.style.display = 'none'; return; }
+      const perm = (typeof Notification !== 'undefined' && Notification.permission) || 'default';
+      if (perm === 'granted') {
+        btn.style.display = 'none';
+      } else if (perm === 'denied') {
+        btn.style.display = 'inline-block';
+        btn.textContent = '通知ブロック中（解除してね）';
+      } else {
+        btn.style.display = 'inline-block';
+        btn.textContent = '通知をオンにする';
+      }
+    }
+
+    function showNotificationUnblockHelp(){
+      const isAndroid = /Android/i.test(navigator.userAgent);
+      const msg = isAndroid
+        ? 'Android: 右上の⋮ → サイト設定 → 通知 → 許可 に切り替えてください。\nその後、画面に戻って「通知をオンにする」を押してね。'
+        : '通知がブロックされています。ブラウザのサイト設定から通知を許可してください。';
+      try { alert(msg); } catch(_) {}
+    }
+
+    // Permission状態変化を拾ってボタン表示を追従
+    if (navigator.permissions && navigator.permissions.query) {
+      try {
+        navigator.permissions.query({ name: 'notifications' }).then(p => {
+          try { p.onchange = updateNotificationUI; } catch(_){}
+        });
+      } catch(_) {}
     }
 
     /* === Retry helper to save token later (e.g., if rules briefly block writes) === */
@@ -1244,8 +1299,10 @@
             alert('通知を受信するには、ホーム画面に追加してアプリとして起動してください。');
             localStorage.setItem('suppressStandaloneAlert', 'true');
         }
-        // ページ読み込み時に通知許可をリクエスト
-        requestNotificationPermission().then(() => { try { resyncFcmToken(); } catch(_) {} });
+        // ページ読み込みでの自動プロンプトはQuiet UIで無視されやすい → 明示ボタンで促す
+        updateNotificationUI();
+        // 既にトークンがあるなら同期だけ（無許可なら何もしない）
+        if (localStorage.getItem('fcm_token')) { try { resyncFcmToken(); } catch(_) {} }
         const elements = {
           changePasswordBtn: document.getElementById('change-password-btn'),
           changePasswordModal: document.getElementById('change-password-modal'),
@@ -2615,3 +2672,13 @@ if(elements.changePasswordForm){
 
 </body>
 </html>
+
+        const enableNotifBtn = document.getElementById('enable-notif-btn');
+        if (enableNotifBtn) {
+          enableNotifBtn.addEventListener('click', async () => {
+            const token = await requestNotificationPermission();
+            updateNotificationUI();
+            if (!token && Notification.permission === 'denied') { showNotificationUnblockHelp(); }
+            else if (token) { try { resyncFcmToken(); } catch(_) {} }
+          });
+        }
