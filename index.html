@@ -1303,6 +1303,19 @@
         updateNotificationUI();
         // 既にトークンがあるなら同期だけ（無許可なら何もしない）
         if (localStorage.getItem('fcm_token')) { try { resyncFcmToken(); } catch(_) {} }
+        // 通知ボタン: 明示的に許可を促す（AndroidでQuiet UIを避ける）
+        const enableNotifBtn = document.getElementById('enable-notif-btn');
+        if (enableNotifBtn) {
+          enableNotifBtn.addEventListener('click', async () => {
+            const token = await requestNotificationPermission();
+            updateNotificationUI();
+            if (!token && typeof Notification !== 'undefined' && Notification.permission === 'denied') {
+              showNotificationUnblockHelp();
+            } else if (token) {
+              try { resyncFcmToken(); } catch(_) {}
+            }
+          });
+        }
         const elements = {
           changePasswordBtn: document.getElementById('change-password-btn'),
           changePasswordModal: document.getElementById('change-password-modal'),
@@ -2664,6 +2677,26 @@ if(elements.changePasswordForm){
             document.getElementById('loading-overlay').style.display = 'none';
           };
         });
+        // --- Safety cleanup: もし誤ってコードがテキストとしてDOM直下に出てしまった場合は除去 ---
+        (function cleanupLeakedCode(){
+          try{
+            const body = document.body;
+            if (!body) return;
+            const targets = [
+              /const\s+enableNotifBtn\s*=\s*document\.getElementById\('enable-notif-btn'\)/,
+              /addEventListener\(\'click\',\s*async\s*\(\)\s*=>/,
+              /requestNotificationPermission\(\)/
+            ];
+            for (const node of Array.from(body.childNodes)) {
+              if (node.nodeType === Node.TEXT_NODE) {
+                const val = String(node.nodeValue || '');
+                if (targets.some(re => re.test(val))) {
+                  body.removeChild(node);
+                }
+              }
+            }
+          }catch(_){}
+        })();
     });
 
 // --- 削除CSSブロック: .name-stack{ ... } ---
@@ -2672,13 +2705,3 @@ if(elements.changePasswordForm){
 
 </body>
 </html>
-
-        const enableNotifBtn = document.getElementById('enable-notif-btn');
-        if (enableNotifBtn) {
-          enableNotifBtn.addEventListener('click', async () => {
-            const token = await requestNotificationPermission();
-            updateNotificationUI();
-            if (!token && Notification.permission === 'denied') { showNotificationUnblockHelp(); }
-            else if (token) { try { resyncFcmToken(); } catch(_) {} }
-          });
-        }
