@@ -928,7 +928,7 @@
         btn.style.display = 'none';
       } else if (perm === 'denied') {
         btn.style.display = 'inline-block';
-        btn.textContent = '通知ブロック中（解除してね）';
+        btn.textContent = '通知ブロック中';
       } else {
         btn.style.display = 'inline-block';
         btn.textContent = '通知をオンにする';
@@ -938,7 +938,7 @@
     function showNotificationUnblockHelp(){
       const isAndroid = /Android/i.test(navigator.userAgent);
       const msg = isAndroid
-        ? 'Android: 右上の⋮ → サイト設定 → 通知 → 許可 に切り替えてください。\nその後、画面に戻って「通知をオンにする」を押してね。'
+        ? 'Android: 右上の⋮ → サイト設定 → 通知 → 許可 に切り替えてください。\nその後、画面に戻って「通知をオンにする」を押してください。'
         : '通知がブロックされています。ブラウザのサイト設定から通知を許可してください。';
       try { alert(msg); } catch(_) {}
     }
