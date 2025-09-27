@@ -756,10 +756,10 @@
     </select>
 </footer>
 
-<script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-messaging-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-messaging-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-auth-compat.js"></script>
 
 <script>
     // 重複した Service Worker を自動で解除
@@ -805,6 +805,16 @@
 
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
+    // Enable local persistence (multi-tab safe)
+    try {
+      if (db && typeof db.enablePersistence === 'function') {
+        db.enablePersistence({ synchronizeTabs: true }).catch(function(e){
+          console.warn('enablePersistence warning:', (e && (e.code || e.message)) || e);
+        });
+      }
+    } catch (e) {
+      console.warn('enablePersistence failed:', (e && (e.code || e.message)) || e);
+    }
     const messaging = firebase.messaging();
     const auth = firebase.auth();
 
@@ -1009,34 +1019,59 @@
       return out;
     }
 
-    // 荷物/郵便の個数を ±1 する（0 未満にならないように制御）
+    // 荷物/郵便の個数を ±1（即時にUI反映し、バックグラウンドで保存）
     function updateCount(residentId, residentName, type, value) {
-        // Determine target collection for “all” mode
-        let targetCollection = currentCollectionName;
-        if (currentCollectionName === 'all') {
-            const resident = allResidents.find(r => r.id === residentId);
-            targetCollection = `residents_${resident.dorm}`;
+      // 1) 楽観的にメモリ上のデータとUIを即反映
+      try {
+        const idx = Array.isArray(allResidents) ? allResidents.findIndex(r => r.id === residentId) : -1;
+        if (idx >= 0) {
+          const cur = (typeof allResidents[idx][type] === 'number')
+            ? allResidents[idx][type]
+            : (parseInt(allResidents[idx][type]) || 0);
+          const next = Math.max(0, cur + value);
+          if (next !== cur) {
+            allResidents[idx][type] = next;
+            if (typeof window.renderTable === 'function') {
+              try { window.renderTable(); } catch (_) {}
+            }
+          } else {
+            // 変化なしならサーバー更新も不要
+            return;
+          }
         }
-        const docRef = db.collection(targetCollection).doc(residentId);
+      } catch (_) {}
 
-        db.runTransaction(async (t) => {
+      // 2) 保存先コレクションを決定（両寮表示時にも正しく解決）
+      let targetCollection = currentCollectionName;
+      if (currentCollectionName === 'all') {
+        const res = Array.isArray(allResidents) ? allResidents.find(r => r.id === residentId) : null;
+        const dormKey = (res && res.dorm) || (currentCollectionName.split('_')[1] || 'shofu');
+        targetCollection = `residents_${dormKey}`;
+      }
+      const docRef = db.collection(targetCollection).doc(residentId);
+
+      // 3) まずは FieldValue.increment で高速に更新（競合にも強い）
+      docRef.update({ [type]: firebase.firestore.FieldValue.increment(value) })
+        .then(() => {
+          try {
+            const typeJa = (type === 'luggage') ? '荷物' : '郵便';
+            const dormKey = (targetCollection.split('_')[1] || '');
+            addLog('個数変更', `[${dormKey}] ${residentName} の${typeJa}を ${value > 0 ? '+1' : '-1'}`);
+          } catch (_) {}
+        })
+        .catch((e) => {
+          console.warn('increment 更新に失敗: 競合や権限により再試行します', (e && (e.code || e.message)) || e);
+          // 4) フォールバック: トランザクションで 0 未満禁止を担保
+          db.runTransaction(async (t) => {
             const snap = await t.get(docRef);
             if (!snap.exists) return;
-
             const current = (snap.data()[type] != null) ? snap.data()[type] : 0;
-            let next      = current + value;
-            if (next < 0) next = 0;          // 0 未満は禁止
-
-            // 変化がなければ書き込まない
+            let next = current + value;
+            if (next < 0) next = 0;
             if (next === current) return;
-
             t.update(docRef, { [type]: next });
-
-            // ログ（日本語）を残す
-            const typeJa = (type === 'luggage') ? '荷物' : '郵便';
-            addLog('個数変更',
-                   `[${currentCollectionName.split('_')[1]}] ${residentName} の${typeJa}を ${value > 0 ? '+1' : '-1'}`);
-        }).catch(e => console.error('updateCount transaction error', e));
+          }).catch(err => console.error('updateCount フォールバック失敗', err));
+        });
     }
 
     function deleteResident(residentId, residentName) {
