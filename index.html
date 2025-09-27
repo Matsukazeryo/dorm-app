@@ -939,7 +939,7 @@
       const isAndroid = /Android/i.test(navigator.userAgent);
       const msg = isAndroid
         ? 'Android: 右上の⋮ → サイト設定 → 通知 → 許可 に切り替えてください。\nその後、画面に戻って「通知をオンにする」を押してください。'
-        : '通知がブロックされています。ブラウザのサイト設定から通知を許可してください。';
+        : '通知がブロックされています。設定から通知を許可してください。';
       try { alert(msg); } catch(_) {}
     }
 
