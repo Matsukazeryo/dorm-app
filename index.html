@@ -492,6 +492,7 @@
             <button id="log-view-btn" class="header-btn" style="background:#8e44ad;">操作履歴</button>
             <button id="change-password-btn" class="header-btn" style="background:#16a085;">パスワード変更</button>
             <button id="enable-notif-btn" class="header-btn" style="background:#2ecc71; display:none;">通知をオンにする</button>
+            <button id="morning-run-btn" class="header-btn" style="background:#f39c12;">朝の庶務</button>
             <label class="switch" style="margin-left:8px;">
               <input type="checkbox" id="sohmu-toggle">
               <span class="slider round"></span>
@@ -536,6 +537,14 @@
         </div>
     </div>
 
+    <!-- ===== 朝の庶務バナー ===== -->
+    <div id="morning-banner" class="morning-banner" style="display:none;">
+      <div class="left">🌅 朝の庶務中 <span id="morning-banner-dorm"></span>｜参考＝リセット直前の数</div>
+      <div class="right">
+        <button id="morning-finish-btn" class="header-btn" style="background:#27ae60;">終了</button>
+      </div>
+    </div>
+    <!-- ===== 朝の庶務バナーここまで ===== -->
 
     <div class="table-container">
         <table id="resident-table">
@@ -991,6 +1000,209 @@
     let unsubscribe; 
     let logUnsubscribe = null;  // 操作履歴 listener
 
+    // ==== 朝の庶務（モーニング）状態 ====
+    let isMorningMode = false;
+    const morningRef = {
+      dorm: null,                 // 'shofu' | 'meizen'
+      byId: new Map(),            // residentId -> { luggage, mail, name, roomNumber }
+      byName: new Map(),          // name -> { luggage, mail }
+      startedAt: null
+    };
+    /* ===== 朝の庶務：参考＝「リセット直前」スナップショット取得 → 全0リセット → 参照表示 ===== */
+    function getDormKeyFromCollectionName(name){
+      if (!name || name === 'all') return 'both';
+      return (name.split('_')[1] || 'shofu'); // 'residents_shofu' -> 'shofu'
+    }
+
+    async function snapshotDormToFirestore(dormKey){
+      // runId 例: 20251004T083012_shofu
+      const runId = new Date().toISOString().replace(/[:.]/g,'') + '_' + dormKey;
+      const topRef = db.collection('morning_refs').doc(runId);
+
+      const snap = await db.collection(`residents_${dormKey}`).get();
+      const byId = new Map();
+      const byName = new Map();
+
+      // 親ドキュメント作成
+      const head = {
+        dorm: dormKey,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        count: snap.size
+      };
+      let batch = db.batch();
+      let opCount = 0;
+      batch.set(topRef, head); opCount++;
+
+      snap.forEach(doc => {
+        const d = doc.data() || {};
+        const lug = (typeof d.luggage === 'number') ? d.luggage : (parseInt(d.luggage) || 0);
+        const mail = (typeof d.mail === 'number') ? d.mail : (parseInt(d.mail) || 0);
+        const rdoc = topRef.collection('residents').doc(doc.id);
+        batch.set(rdoc, {
+          name: d.name || '',
+          roomNumber: d.roomNumber || '',
+          luggage: lug,
+          mail: mail
+        });
+        opCount++;
+
+        byId.set(doc.id, { luggage: lug, mail: mail, name: d.name || '', roomNumber: d.roomNumber || '' });
+        if (d.name) byName.set(String(d.name), { luggage: lug, mail: mail });
+
+        if (opCount >= 480){
+          batch.commit().catch(()=>{});
+          batch = db.batch();
+          opCount = 0;
+        }
+      });
+      await batch.commit().catch(()=>{});
+      return { runId, byId, byName };
+    }
+
+    async function zeroDorm(dormKey){
+      const snap = await db.collection(`residents_${dormKey}`).get();
+      let batch = db.batch();
+      let opCount = 0;
+      const commits = [];
+      snap.forEach(doc => {
+        batch.update(db.collection(`residents_${dormKey}`).doc(doc.id), { luggage: 0, mail: 0 });
+        opCount++;
+        if (opCount >= 480){
+          commits.push(batch.commit());
+          batch = db.batch();
+          opCount = 0;
+        }
+      });
+      commits.push(batch.commit());
+      await Promise.all(commits);
+    }
+
+    function showMorningBanner(){
+      const b = document.getElementById('morning-banner');
+      const l = document.getElementById('morning-banner-dorm');
+      if (b){
+        b.style.display = 'flex';
+        if (l) l.textContent = (morningRef.dorm === 'shofu' ? '（松風寮）' : '（明善寮）');
+      }
+    }
+
+    function finishMorning(){
+      isMorningMode = false;
+      document.body.classList.remove('morning-mode');
+      const b = document.getElementById('morning-banner');
+      if (b) b.style.display = 'none';
+      // 参照表示を消去
+      try {
+        document.querySelectorAll('.ref-line, .diff-badge').forEach(el => el.remove());
+      } catch(_){}
+    }
+
+    async function startMorningForDorm(dormKey){
+      const dormLabel = (dormKey === 'shofu' ? '松風寮' : '明善寮');
+      if (!confirm(`「${dormLabel}」の朝の庶務を開始します。\n直前の数を参考として保存し、アプリ上の荷物/郵便を0に初期化します。よろしいですか？`)) return;
+
+      // 1) 参考＝直前の数（スナップショット）を保存
+      let ref;
+      try{
+        ref = await snapshotDormToFirestore(dormKey);
+      }catch(e){
+        console.warn('snapshotDormToFirestore failed', e);
+        alert('参考データの保存に失敗しました（権限やネットワークをご確認ください）。このまま続行します。');
+      }
+
+      // 2) 全0に初期化
+      try{
+        await zeroDorm(dormKey);
+      }catch(e){
+        console.error('zeroDorm failed', e);
+        alert('全0の初期化に失敗しました。');
+        return;
+      }
+
+      // 3) 画面状態を朝モードに
+      isMorningMode = true;
+      document.body.classList.add('morning-mode');
+      morningRef.dorm = dormKey;
+      morningRef.byId = (ref && ref.byId) || new Map();
+      morningRef.byName = (ref && ref.byName) || new Map();
+      morningRef.startedAt = Date.now();
+      try { addLog('朝の庶務開始', `[${dormKey}] 参考＝直前スナップショット取得、全0初期化`); } catch(_){}
+
+      // 4) バナー表示 + テーブル再描画後に参照値を埋め込む
+      showMorningBanner();
+      try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_){}
+      setTimeout(annotateReferenceOnTable, 0);
+    }
+
+    function annotateReferenceOnTable(){
+      if (!isMorningMode) return;
+      const tbody = document.querySelector('#resident-table tbody');
+      if (!tbody) return;
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+      rows.forEach(row => {
+        const tds = row.querySelectorAll('td');
+        if (tds.length < 5) return;
+
+        // 名前セル（第2列）の文字列から名前推定（部屋番号や空白を除去）
+        const nameCell = tds[1];
+        let nameText = (nameCell && nameCell.textContent || '').trim().replace(/\s+/g,' ');
+        if (!nameText) return;
+        nameText = nameText.replace(/^\d+\s*/, '');
+
+        const ref = morningRef.byName.get(nameText);
+        if (!ref) return;
+
+        // 荷物列（第3列）, 郵便列（第4列）
+        const lugCell = tds[2].querySelector('.cell-content') || tds[2];
+        const mailCell = tds[3].querySelector('.cell-content') || tds[3];
+
+        const currentLug = parseInt((tds[2].innerText || '').match(/\d+/)) || 0;
+        const currentMail = parseInt((tds[3].innerText || '').match(/\d+/)) || 0;
+
+        // 既存の ref/diff を一度消去
+        lugCell.querySelectorAll('.ref-line, .diff-badge').forEach(n => n.remove());
+        mailCell.querySelectorAll('.ref-line, .diff-badge').forEach(n => n.remove());
+
+        // 参考行を追加
+        const refL = document.createElement('div');
+        refL.className = 'ref-line';
+        refL.textContent = '参考: ' + ref.luggage;
+        lugCell.appendChild(refL);
+
+        const refM = document.createElement('div');
+        refM.className = 'ref-line';
+        refM.textContent = '参考: ' + ref.mail;
+        mailCell.appendChild(refM);
+
+        // 差分バッジ
+        const diffL = currentLug - ref.luggage;
+        const diffM = currentMail - ref.mail;
+
+        const bL = document.createElement('span');
+        bL.className = 'diff-badge ' + (diffL > 0 ? 'diff-plus' : diffL < 0 ? 'diff-minus' : 'diff-zero');
+        bL.textContent = (diffL > 0 ? '+' : '') + diffL;
+        lugCell.appendChild(bL);
+
+        const bM = document.createElement('span');
+        bM.className = 'diff-badge ' + (diffM > 0 ? 'diff-plus' : diffM < 0 ? 'diff-minus' : 'diff-zero');
+        bM.textContent = (diffM > 0 ? '+' : '') + diffM;
+        mailCell.appendChild(bM);
+      });
+    }
+
+    // renderTable 実行後に参照を再適用（他所でrenderTableが呼ばれてもOK）
+    (function(){
+      const orig = window.renderTable;
+      window.renderTable = function(){
+        if (typeof orig === 'function'){
+          orig.apply(this, arguments);
+        }
+        if (isMorningMode){
+          try { annotateReferenceOnTable(); } catch(_){}
+        }
+      };
+    })();
+
     // 全ての関数をグローバルスコープに配置
     async function addLog(action, details){
         try{
@@ -1390,6 +1602,8 @@
           confirmNameInput     : document.getElementById('confirm-name'),
           editSaveBtn          : document.getElementById('edit-save-btn'),
           editCancelBtn        : document.getElementById('edit-cancel-btn'),
+          morningRunBtn       : document.getElementById('morning-run-btn'),
+          morningBanner       : document.getElementById('morning-banner'),
         };
 
 // Initialize dynamic admin password from Firestore
@@ -1504,6 +1718,55 @@ if(elements.changePasswordForm){
         if (elements.sohmuToggle) {
           elements.sohmuToggle.addEventListener('change', applySohmuUI);
         }
+
+        // ===== 朝の庶務ボタン =====
+        if (elements.morningRunBtn){
+          elements.morningRunBtn.addEventListener('click', async () => {
+            const key = getDormKeyFromCollectionName(currentCollectionName);
+            if (key === 'both'){
+              const okBoth = confirm('現在「両方」を表示中です。松風・明善の両方で朝の庶務を開始しますか？');
+              if (!okBoth) return;
+              await startMorningForDorm('shofu');
+              await startMorningForDorm('meizen');
+            }else{
+              await startMorningForDorm(key);
+            }
+          });
+        }
+        const morningFinishBtn = document.getElementById('morning-finish-btn');
+        if (morningFinishBtn){
+          morningFinishBtn.addEventListener('click', finishMorning);
+        }
+
+        // ===== 既存の「全て0にする」ボタンを安全動作に上書き（直前スナップショット -> 全0）=====
+        if (elements.resetAllBtn){
+          elements.resetAllBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            const ok = confirm('直前の数を参考として保存し、【松風・明善】の荷物/郵便を全て0にします。よろしいですか？');
+            if (!ok) return;
+            try{
+              await startMorningForDorm('shofu');
+              await startMorningForDorm('meizen');
+            }catch(err){
+              console.error('resetAll with snapshot failed', err);
+              alert('全ゼロの実行に失敗しました。通信状況や権限をご確認ください。');
+            }
+          }, true); // capture: true で先に処理
+        }
+
+        // 朝モード中はUI切替後も参照表示を維持
+        if (isMorningMode){
+          try { annotateReferenceOnTable(); } catch(_){}
+        }
+
+        // 検索で絞り込み後に参照再適用
+        document.addEventListener('keyup', function(ev){
+          if (!isMorningMode) return;
+          if (ev.target && (ev.target.id === 'search-input')){
+            setTimeout(() => { try { annotateReferenceOnTable(); } catch(_){ } }, 0);
+          }
+        }, true);
 
         // ===== 強調（赤のみ）ツール =====
         var currentColorTarget = elements.postBodyInput; // 初期は本文
