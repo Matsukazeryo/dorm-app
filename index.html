@@ -111,8 +111,6 @@
         body.resident-edit-mode .ops-container { display: flex; }
         
         .ops-container button { padding: 10px; color: white; border: none; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; }
-        #reset-all-btn { background-color: #f39c12; display: none; }
-        body.count-edit-mode #reset-all-btn { display: block; }
 
         .bulk-ops-container { display: none; width: 100%; gap: 10px; }
         body.resident-edit-mode .bulk-ops-container { display: flex; }
@@ -540,7 +538,6 @@
             </div>
         </div>
         <div class="ops-container">
-            <button id="reset-all-btn" class="header-btn" style="background-color:#f39c12;">【松風・明善】全ての荷物/郵便を0にする</button>
              <div class="bulk-ops-container">
                 <button id="add-resident-btn">新しい寮生を追加</button>
                 <button id="add-bulk-btn">寮生を一括追加</button>
@@ -1164,7 +1161,12 @@
       const l = document.getElementById('morning-banner-dorm');
       if (b){
         b.style.display = 'flex';
-        if (l) l.textContent = (morningRef.dorm === 'shofu' ? '（松風寮）' : '（明善寮）');
+        if (l) {
+          let label = '（松風寮）';
+          if (morningRef.dorm === 'meizen') label = '（明善寮）';
+          else if (morningRef.dorm === 'both') label = '（両寮）';
+          l.textContent = label;
+        }
       }
     }
 
@@ -1219,6 +1221,62 @@
       // 4) バナー表示 + テーブル再描画後に参照値を埋め込む
       showMorningBanner();
       try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_){}
+      scheduleAnnotate();
+      ensureMorningObserver();
+    }
+
+    // 朝の庶務（両寮）起動
+    async function startMorningForBoth(){
+      if (!confirm('「松風寮・明善寮」両方の朝の庶務を開始します。\n直前の数を参考として保存し、両方の荷物/郵便を0に初期化します。よろしいですか？')) return;
+
+      // 1) 参考＝直前の数を両寮分スナップショット
+      let refShofu = null, refMeizen = null;
+      try { refShofu  = await snapshotDormToFirestore('shofu'); }  catch(e){ console.warn('snapshot shofu failed', e); alert('参考データ（松風）の保存に失敗しました。続行します。'); }
+      try { refMeizen = await snapshotDormToFirestore('meizen'); } catch(e){ console.warn('snapshot meizen failed', e); alert('参考データ（明善）の保存に失敗しました。続行します。'); }
+
+      // 2) 両寮を全0初期化
+      try {
+        await zeroDorm('shofu');
+        await zeroDorm('meizen');
+      } catch(e){
+        console.error('zero both failed', e);
+        alert('全0の初期化に失敗しました。');
+        return;
+      }
+
+      // 3) 朝モードON + 参照データを統合
+      isMorningMode = true;
+      document.body.classList.add('morning-mode');
+      morningRef.dorm = 'both';
+      const mergeMap = (a, b) => {
+        const m = new Map();
+        if (a) a.forEach((v, k) => m.set(k, v));
+        if (b) b.forEach((v, k) => m.set(k, v));
+        return m;
+      };
+      morningRef.byId        = mergeMap(refShofu && refShofu.byId,        refMeizen && refMeizen.byId);
+      morningRef.byName      = mergeMap(refShofu && refShofu.byName,      refMeizen && refMeizen.byName);
+      morningRef.byRoom      = mergeMap(refShofu && refShofu.byRoom,      refMeizen && refMeizen.byRoom);
+      morningRef.byComposite = mergeMap(refShofu && refShofu.byComposite, refMeizen && refMeizen.byComposite);
+      morningRef.startedAt   = Date.now();
+
+      try { addLog('朝の庶務開始', '[both] 参考＝直前スナップショット取得、両寮を全0初期化'); } catch(_){}
+
+      // 4) 画面を「両方」表示に自動切替
+      try {
+        localStorage.setItem('currentDorm', 'all');
+        currentCollectionName = 'all';
+      } catch(_){}
+      const allBtn = document.querySelector('#dorm-selector button[data-dorm="all"]');
+      if (allBtn) {
+        try { allBtn.click(); } catch(_){}
+      }
+
+      // 5) バナー表示 + 参照埋め込み
+      showMorningBanner();
+      if (typeof window.renderTable === 'function') {
+        try { window.renderTable(); } catch(_){}
+      }
       scheduleAnnotate();
       ensureMorningObserver();
     }
@@ -1855,12 +1913,26 @@ if(elements.changePasswordForm){
           if (typeof window.renderTable === 'function') {
             try { window.renderTable(); } catch(_) {}
           }
+          // 庶務モードONの時だけ「朝の庶務」ボタンを表示
+          if (elements.morningRunBtn) {
+            const on = !!(elements.sohmuToggle && elements.sohmuToggle.checked);
+            elements.morningRunBtn.style.display = on ? 'inline-block' : 'none';
+          }
         }
         // 初期適用 & 変更監視（renderTable未定義の段階でも例外を出さない）
         applySohmuUI();
         if (elements.sohmuToggle) {
           elements.sohmuToggle.addEventListener('change', applySohmuUI);
         }
+        // 朝の庶務（両寮）起動
+        if (elements.morningRunBtn) {
+          elements.morningRunBtn.addEventListener('click', startMorningForBoth);
+        }
+        // 朝の庶務 終了
+        (function(){
+          const btn = document.getElementById('morning-finish-btn');
+          if (btn) btn.addEventListener('click', finishMorning);
+        })();
 
         // ===== 朝の庶務ボタン =====
         if (elements.morningRunBtn){
