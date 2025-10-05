@@ -1004,14 +1004,46 @@
     let isMorningMode = false;
     const morningRef = {
       dorm: null,                 // 'shofu' | 'meizen'
-      byId: new Map(),            // residentId -> { luggage, mail, name, roomNumber }
-      byName: new Map(),          // name -> { luggage, mail }
+      byId: new Map(),            // residentId -> { luggage, mail, name, roomNumber, id }
+      byName: new Map(),          // normalized name -> obj
+      byRoom: new Map(),          // roomNumber -> [obj, ...]
+      byComposite: new Map(),     // `${roomNumber}::${normalizedName}` -> obj
       startedAt: null
     };
+    // DOM変化を検知して再注入するためのオブザーバ
+    let __morningObserver = null;
     /* ===== 朝の庶務：参考＝「リセット直前」スナップショット取得 → 全0リセット → 参照表示 ===== */
     function getDormKeyFromCollectionName(name){
       if (!name || name === 'all') return 'both';
       return (name.split('_')[1] || 'shofu'); // 'residents_shofu' -> 'shofu'
+    }
+
+    // 表示名を比較用に正規化（全角→半角、空白圧縮、飾り文字除去）
+    function normalizeKey(s){
+      try{
+        return String(s || '')
+          .normalize('NFKC')
+          .replace(/\s+/g, ' ')
+          .replace(/[☆★◆◇◎○●⚫︎◯・･]/g, '')
+          .trim();
+      }catch(_){
+        return String(s || '').trim();
+      }
+    }
+
+    // tbodyの差し替え・再描画を監視して参照行を再注入
+    function ensureMorningObserver(){
+      const tbody = document.querySelector('#resident-table tbody');
+      if (!tbody) return;
+      if (__morningObserver) {
+        try { __morningObserver.disconnect(); } catch(_){}
+      }
+      __morningObserver = new MutationObserver(() => {
+        if (isMorningMode){
+          try { annotateReferenceOnTable(); } catch(_){}
+        }
+      });
+      __morningObserver.observe(tbody, { childList: true, subtree: true });
     }
 
     async function snapshotDormToFirestore(dormKey){
@@ -1022,6 +1054,8 @@
       const snap = await db.collection(`residents_${dormKey}`).get();
       const byId = new Map();
       const byName = new Map();
+      const byRoom = new Map();
+      const byComposite = new Map();
 
       // 親ドキュメント作成
       const head = {
@@ -1046,8 +1080,24 @@
         });
         opCount++;
 
-        byId.set(doc.id, { luggage: lug, mail: mail, name: d.name || '', roomNumber: d.roomNumber || '' });
-        if (d.name) byName.set(String(d.name), { luggage: lug, mail: mail });
+        const room = (d.roomNumber || '').toString().trim();
+        const obj = { id: doc.id, luggage: lug, mail: mail, name: d.name || '', roomNumber: room };
+
+        byId.set(doc.id, obj);
+
+        const nameKey = normalizeKey(d.name || '');
+        if (nameKey) {
+          byName.set(nameKey, obj);
+        }
+
+        if (room) {
+          const arr = byRoom.get(room) || [];
+          arr.push(obj);
+          byRoom.set(room, arr);
+          if (nameKey) {
+            byComposite.set(room + '::' + nameKey, obj);
+          }
+        }
 
         if (opCount >= 480){
           batch.commit().catch(()=>{});
@@ -1056,7 +1106,7 @@
         }
       });
       await batch.commit().catch(()=>{});
-      return { runId, byId, byName };
+      return { runId, byId, byName, byRoom, byComposite };
     }
 
     async function zeroDorm(dormKey){
@@ -1095,6 +1145,10 @@
       try {
         document.querySelectorAll('.ref-line, .diff-badge').forEach(el => el.remove());
       } catch(_){}
+      if (__morningObserver){
+        try { __morningObserver.disconnect(); } catch(_){}
+        __morningObserver = null;
+      }
     }
 
     async function startMorningForDorm(dormKey){
@@ -1125,6 +1179,8 @@
       morningRef.dorm = dormKey;
       morningRef.byId = (ref && ref.byId) || new Map();
       morningRef.byName = (ref && ref.byName) || new Map();
+      morningRef.byRoom = (ref && ref.byRoom) || new Map();
+      morningRef.byComposite = (ref && ref.byComposite) || new Map();
       morningRef.startedAt = Date.now();
       try { addLog('朝の庶務開始', `[${dormKey}] 参考＝直前スナップショット取得、全0初期化`); } catch(_){}
 
@@ -1132,6 +1188,7 @@
       showMorningBanner();
       try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_){}
       setTimeout(annotateReferenceOnTable, 0);
+      ensureMorningObserver();
     }
 
     function annotateReferenceOnTable(){
@@ -1143,14 +1200,65 @@
         const tds = row.querySelectorAll('td');
         if (tds.length < 5) return;
 
-        // 名前セル（第2列）の文字列から名前推定（部屋番号や空白を除去）
+        // --- できる限りIDで特定し、ダメなら（部屋番号＋名前正規化）で照合 ---
         const nameCell = tds[1];
-        let nameText = (nameCell && nameCell.textContent || '').trim().replace(/\s+/g,' ');
-        if (!nameText) return;
-        nameText = nameText.replace(/^\d+\s*/, '');
+        let refObj = null;
 
-        const ref = morningRef.byName.get(nameText);
-        if (!ref) return;
+        // 1) 編集ボタンの onclick から residentId を拾う（存在すれば最強）
+        try {
+          const editBtn = row.querySelector('button.edit-btn');
+          if (editBtn) {
+            const oc = editBtn.getAttribute('onclick') || '';
+            const m = oc && oc.match(/openEditResidentModal\(['"]([^'"]+)['"]\)/);
+            if (m && m[1] && morningRef.byId.has(m[1])) {
+              refObj = morningRef.byId.get(m[1]);
+            }
+          }
+        } catch(_){}
+
+        // 2) data属性でのID
+        if (!refObj) {
+          const rid = row.getAttribute('data-resident-id') || row.getAttribute('data-id');
+          if (rid && morningRef.byId.has(rid)) {
+            refObj = morningRef.byId.get(rid);
+          }
+        }
+
+        // 3) 表示テキストから（部屋番号＋名前正規化）で照合
+        if (!refObj) {
+          let raw = (nameCell && nameCell.textContent || '').trim();
+          // 部屋番号は .room-number があればそこから、無ければ先頭の数字群
+          const rnEl = nameCell ? nameCell.querySelector('.room-number') : null;
+          const room = rnEl ? rnEl.textContent.trim() : ((raw.match(/^\s*(\d{1,4})/) || [,''])[1] || '').trim();
+
+          // 飾りや寮名などを取り除いて名前を正規化
+          let nameOnly = raw;
+          if (room) nameOnly = nameOnly.replace(new RegExp('^\\s*' + room + '\\s*'), '');
+          nameOnly = nameOnly.replace(/[☆★]/g, '')
+                             .replace(/(松風寮|明善寮)/g, '')
+                             .replace(/[()\[\]（）]/g, ' ')
+                             .replace(/\s+/g, ' ')
+                             .trim();
+          const key = normalizeKey(nameOnly);
+
+          // room+name -> byComposite
+          if (room && key) {
+            const comp = morningRef.byComposite.get(room + '::' + key);
+            if (comp) refObj = comp;
+          }
+          // nameのみ
+          if (!refObj && key) {
+            const byN = morningRef.byName.get(key);
+            if (byN) refObj = byN;
+          }
+          // roomのみ（一意のときだけ）
+          if (!refObj && room) {
+            const arr = morningRef.byRoom.get(room) || [];
+            if (arr.length === 1) refObj = arr[0];
+          }
+        }
+
+        if (!refObj) return; // 照合できない行はスキップ
 
         // 荷物列（第3列）, 郵便列（第4列）
         const lugCell = tds[2].querySelector('.cell-content') || tds[2];
@@ -1166,17 +1274,17 @@
         // 参考行を追加
         const refL = document.createElement('div');
         refL.className = 'ref-line';
-        refL.textContent = '参考: ' + ref.luggage;
+        refL.textContent = '参考: ' + refObj.luggage;
         lugCell.appendChild(refL);
 
         const refM = document.createElement('div');
         refM.className = 'ref-line';
-        refM.textContent = '参考: ' + ref.mail;
+        refM.textContent = '参考: ' + refObj.mail;
         mailCell.appendChild(refM);
 
         // 差分バッジ
-        const diffL = currentLug - ref.luggage;
-        const diffM = currentMail - ref.mail;
+        const diffL = currentLug - refObj.luggage;
+        const diffM = currentMail - refObj.mail;
 
         const bL = document.createElement('span');
         bL.className = 'diff-badge ' + (diffL > 0 ? 'diff-plus' : diffL < 0 ? 'diff-minus' : 'diff-zero');
@@ -1759,6 +1867,9 @@ if(elements.changePasswordForm){
         if (isMorningMode){
           try { annotateReferenceOnTable(); } catch(_){}
         }
+
+        // tbody差し替えに追従（朝モード時のみ）
+        ensureMorningObserver();
 
         // 検索で絞り込み後に参照再適用
         document.addEventListener('keyup', function(ev){
