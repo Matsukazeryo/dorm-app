@@ -471,11 +471,32 @@
             font-size: 2.2em; /* 2.5em → 少しだけ縮小 */
           }
         }
-  /* === 庶務モードOFF: 上部のコントロールを非表示にする === */
-  body.sohmu-off .controls-container,
-  body.sohmu-off .middle-controls{
-    display: none !important;
+        /* === 庶務モードOFF: 上部のコントロールを非表示にする === */
+        body.sohmu-off .controls-container,
+        body.sohmu-off .middle-controls{
+          display: none !important;
+        }
+
+  /* ===== 朝の庶務（モーニング）UI ===== */
+  .morning-banner{
+    background: var(--announce-item-bg);
+    border: 1px dashed var(--header-border);
+    padding: 8px 10px;
+    border-radius: 6px;
+    margin: 8px 0;
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
   }
+  .morning-banner .left{ font-weight:600; color:var(--header-text); }
+  .ref-line{ display:block; font-size:0.78em; opacity:.85; margin-top:2px; color:#7f8c8d; }
+  body.dark-theme .ref-line{ color:#bdc3c7; }
+  .diff-badge{ display:inline-block; font-size:.74em; padding:2px 6px; border-radius:12px; margin-left:6px; background:#95a5a6; color:#fff; }
+  .diff-plus{ background:#3498db; }
+  .diff-minus{ background:#e67e22; }
+  .diff-zero{ background:#95a5a6; }
+  body.morning-mode .header-area h1::after{ content:"（朝の庶務中）"; font-size:.6em; margin-left:.4em; color:var(--header-text); opacity:.8; }
 </style>
 </head>
 <body>
@@ -1012,6 +1033,16 @@
     };
     // DOM変化を検知して再注入するためのオブザーバ
     let __morningObserver = null;
+    let __annotating = false;
+    let __annotateTimer = null;
+    function scheduleAnnotate(){
+      if (!isMorningMode) return;
+      if (__annotateTimer) return;
+      __annotateTimer = setTimeout(() => {
+        __annotateTimer = null;
+        try { annotateReferenceOnTable(); } catch(_) {}
+      }, 0);
+    }
     /* ===== 朝の庶務：参考＝「リセット直前」スナップショット取得 → 全0リセット → 参照表示 ===== */
     function getDormKeyFromCollectionName(name){
       if (!name || name === 'all') return 'both';
@@ -1038,12 +1069,13 @@
       if (__morningObserver) {
         try { __morningObserver.disconnect(); } catch(_){}
       }
-      __morningObserver = new MutationObserver(() => {
-        if (isMorningMode){
-          try { annotateReferenceOnTable(); } catch(_){}
-        }
+      __morningObserver = new MutationObserver((mutations) => {
+        if (!isMorningMode) return;
+        if (__annotating) return; // ignore our own DOM writes
+        const relevant = mutations.some(m => m.type === 'childList' && m.target === tbody);
+        if (relevant) scheduleAnnotate();
       });
-      __morningObserver.observe(tbody, { childList: true, subtree: true });
+      __morningObserver.observe(tbody, { childList: true });
     }
 
     async function snapshotDormToFirestore(dormKey){
@@ -1187,7 +1219,7 @@
       // 4) バナー表示 + テーブル再描画後に参照値を埋め込む
       showMorningBanner();
       try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_){}
-      setTimeout(annotateReferenceOnTable, 0);
+      scheduleAnnotate();
       ensureMorningObserver();
     }
 
@@ -1195,6 +1227,8 @@
       if (!isMorningMode) return;
       const tbody = document.querySelector('#resident-table tbody');
       if (!tbody) return;
+      if (__annotating) return;
+      __annotating = true;
       const rows = Array.from(tbody.querySelectorAll('tr'));
       rows.forEach(row => {
         const tds = row.querySelectorAll('td');
@@ -1296,6 +1330,7 @@
         bM.textContent = (diffM > 0 ? '+' : '') + diffM;
         mailCell.appendChild(bM);
       });
+      __annotating = false;
     }
 
     // renderTable 実行後に参照を再適用（他所でrenderTableが呼ばれてもOK）
