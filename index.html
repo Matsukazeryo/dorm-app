@@ -559,8 +559,8 @@
     <div id="morning-banner" class="morning-banner" style="display:none;">
       <div class="left">🌅 朝の庶務中 <span id="morning-banner-dorm"></span>｜参考＝リセット直前の数</div>
       <div class="right">
-        <button id="morning-cancel-btn" class="header-btn" style="background:#7f8c8d;">取り消し</button>
-        <button id="morning-finish-btn" class="header-btn" style="background:#27ae60;">終了</button>
+        <button id="morning-cancel-btn" type="button" class="header-btn" style="background:#7f8c8d;">取り消し</button>
+        <button id="morning-finish-btn" type="button" class="header-btn" style="background:#27ae60;">終了</button>
       </div>
     </div>
     <!-- ===== 朝の庶務バナーここまで ===== -->
@@ -1493,6 +1493,61 @@
       return out;
     }
 
+    // ===== 朝の庶務「取り消し」ボタン処理 =====
+    async function cancelMorningAndRestore(){
+      if (!isMorningMode) return;
+      const __cancelBtnRef = document.getElementById('morning-cancel-btn');
+      if (__cancelBtnRef) __cancelBtnRef.disabled = true;
+      // オーバーレイ表示
+      const overlay = document.getElementById('loading-overlay');
+      if (overlay) { overlay.style.display = 'flex'; }
+      try {
+        // 寮種別で復元
+        if (morningRef.dorm === 'shofu' || morningRef.dorm === 'meizen') {
+          // 各住人の荷物/郵便を参考値に戻す
+          const batch = db.batch();
+          morningRef.byId.forEach((refObj, rid) => {
+            const docRef = db.collection(`residents_${morningRef.dorm}`).doc(rid);
+            batch.update(docRef, { luggage: refObj.luggage, mail: refObj.mail });
+          });
+          await batch.commit();
+        } else if (morningRef.dorm === 'both') {
+          // 両寮: byIdの各住人を寮ごとに分けて復元
+          const batchShofu = db.batch();
+          const batchMeizen = db.batch();
+          morningRef.byId.forEach((refObj, rid) => {
+            // refObj.id, refObj.dorm
+            // 推定: idの先頭文字やmorningRef.byIdの内容から判別
+            // ここでは両寮分の復元を全て試みる
+            if (refObj && refObj.id) {
+              // どちらに属するかはidから判別できなければ両方試みる
+              if (refObj.dorm === 'shofu' || (!refObj.dorm && rid.startsWith('sh'))) {
+                batchShofu.update(db.collection('residents_shofu').doc(rid), { luggage: refObj.luggage, mail: refObj.mail });
+              } else if (refObj.dorm === 'meizen' || (!refObj.dorm && rid.startsWith('me'))) {
+                batchMeizen.update(db.collection('residents_meizen').doc(rid), { luggage: refObj.luggage, mail: refObj.mail });
+              } else {
+                // 両方に同じIDが存在することはほぼ無いが、両方に投げる
+                batchShofu.update(db.collection('residents_shofu').doc(rid), { luggage: refObj.luggage, mail: refObj.mail });
+                batchMeizen.update(db.collection('residents_meizen').doc(rid), { luggage: refObj.luggage, mail: refObj.mail });
+              }
+            }
+          });
+          await Promise.all([batchShofu.commit(), batchMeizen.commit()]);
+        }
+        finishMorning();
+        try { addLog('朝の庶務取り消し', `[${morningRef.dorm}] 参考値で復元`); } catch(_){}
+        alert('朝の庶務を取り消して復元しました。');
+      } catch(e){
+        alert('復元に失敗しました。ネットワークや権限をご確認ください。');
+        console.error('cancelMorningAndRestore error', e);
+      } finally {
+        const overlay = document.getElementById('loading-overlay');
+        if (overlay) overlay.style.display = 'none';
+        const __cancelBtnRef2 = document.getElementById('morning-cancel-btn');
+        if (__cancelBtnRef2) __cancelBtnRef2.disabled = false;
+      }
+    }
+
     // 荷物/郵便の個数を ±1（即時にUI反映し、バックグラウンドで保存）
     function updateCount(residentId, residentName, type, value) {
       // 1) 楽観的にメモリ上のデータとUIを即反映
@@ -1810,10 +1865,61 @@
           editCancelBtn        : document.getElementById('edit-cancel-btn'),
           morningRunBtn       : document.getElementById('morning-run-btn'),
           morningBanner       : document.getElementById('morning-banner'),
+          // 朝の庶務バナー操作ボタン
+          morningCancelBtn    : document.getElementById('morning-cancel-btn'),
+          morningFinishBtn    : document.getElementById('morning-finish-btn'),
         };
 
 // Initialize dynamic admin password from Firestore
 initAdminPassword();
+// ===== 朝の庶務バナー: 操作ボタンのイベントバインド =====
+const __cancelBtn = elements.morningCancelBtn;
+const __finishBtn = elements.morningFinishBtn;
+if (__cancelBtn) {
+  __cancelBtn.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    try { cancelMorningAndRestore(); } catch(_) {}
+  });
+}
+if (__finishBtn) {
+  __finishBtn.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    try { finishMorning(); } catch(_) {}
+  });
+}
+if (elements.morningRunBtn) {
+  elements.morningRunBtn.addEventListener('click', async (ev) => {
+    ev.preventDefault();
+    // 現在の寮表示に応じて
+    const dormKey = (() => {
+      if (currentCollectionName === 'residents_shofu') return 'shofu';
+      if (currentCollectionName === 'residents_meizen') return 'meizen';
+      if (currentCollectionName === 'all') return 'both';
+      return (currentCollectionName.split('_')[1] || 'shofu');
+    })();
+    if (dormKey === 'both') {
+      await startMorningForBoth();
+    } else {
+      await startMorningForDorm(dormKey);
+    }
+  });
+}
+
+// === Fallback delegation (DOMが差し替わっても確実に反応) ===
+document.addEventListener('click', (ev) => {
+  const cancelEl = ev.target && ev.target.closest && ev.target.closest('#morning-cancel-btn');
+  if (cancelEl) {
+    ev.preventDefault();
+    try { cancelMorningAndRestore(); } catch(_) {}
+    return;
+  }
+  const finishEl = ev.target && ev.target.closest && ev.target.closest('#morning-finish-btn');
+  if (finishEl) {
+    ev.preventDefault();
+    try { finishMorning(); } catch(_) {}
+    return;
+  }
+});
 
 // ===== パスワード変更モーダルの挙動 =====
 function openChangePasswordModal(){
