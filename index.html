@@ -1186,70 +1186,27 @@
       }
     }
 
-    async function startMorningForDorm(dormKey, skipConfirm){
-        const dormLabel = (dormKey === 'shofu' ? '松風寮' : '明善寮');
-        if (!skipConfirm) {
-          if (!confirm(`「${dormLabel}」の朝の庶務を開始します。\n直前の数を参考として保存し、アプリ上の荷物/郵便を0に初期化します。よろしいですか？`)) return;
-        }
+    // ===== 統一版: 朝の庶務モード開始（両寮のみ） =====
+    async function startMorning(skipConfirm){
+      if (!skipConfirm) {
+        if (!confirm('朝の庶務モードを開始します。直前の数を参考として保存し、松風寮・明善寮の荷物/郵便を0に初期化します。よろしいですか？')) return;
+      }
+      const overlay = document.getElementById('loading-overlay');
+      if (overlay) overlay.style.display = 'flex';
 
-        const overlay = document.getElementById('loading-overlay');
-        if (overlay) overlay.style.display = 'flex';
-
-        let ref;
-        try{
-          ref = await snapshotDormToFirestore(dormKey);
-        }catch(e){
-          console.warn('snapshotDormToFirestore failed', e);
-          alert('参考データの保存に失敗しました（権限やネットワークをご確認ください）。このまま続行します。');
-        }
-
-        try{
-          await zeroDorm(dormKey);
-        }catch(e){
-          console.error('zeroDorm failed', e);
-          alert('全0の初期化に失敗しました。');
-          if (overlay) overlay.style.display = 'none';
-          return;
-        }
-
-        isMorningMode = true;
-        document.body.classList.add('morning-mode');
-        morningRef.dorm = dormKey;
-        morningRef.byId = (ref && ref.byId) || new Map();
-        morningRef.byName = (ref && ref.byName) || new Map();
-        morningRef.byRoom = (ref && ref.byRoom) || new Map();
-        morningRef.byComposite = (ref && ref.byComposite) || new Map();
-        morningRef.startedAt = Date.now();
-        try { addLog('朝の庶務開始', `[${dormKey}] 参考＝直前スナップショット取得、全0初期化`); } catch(_){}
-
-        showMorningBanner();
-        try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_){}
-        scheduleAnnotate();
-        ensureMorningObserver();
-
-        if (overlay) overlay.style.display = 'none';
-    }
-
-    // 朝の庶務（両寮）起動
-    async function startMorningForBoth(){
-      if (!confirm('「松風寮・明善寮」両方の朝の庶務を開始します。\n直前の数を参考として保存し、両方の荷物/郵便を0に初期化します。よろしいですか？')) return;
-
-      // 1) 参考＝直前の数を両寮分スナップショット
       let refShofu = null, refMeizen = null;
       try { refShofu  = await snapshotDormToFirestore('shofu'); }  catch(e){ console.warn('snapshot shofu failed', e); alert('参考データ（松風）の保存に失敗しました。続行します。'); }
       try { refMeizen = await snapshotDormToFirestore('meizen'); } catch(e){ console.warn('snapshot meizen failed', e); alert('参考データ（明善）の保存に失敗しました。続行します。'); }
 
-      // 2) 両寮を全0初期化
       try {
-        await zeroDorm('shofu');
-        await zeroDorm('meizen');
+        await Promise.all([ zeroDorm('shofu'), zeroDorm('meizen') ]);
       } catch(e){
         console.error('zero both failed', e);
         alert('全0の初期化に失敗しました。');
+        if (overlay) overlay.style.display = 'none';
         return;
       }
 
-      // 3) 朝モードON + 参照データを統合
       isMorningMode = true;
       document.body.classList.add('morning-mode');
       morningRef.dorm = 'both';
@@ -1267,23 +1224,28 @@
 
       try { addLog('朝の庶務開始', '[both] 参考＝直前スナップショット取得、両寮を全0初期化'); } catch(_){}
 
-      // 4) 画面を「両方」表示に自動切替
+      // 画面を「両方」表示に固定
       try {
         localStorage.setItem('currentDorm', 'all');
         currentCollectionName = 'all';
       } catch(_){}
       const allBtn = document.querySelector('#dorm-selector button[data-dorm="all"]');
-      if (allBtn) {
-        try { allBtn.click(); } catch(_){}
-      }
+      if (allBtn) { try { allBtn.click(); } catch(_){ } }
 
-      // 5) バナー表示 + 参照埋め込み
       showMorningBanner();
-      if (typeof window.renderTable === 'function') {
-        try { window.renderTable(); } catch(_){}
-      }
+      try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_){}
       scheduleAnnotate();
       ensureMorningObserver();
+
+      if (overlay) overlay.style.display = 'none';
+    }
+
+    async function startMorningForDorm(dormKey, skipConfirm){
+      return startMorning(!!skipConfirm);
+    }
+
+    async function startMorningForBoth(skipConfirm){
+      return startMorning(!!skipConfirm);
     }
 
     function annotateReferenceOnTable(){
@@ -1838,6 +1800,44 @@ async function openEditResidentModal(residentId){
     }
 
     document.addEventListener('DOMContentLoaded', () => {
+    // ===== 起動ボタンを統一関数へ（キャプチャで先取り・二重確認防止） =====
+    document.addEventListener('DOMContentLoaded', () => {
+      const runBtn = document.getElementById('morning-run-btn');
+      if (runBtn && !runBtn.dataset.boundUnified) {
+        runBtn.dataset.boundUnified = '1';
+        runBtn.addEventListener('click', (ev) => {
+          try { ev.preventDefault(); ev.stopImmediatePropagation(); } catch(_){}
+          startMorning(false); // ← 確認はここで1回だけ
+        }, true); // capture
+      }
+
+      // ===== 表示トグル（ふりがな / サークル / 寮）復活 & 永続化 =====
+      const f = document.getElementById('toggle-furigana');
+      const c = document.getElementById('toggle-circle');
+      const d = document.getElementById('toggle-dorm');
+      const apply = () => {
+        const sF = localStorage.getItem('show_furigana') === '1';
+        const sC = localStorage.getItem('show_circle')   === '1';
+        const sD = localStorage.getItem('show_dorm')     === '1';
+        if (f) { f.checked = sF; document.body.classList.toggle('show-furigana', sF); }
+        if (c) { c.checked = sC; document.body.classList.toggle('show-circle',   sC); }
+        if (d) { d.checked = sD; document.body.classList.toggle('show-dorm',     sD); }
+        try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_){}
+      };
+      apply();
+      if (f && !f.dataset.bound){ f.dataset.bound='1'; f.addEventListener('change', ()=>{ localStorage.setItem('show_furigana', f.checked?'1':'0'); apply(); }); }
+      if (c && !c.dataset.bound){ c.dataset.bound='1'; c.addEventListener('change', ()=>{ localStorage.setItem('show_circle',   c.checked?'1':'0'); apply(); }); }
+      if (d && !d.dataset.bound){ d.dataset.bound='1'; d.addEventListener('change', ()=>{ localStorage.setItem('show_dorm',     d.checked?'1':'0'); apply(); }); }
+    });
+
+    // === 予備: クリック委譲（再描画で直付けが外れても動く） ===
+    document.addEventListener('click', (ev) => {
+      const runEl = ev.target && ev.target.closest && ev.target.closest('#morning-run-btn');
+      if (runEl) {
+        try { ev.preventDefault(); } catch(_){}
+        startMorning(false);
+      }
+    }, true);
         // Show standalone-mode alert only once
         const suppressAlert = localStorage.getItem('suppressStandaloneAlert');
         const isiOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
