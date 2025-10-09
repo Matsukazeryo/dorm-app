@@ -1495,57 +1495,86 @@
 
     // ===== 朝の庶務「取り消し」ボタン処理 =====
     async function cancelMorningAndRestore(){
-      if (!isMorningMode) return;
-      const __cancelBtnRef = document.getElementById('morning-cancel-btn');
-      if (__cancelBtnRef) __cancelBtnRef.disabled = true;
-      // オーバーレイ表示
-      const overlay = document.getElementById('loading-overlay');
-      if (overlay) { overlay.style.display = 'flex'; }
-      try {
-        // 寮種別で復元
-        if (morningRef.dorm === 'shofu' || morningRef.dorm === 'meizen') {
-          // 各住人の荷物/郵便を参考値に戻す
-          const batch = db.batch();
+      try{
+        if (!isMorningMode) return;
+        const overlay = document.getElementById('loading-overlay');
+        if (overlay) overlay.style.display = 'flex';
+        const btn = document.getElementById('morning-cancel-btn');
+        if (btn) btn.disabled = true;
+
+        // 参考スナップショットから復元する対象を寮別に正確に仕分け
+        const updatesByDorm = { shofu: [], meizen: [] };
+        if (morningRef && morningRef.byId && typeof morningRef.byId.forEach === 'function') {
           morningRef.byId.forEach((refObj, rid) => {
-            const docRef = db.collection(`residents_${morningRef.dorm}`).doc(rid);
-            batch.update(docRef, { luggage: refObj.luggage, mail: refObj.mail });
+            let dormKey = null;
+            // 1) allResidents から正確な寮を特定（両寮モードでもOK）
+            try{
+              const r = Array.isArray(allResidents) ? allResidents.find(x => x.id === rid) : null;
+              if (r && (r.dorm === 'shofu' || r.dorm === 'meizen')) dormKey = r.dorm;
+            }catch(_){}
+            // 2) 単寮モードで寮が分かっている場合はフォールバック
+            if (!dormKey && (morningRef.dorm === 'shofu' || morningRef.dorm === 'meizen')) dormKey = morningRef.dorm;
+            // 3) まだ不明なら安全のためスキップ（誤コレ更新 → 権限/存在エラーを避ける）
+            if (!dormKey) return;
+            updatesByDorm[dormKey].push({ id: rid, luggage: refObj.luggage || 0, mail: refObj.mail || 0 });
           });
-          await batch.commit();
-        } else if (morningRef.dorm === 'both') {
-          // 両寮: byIdの各住人を寮ごとに分けて復元
-          const batchShofu = db.batch();
-          const batchMeizen = db.batch();
-          morningRef.byId.forEach((refObj, rid) => {
-            // refObj.id, refObj.dorm
-            // 推定: idの先頭文字やmorningRef.byIdの内容から判別
-            // ここでは両寮分の復元を全て試みる
-            if (refObj && refObj.id) {
-              // どちらに属するかはidから判別できなければ両方試みる
-              if (refObj.dorm === 'shofu' || (!refObj.dorm && rid.startsWith('sh'))) {
-                batchShofu.update(db.collection('residents_shofu').doc(rid), { luggage: refObj.luggage, mail: refObj.mail });
-              } else if (refObj.dorm === 'meizen' || (!refObj.dorm && rid.startsWith('me'))) {
-                batchMeizen.update(db.collection('residents_meizen').doc(rid), { luggage: refObj.luggage, mail: refObj.mail });
-              } else {
-                // 両方に同じIDが存在することはほぼ無いが、両方に投げる
-                batchShofu.update(db.collection('residents_shofu').doc(rid), { luggage: refObj.luggage, mail: refObj.mail });
-                batchMeizen.update(db.collection('residents_meizen').doc(rid), { luggage: refObj.luggage, mail: refObj.mail });
-              }
-            }
-          });
-          await Promise.all([batchShofu.commit(), batchMeizen.commit()]);
         }
-        finishMorning();
-        try { addLog('朝の庶務取り消し', `[${morningRef.dorm}] 参考値で復元`); } catch(_){}
-        alert('朝の庶務を取り消して復元しました。');
+
+        // Firestore バッチで安全に復元（各 480 件で区切る）
+        for (const dormKey of ['shofu','meizen']){
+          const list = updatesByDorm[dormKey];
+          if (!list || !list.length) continue;
+          let batch = db.batch();
+          let opCount = 0;
+          for (const u of list){
+            const dref = db.collection(`residents_${dormKey}`).doc(u.id);
+            batch.update(dref, { luggage: u.luggage, mail: u.mail });
+            opCount++;
+            if (opCount >= 480){
+              await batch.commit();
+              batch = db.batch();
+              opCount = 0;
+            }
+          }
+          await batch.commit();
+        }
+
+        try { addLog('朝の庶務取り消し', '参考の数に復元'); } catch(_){}
+        alert('朝の庶務を取り消し、参考の数に戻しました。');
       } catch(e){
-        alert('復元に失敗しました。ネットワークや権限をご確認ください。');
         console.error('cancelMorningAndRestore error', e);
+        const detail = (e && (e.code || e.message)) ? `\n[${e.code || 'error'}] ${e.message}` : '';
+        alert('取り消しに失敗しました。' + detail + '\n権限やネットワークを確認してください。');
       } finally {
         const overlay = document.getElementById('loading-overlay');
         if (overlay) overlay.style.display = 'none';
-        const __cancelBtnRef2 = document.getElementById('morning-cancel-btn');
-        if (__cancelBtnRef2) __cancelBtnRef2.disabled = false;
+        const btn = document.getElementById('morning-cancel-btn');
+        if (btn) btn.disabled = false;
+        // 表示上も朝モードを終了して注釈を消す
+        finishMorning();
+        try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_){}
       }
+    }
+
+    // === Fallback delegation (DOM差し替えでも確実に反応) ※一度だけ登録 ===
+    if (!window.__morningDelegationBound) {
+      document.addEventListener('click', (ev) => {
+        const cancelEl = ev.target && ev.target.closest && ev.target.closest('#morning-cancel-btn');
+        if (cancelEl) {
+          if (cancelEl.disabled) return;
+          ev.preventDefault();
+          try { cancelMorningAndRestore(); } catch(_) {}
+          return;
+        }
+        const finishEl = ev.target && ev.target.closest && ev.target.closest('#morning-finish-btn');
+        if (finishEl) {
+          if (finishEl.disabled) return;
+          ev.preventDefault();
+          try { finishMorning(); } catch(_) {}
+          return;
+        }
+      });
+      window.__morningDelegationBound = true;
     }
 
     // 荷物/郵便の個数を ±1（即時にUI反映し、バックグラウンドで保存）
