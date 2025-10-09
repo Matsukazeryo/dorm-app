@@ -1968,6 +1968,64 @@ if(elements.changePasswordForm){
   });
 }
 
+        // ===== 朝の庶務: ボタンのイベント（直付け） =====
+        (function(){
+          const runBtn = document.getElementById('morning-run-btn');
+          if (runBtn && !runBtn.dataset.bound) {
+            runBtn.dataset.bound = '1';
+            runBtn.addEventListener('click', (ev) => {
+              ev.preventDefault();
+              let mode = 'shofu';
+              try{
+                const activeBtn = document.querySelector('#dorm-selector button.active');
+                const k = activeBtn ? activeBtn.getAttribute('data-dorm') : 'shofu';
+                mode = k || 'shofu';
+              }catch(_){}
+              if (mode === 'shofu') {
+                startMorningForDorm('shofu', true);
+              } else if (mode === 'meizen') {
+                startMorningForDorm('meizen', true);
+              } else {
+                startMorningForBoth(true);
+              }
+            });
+          }
+          const cancelBtn = document.getElementById('morning-cancel-btn');
+          if (cancelBtn && !cancelBtn.dataset.bound) {
+            cancelBtn.dataset.bound = '1';
+            cancelBtn.addEventListener('click', (ev) => {
+              ev.preventDefault();
+              cancelMorningAndRestore();
+            });
+          }
+          const finishBtn = document.getElementById('morning-finish-btn');
+          if (finishBtn && !finishBtn.dataset.bound) {
+            finishBtn.dataset.bound = '1';
+            finishBtn.addEventListener('click', (ev) => {
+              ev.preventDefault();
+              finishMorning();
+            });
+          }
+        })();
+
+        // ===== フォールバック: デリゲートで確実に拾う =====
+        document.addEventListener('click', (ev) => {
+          const cancelEl = ev.target && ev.target.closest && ev.target.closest('#morning-cancel-btn');
+          if (cancelEl) {
+            if (cancelEl.disabled) return;
+            ev.preventDefault();
+            cancelMorningAndRestore();
+            return;
+          }
+          const finishEl = ev.target && ev.target.closest && ev.target.closest('#morning-finish-btn');
+          if (finishEl) {
+            if (finishEl.disabled) return;
+            ev.preventDefault();
+            finishMorning();
+            return;
+          }
+        });
+
         // ===== 寮生編集モーダル: ガードとイベント =====
         (function(){
           function bindEditModalGuards(){
