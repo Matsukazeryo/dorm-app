@@ -1,93 +1,4 @@
-  // ===== 起動ボタン/表示/ログイン/自分選択の再バインド（堅牢版） =====
-  document.addEventListener('DOMContentLoaded', () => {
-    // 朝の庶務：確認1回
-    const runBtn = document.getElementById('morning-run-btn');
-    if (runBtn && !runBtn.dataset.boundUnified2) {
-      runBtn.dataset.boundUnified2 = '1';
-      runBtn.addEventListener('click', (ev) => {
-        try { ev.preventDefault(); ev.stopImmediatePropagation(); } catch(_){}
-        startMorning(false);
-      }, true);
-    }
-    // 表示トグル（ふりがな/サークル/寮）
-    const f = document.getElementById('toggle-furigana');
-    const c = document.getElementById('toggle-circle');
-    const d = document.getElementById('toggle-dorm');
-    const applyViewToggles2 = () => {
-      const sF = localStorage.getItem('show_furigana') === '1';
-      const sC = localStorage.getItem('show_circle')   === '1';
-      const sD = localStorage.getItem('show_dorm')     === '1';
-      if (f) { f.checked = sF; document.body.classList.toggle('show-furigana', sF); }
-      if (c) { c.checked = sC; document.body.classList.toggle('show-circle',   sC); }
-      if (d) { d.checked = sD; document.body.classList.toggle('show-dorm',     sD); }
-      try { if (typeof window.renderTable === 'function') window.renderTable(); else enhanceCellsWithMeta(); } catch(_){}
-    };
-    applyViewToggles2();
-    if (f && !f.dataset.bound2){ f.dataset.bound2='1'; f.addEventListener('change', ()=>{ localStorage.setItem('show_furigana', f.checked?'1':'0'); applyViewToggles2(); }); }
-    if (c && !c.dataset.bound2){ c.dataset.bound2='1'; c.addEventListener('change', ()=>{ localStorage.setItem('show_circle',   c.checked?'1':'0'); applyViewToggles2(); }); }
-    if (d && !d.dataset.bound2){ d.dataset.bound2='1'; d.addEventListener('change', ()=>{ localStorage.setItem('show_dorm',     d.checked?'1':'0'); applyViewToggles2(); }); }
-    // 庶務OFF
-    const sohmuToggle = document.getElementById('sohmu-toggle');
-    const applySohmu2 = () => {
-      const off = localStorage.getItem('sohmu_off') === '1';
-      document.body.classList.toggle('sohmu-off', off);
-      if (sohmuToggle) sohmuToggle.checked = !off;
-    };
-    applySohmu2();
-    if (sohmuToggle && !sohmuToggle.dataset.bound2){
-      sohmuToggle.dataset.bound2 = '1';
-      sohmuToggle.addEventListener('change', ()=> {
-        const off = !sohmuToggle.checked;
-        localStorage.setItem('sohmu_off', off ? '1' : '0');
-        applySohmu2();
-      });
-    }
-    // 管理者ログイン
-    applyAdminUI();
-    const loginBtn = document.getElementById('login-logout-btn');
-    if (loginBtn && !loginBtn.dataset.bound2) {
-      loginBtn.dataset.bound2 = '1';
-      loginBtn.addEventListener('click', async (ev) => {
-        try { ev.preventDefault(); } catch(_){}
-        const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
-        if (isAdmin) {
-          sessionStorage.removeItem('isAdminLoggedIn');
-          applyAdminUI();
-          alert('ログアウトしました。');
-        } else {
-          await promptAdminLogin();
-        }
-      });
-    }
-    // 寮生変更（自分選択）
-    const changeResidentBtn = document.getElementById('change-resident-btn');
-    const selfCancel = document.getElementById('self-cancel-btn');
-    const selfOk     = document.getElementById('self-select-btn');
-    if (changeResidentBtn && !changeResidentBtn.dataset.bound2){
-      changeResidentBtn.dataset.bound2='1';
-      changeResidentBtn.addEventListener('click', (e)=>{ try{e.preventDefault();}catch(_){ } openSelfSelect(); });
-    }
-    if (selfCancel && !selfCancel.dataset.bound2){
-      selfCancel.dataset.bound2='1';
-      selfCancel.addEventListener('click', (e)=>{ try{e.preventDefault();}catch(_){ } closeSelfSelect(); });
-    }
-    if (selfOk && !selfOk.dataset.bound2){
-      selfOk.dataset.bound2='1';
-      selfOk.addEventListener('click', (e)=>{
-        try{e.preventDefault();}catch(_){}
-        const sel = document.getElementById('self-select');
-        const val = sel && sel.value;
-        if (val){
-          try { localStorage.setItem('myResidentId', val); } catch(_){}
-          alert('あなたを設定しました。');
-          closeSelfSelect();
-        }
-      });
-    }
-    // 初期の行メタも適用
-    try { enhanceCellsWithMeta(); } catch(_){}
-  });
-  // === 予備: クリック委譲（再描画で直付けが外れても動く） ===
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -1908,7 +1819,11 @@ async function openEditResidentModal(residentId){
       const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
       document.body.classList.toggle('admin-logged-in', isAdmin);
       const btn = document.getElementById('login-logout-btn');
-      if (btn) btn.textContent = isAdmin ? 'ログアウト' : '管理者ログイン';
+      if (btn) {
+        btn.textContent = isAdmin ? 'ログアウト' : '管理者ログイン';
+        // 見た目も切り替え（赤ボタン=ログアウト状態）
+        if (btn.classList) btn.classList.toggle('logout', isAdmin);
+      }
     }
     async function promptAdminLogin(){
       try { await initAdminPassword(); } catch(_){}
@@ -1952,23 +1867,43 @@ async function openEditResidentModal(residentId){
       if (modal) modal.classList.remove('active');
     }
 
+    // ===== 初期化: 起動ボタン/表示トグル/管理者ログインの一括セットアップ（重複ガード付き） =====
     document.addEventListener('DOMContentLoaded', () => {
-    // ===== 起動ボタンを統一関数へ（キャプチャで先取り・二重確認防止） =====
-    document.addEventListener('DOMContentLoaded', () => {
+      // 初期UI反映（ログイン状態の文言・スタイル）
+      try { applyAdminUI(); } catch(_){}
+    
+      // 朝の庶務：確認は1回のみ（古いハンドラより先に実行するため capture）
       const runBtn = document.getElementById('morning-run-btn');
       if (runBtn && !runBtn.dataset.boundUnified) {
         runBtn.dataset.boundUnified = '1';
         runBtn.addEventListener('click', (ev) => {
           try { ev.preventDefault(); ev.stopImmediatePropagation(); } catch(_){}
-          startMorning(false); // ← 確認はここで1回だけ
-        }, true); // capture
+          startMorning(false);
+        }, true);
       }
-
-      // ===== 表示トグル（ふりがな / サークル / 寮）復活 & 永続化 =====
+    
+      // 管理者ログイン/ログアウト（capture で競合回避）
+      const loginBtn = document.getElementById('login-logout-btn');
+      if (loginBtn && !loginBtn.dataset.bound) {
+        loginBtn.dataset.bound = '1';
+        loginBtn.addEventListener('click', async (ev) => {
+          try { ev.preventDefault(); ev.stopImmediatePropagation(); } catch(_){}
+          const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
+          if (isAdmin) {
+            sessionStorage.removeItem('isAdminLoggedIn');
+            applyAdminUI();
+            alert('ログアウトしました。');
+          } else {
+            await promptAdminLogin();
+          }
+        }, true);
+      }
+    
+      // 表示トグル（ふりがな / サークル / 寮）復活 & 永続化
       const f = document.getElementById('toggle-furigana');
       const c = document.getElementById('toggle-circle');
       const d = document.getElementById('toggle-dorm');
-      const apply = () => {
+      const applyViewToggles = () => {
         const sF = localStorage.getItem('show_furigana') === '1';
         const sC = localStorage.getItem('show_circle')   === '1';
         const sD = localStorage.getItem('show_dorm')     === '1';
@@ -1977,20 +1912,34 @@ async function openEditResidentModal(residentId){
         if (d) { d.checked = sD; document.body.classList.toggle('show-dorm',     sD); }
         try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_){}
       };
-      apply();
-      if (f && !f.dataset.bound){ f.dataset.bound='1'; f.addEventListener('change', ()=>{ localStorage.setItem('show_furigana', f.checked?'1':'0'); apply(); }); }
-      if (c && !c.dataset.bound){ c.dataset.bound='1'; c.addEventListener('change', ()=>{ localStorage.setItem('show_circle',   c.checked?'1':'0'); apply(); }); }
-      if (d && !d.dataset.bound){ d.dataset.bound='1'; d.addEventListener('change', ()=>{ localStorage.setItem('show_dorm',     d.checked?'1':'0'); apply(); }); }
+      applyViewToggles();
+      if (f && !f.dataset.bound){ f.dataset.bound='1'; f.addEventListener('change', ()=>{ localStorage.setItem('show_furigana', f.checked?'1':'0'); applyViewToggles(); }); }
+      if (c && !c.dataset.bound){ c.dataset.bound='1'; c.addEventListener('change', ()=>{ localStorage.setItem('show_circle',   c.checked?'1':'0'); applyViewToggles(); }); }
+      if (d && !d.dataset.bound){ d.dataset.bound='1'; d.addEventListener('change', ()=>{ localStorage.setItem('show_dorm',     d.checked?'1':'0'); applyViewToggles(); }); }
+    
+      // クリック委譲（DOM再描画で直付けが外れても動く・保険）
+      document.addEventListener('click', async (ev) => {
+        const loginEl = ev.target && ev.target.closest && ev.target.closest('#login-logout-btn');
+        if (loginEl) {
+          try { ev.preventDefault(); ev.stopImmediatePropagation(); } catch(_){}
+          const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
+          if (isAdmin) {
+            sessionStorage.removeItem('isAdminLoggedIn');
+            applyAdminUI();
+            alert('ログアウトしました。');
+          } else {
+            await promptAdminLogin();
+          }
+          return;
+        }
+        const runEl = ev.target && ev.target.closest && ev.target.closest('#morning-run-btn');
+        if (runEl) {
+          try { ev.preventDefault(); } catch(_){}
+          startMorning(false);
+          return;
+        }
+      }, true);
     });
-
-    // === 予備: クリック委譲（再描画で直付けが外れても動く） ===
-    document.addEventListener('click', (ev) => {
-      const runEl = ev.target && ev.target.closest && ev.target.closest('#morning-run-btn');
-      if (runEl) {
-        try { ev.preventDefault(); } catch(_){}
-        startMorning(false);
-      }
-    }, true);
         // Show standalone-mode alert only once
         const suppressAlert = localStorage.getItem('suppressStandaloneAlert');
         const isiOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
@@ -3574,7 +3523,7 @@ if(elements.changePasswordForm){
             }
           }catch(_){}
         })();
-    });
+  
 
 // --- 削除CSSブロック: .name-stack{ ... } ---
 // --- 削除CSSブロック: .furigana-text{ ... } と body.show-furigana .furigana-text{ ... } ---
