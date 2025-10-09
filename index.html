@@ -1119,6 +1119,9 @@
       byComposite: new Map(),     // `${roomNumber}::${normalizedName}` -> obj
       startedAt: null
     };
+    // 開始の二重押し/多重実行を防止 & 確認は一度きり
+    let __morningStarting = false;
+    let __morningConfirmShown = false;
     // DOM変化を検知して再注入するためのオブザーバ
     let __morningObserver = null;
     let __annotating = false;
@@ -1171,7 +1174,7 @@
       const runId = new Date().toISOString().replace(/[:.]/g,'') + '_' + dormKey;
       const topRef = db.collection('morning_refs').doc(runId);
 
-      const snap = await db.collection(`residents_${dormKey}`).get();
+      const snap = await db.collection(`residents_${dormKey}`).get({ source: 'server' }).catch(() => db.collection(`residents_${dormKey}`).get());
       const byId = new Map();
       const byName = new Map();
       const byRoom = new Map();
@@ -1278,9 +1281,17 @@
 
     // ===== 統一版: 朝の庶務モード開始（両寮のみ） =====
     async function startMorning(skipConfirm){
-      if (!skipConfirm) {
-        if (!confirm('朝の庶務モードを開始します。直前の数を参考として保存し、松風寮・明善寮の荷物/郵便を0に初期化します。よろしいですか？')) return;
+      // すでに開始処理中なら無視（多重起動防止）
+      if (__morningStarting) return;
+
+      // 確認ダイアログは全体で一度だけ
+      if (!skipConfirm && !__morningConfirmShown) {
+        const ok = confirm('朝の庶務モードを開始します。直前の数を参考として保存し、松風寮・明善寮の荷物/郵便を0に初期化します。よろしいですか？');
+        if (!ok) return;
+        __morningConfirmShown = true;
       }
+
+      __morningStarting = true;
       const overlay = document.getElementById('loading-overlay');
       if (overlay) overlay.style.display = 'flex';
 
@@ -1289,11 +1300,13 @@
       try { refMeizen = await snapshotDormToFirestore('meizen'); } catch(e){ console.warn('snapshot meizen failed', e); alert('参考データ（明善）の保存に失敗しました。続行します。'); }
 
       try {
+        // 両寮を**同時**にゼロ化
         await Promise.all([ zeroDorm('shofu'), zeroDorm('meizen') ]);
       } catch(e){
         console.error('zero both failed', e);
         alert('全0の初期化に失敗しました。');
         if (overlay) overlay.style.display = 'none';
+        __morningStarting = false;
         return;
       }
 
@@ -1328,6 +1341,7 @@
       ensureMorningObserver();
 
       if (overlay) overlay.style.display = 'none';
+      __morningStarting = false;
     }
 
     async function startMorningForDorm(dormKey, skipConfirm){
