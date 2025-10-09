@@ -1,3 +1,93 @@
+  // ===== 起動ボタン/表示/ログイン/自分選択の再バインド（堅牢版） =====
+  document.addEventListener('DOMContentLoaded', () => {
+    // 朝の庶務：確認1回
+    const runBtn = document.getElementById('morning-run-btn');
+    if (runBtn && !runBtn.dataset.boundUnified2) {
+      runBtn.dataset.boundUnified2 = '1';
+      runBtn.addEventListener('click', (ev) => {
+        try { ev.preventDefault(); ev.stopImmediatePropagation(); } catch(_){}
+        startMorning(false);
+      }, true);
+    }
+    // 表示トグル（ふりがな/サークル/寮）
+    const f = document.getElementById('toggle-furigana');
+    const c = document.getElementById('toggle-circle');
+    const d = document.getElementById('toggle-dorm');
+    const applyViewToggles2 = () => {
+      const sF = localStorage.getItem('show_furigana') === '1';
+      const sC = localStorage.getItem('show_circle')   === '1';
+      const sD = localStorage.getItem('show_dorm')     === '1';
+      if (f) { f.checked = sF; document.body.classList.toggle('show-furigana', sF); }
+      if (c) { c.checked = sC; document.body.classList.toggle('show-circle',   sC); }
+      if (d) { d.checked = sD; document.body.classList.toggle('show-dorm',     sD); }
+      try { if (typeof window.renderTable === 'function') window.renderTable(); else enhanceCellsWithMeta(); } catch(_){}
+    };
+    applyViewToggles2();
+    if (f && !f.dataset.bound2){ f.dataset.bound2='1'; f.addEventListener('change', ()=>{ localStorage.setItem('show_furigana', f.checked?'1':'0'); applyViewToggles2(); }); }
+    if (c && !c.dataset.bound2){ c.dataset.bound2='1'; c.addEventListener('change', ()=>{ localStorage.setItem('show_circle',   c.checked?'1':'0'); applyViewToggles2(); }); }
+    if (d && !d.dataset.bound2){ d.dataset.bound2='1'; d.addEventListener('change', ()=>{ localStorage.setItem('show_dorm',     d.checked?'1':'0'); applyViewToggles2(); }); }
+    // 庶務OFF
+    const sohmuToggle = document.getElementById('sohmu-toggle');
+    const applySohmu2 = () => {
+      const off = localStorage.getItem('sohmu_off') === '1';
+      document.body.classList.toggle('sohmu-off', off);
+      if (sohmuToggle) sohmuToggle.checked = !off;
+    };
+    applySohmu2();
+    if (sohmuToggle && !sohmuToggle.dataset.bound2){
+      sohmuToggle.dataset.bound2 = '1';
+      sohmuToggle.addEventListener('change', ()=> {
+        const off = !sohmuToggle.checked;
+        localStorage.setItem('sohmu_off', off ? '1' : '0');
+        applySohmu2();
+      });
+    }
+    // 管理者ログイン
+    applyAdminUI();
+    const loginBtn = document.getElementById('login-logout-btn');
+    if (loginBtn && !loginBtn.dataset.bound2) {
+      loginBtn.dataset.bound2 = '1';
+      loginBtn.addEventListener('click', async (ev) => {
+        try { ev.preventDefault(); } catch(_){}
+        const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
+        if (isAdmin) {
+          sessionStorage.removeItem('isAdminLoggedIn');
+          applyAdminUI();
+          alert('ログアウトしました。');
+        } else {
+          await promptAdminLogin();
+        }
+      });
+    }
+    // 寮生変更（自分選択）
+    const changeResidentBtn = document.getElementById('change-resident-btn');
+    const selfCancel = document.getElementById('self-cancel-btn');
+    const selfOk     = document.getElementById('self-select-btn');
+    if (changeResidentBtn && !changeResidentBtn.dataset.bound2){
+      changeResidentBtn.dataset.bound2='1';
+      changeResidentBtn.addEventListener('click', (e)=>{ try{e.preventDefault();}catch(_){ } openSelfSelect(); });
+    }
+    if (selfCancel && !selfCancel.dataset.bound2){
+      selfCancel.dataset.bound2='1';
+      selfCancel.addEventListener('click', (e)=>{ try{e.preventDefault();}catch(_){ } closeSelfSelect(); });
+    }
+    if (selfOk && !selfOk.dataset.bound2){
+      selfOk.dataset.bound2='1';
+      selfOk.addEventListener('click', (e)=>{
+        try{e.preventDefault();}catch(_){}
+        const sel = document.getElementById('self-select');
+        const val = sel && sel.value;
+        if (val){
+          try { localStorage.setItem('myResidentId', val); } catch(_){}
+          alert('あなたを設定しました。');
+          closeSelfSelect();
+        }
+      });
+    }
+    // 初期の行メタも適用
+    try { enhanceCellsWithMeta(); } catch(_){}
+  });
+  // === 予備: クリック委譲（再描画で直付けが外れても動く） ===
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -1797,6 +1887,55 @@ async function openEditResidentModal(residentId){
                 .doc(token)
                 .set({ lastSeen: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
       }catch(_){ /* ignore */ }
+    }
+
+    // ===== 管理者ログイン / 自分選択 / 庶務OFF ヘルパ =====
+    function applyAdminUI(){
+      const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
+      document.body.classList.toggle('admin-logged-in', isAdmin);
+      const btn = document.getElementById('login-logout-btn');
+      if (btn) btn.textContent = isAdmin ? 'ログアウト' : '管理者ログイン';
+    }
+    async function promptAdminLogin(){
+      try { await initAdminPassword(); } catch(_){}
+      const input = window.prompt('管理者パスワードを入力してください');
+      if (input == null) return; // cancel
+      if (String(input) === String(ADMIN_PASSWORD)) {
+        sessionStorage.setItem('isAdminLoggedIn', 'true');
+        applyAdminUI();
+        alert('管理者ログインしました。');
+      } else {
+        alert('パスワードが違います。');
+      }
+    }
+    function populateSelfSelect(dormKey){
+      const sel = document.getElementById('self-select');
+      if (!sel) return;
+      sel.innerHTML = '';
+      const list = Array.isArray(allResidents) ? allResidents : [];
+      const filtered = list.filter(r => {
+        if (!r || !r.id) return false;
+        if (dormKey === 'all' || !dormKey) return true;
+        return r.dorm === dormKey;
+      });
+      filtered.sort((a,b)=> String(a.roomNumber||'').localeCompare(String(b.roomNumber||''), 'ja') || String(a.name||'').localeCompare(String(b.name||''),'ja'));
+      filtered.forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r.id;
+        opt.textContent = `${r.roomNumber || ''} ${r.name || ''}`.trim();
+        sel.appendChild(opt);
+      });
+    }
+    function openSelfSelect(){
+      const modal = document.getElementById('self-select-modal');
+      if (!modal) return;
+      const dormKey = (currentCollectionName === 'all') ? 'all' : (currentCollectionName.split('_')[1] || 'shofu');
+      populateSelfSelect(dormKey);
+      modal.classList.add('active');
+    }
+    function closeSelfSelect(){
+      const modal = document.getElementById('self-select-modal');
+      if (modal) modal.classList.remove('active');
     }
 
     document.addEventListener('DOMContentLoaded', () => {
