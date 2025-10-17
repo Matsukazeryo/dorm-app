@@ -523,9 +523,9 @@
     
     <div class="controls-container">
         <div id="dorm-selector" class="dorm-selector">
-            <button data-dorm="shofu" class="active">松風寮</button>
+            <button data-dorm="shofu">松風寮</button>
             <button data-dorm="meizen">明善寮</button>
-            <button data-dorm="all">両方</button>
+            <button data-dorm="all" class="active">両方</button>
         </div>
         <div class="top-controls">
             <input type="search" id="search-input" placeholder="部屋番号, 名前, ふりがなで検索...">
@@ -1549,7 +1549,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'all';
           try { finishMorning(); } catch(_) {}
           return;
         }
-      });
+      }, true);
       window.__morningDelegationBound = true;
     }
 
