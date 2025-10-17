@@ -1030,9 +1030,8 @@
       byComposite: new Map(),     // `${roomNumber}::${normalizedName}` -> obj
       startedAt: null
     };
-    // 開始の二重押し/多重実行を防止 & 確認は一度きり
+    // 開始の二重押し/多重実行を防止（確認は1クリックにつき1回だけ）
     let __morningStarting = false;
-    let __morningConfirmShown = false;
     // DOM変化を検知して再注入するためのオブザーバ
     let __morningObserver = null;
     let __annotating = false;
@@ -1814,6 +1813,25 @@ async function openEditResidentModal(residentId){
       }catch(_){ /* ignore */ }
     }
 
+// ===== 庶務モード（ON/OFF）状態の保存・適用 =====
+function getSohmuOn(){
+  const v = localStorage.getItem('sohmu_on');
+  if (v === '1' || v === '0') return v === '1';
+  // 初回はDOM既定値（チェック状態）を採用
+  const t = document.getElementById('sohmu-toggle');
+  return !!(t && t.checked);
+}
+function setSohmuOn(on){
+  try { localStorage.setItem('sohmu_on', on ? '1' : '0'); } catch(_){}
+}
+function applySohmuUI(){
+  const on = getSohmuOn();
+  // OFFなら検索UIなどを非表示（CSSで制御）
+  document.body.classList.toggle('sohmu-off', !on);
+  const tgl = document.getElementById('sohmu-toggle');
+  if (tgl) tgl.checked = on;
+}
+
     // ===== 管理者ログイン / 自分選択 / 庶務OFF ヘルパ =====
     function applyAdminUI(){
       const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
@@ -1871,6 +1889,16 @@ async function openEditResidentModal(residentId){
     document.addEventListener('DOMContentLoaded', () => {
       // 初期UI反映（ログイン状態の文言・スタイル）
       try { applyAdminUI(); } catch(_){}
+      // 庶務モード（ON/OFF）を起動時に反映 & 永続化
+      try { applySohmuUI(); } catch(_){}
+      const sohmuTgl = document.getElementById('sohmu-toggle');
+      if (sohmuTgl && !sohmuTgl.dataset.bound) {
+        sohmuTgl.dataset.bound = '1';
+        sohmuTgl.addEventListener('change', (e) => {
+          setSohmuOn(!!e.target.checked);
+          applySohmuUI();
+        }, true);
+      }
     
       // 朝の庶務：確認は1回のみ（古いハンドラより先に実行するため capture）
       const runBtn = document.getElementById('morning-run-btn');
