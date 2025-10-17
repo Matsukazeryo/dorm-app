@@ -1015,7 +1015,7 @@
     });
     /* ===================================== */
 
-    let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_shofu';
+let currentCollectionName = localStorage.getItem('currentDorm') || 'all';
     let allResidents = []; 
     let unsubscribe; 
     let logUnsubscribe = null;  // 操作履歴 listener
@@ -1831,6 +1831,32 @@ function applySohmuUI(){
   const tgl = document.getElementById('sohmu-toggle');
   if (tgl) tgl.checked = on;
 }
+
+    // ===== ensureDormSelectionOnBoot (override: 既定は「両方」) =====
+    async function ensureDormSelectionOnBoot(){
+      // 既定は「両方」
+      const active = document.querySelector('#dorm-selector button.active');
+      let stored = null;
+      try { stored = localStorage.getItem('currentDorm'); } catch(_){ stored = null; }
+      let desired = normalizeStoredDorm(stored) || 'all';
+
+      // ボタン要素
+      const map = { 'residents_shofu':'shofu', 'residents_meizen':'meizen', 'all':'all' };
+      const target = map[desired] || 'all';
+      const btn = document.querySelector(`#dorm-selector button[data-dorm="${target}"]`);
+
+      // クリックで既存ハンドラに任せる。ダメなら手動で active の整合を取る
+      if (btn) {
+        try { btn.click(); } catch(_){}
+        // 念のため同期（クリックが無効なケース）
+        const buttons = document.querySelectorAll('#dorm-selector button');
+        buttons.forEach(b => b.classList.toggle('active', b === btn));
+      }
+
+      // 内部状態と保存
+      currentCollectionName = (desired === 'all') ? 'all' : desired;
+      try { localStorage.setItem('currentDorm', currentCollectionName); } catch(_){}
+    }
 
     // ===== 管理者ログイン / 自分選択 / 庶務OFF ヘルパ =====
     function applyAdminUI(){
