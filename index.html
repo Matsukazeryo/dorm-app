@@ -709,7 +709,6 @@
             </div>
             <div class="bulk-add-controls">
                 <button type="button" id="add-form-entry-btn">+ 寮生を追加</button>
-                <button type="button" id="remove-form-entry-btn">− 寮生を減らす</button>
                 <button type="submit" class="header-btn" style="background-color: #2ecc71;">全て登録する</button>
             </div>
         </form>
@@ -1112,16 +1111,46 @@ function unifiedConfirm(action){
   }, true);
 })();
 
-// ==== 寮生一括追加: 行の追加/削除（モーダル内） ====
+// ==== 寮生一括追加: 行の追加/個別削除（モーダル内） ====
 (function bindBulkAddButtons(){
   if (window.__bulkBind) return; window.__bulkBind = true;
   const entriesRoot = document.getElementById('bulk-form-entries');
+
   function circleOptionsHTML(dorm){
     const list = (CIRCLE_OPTIONS[dorm] || []);
     return ['<option value=""></option>'].concat(list.map(c => `<option value="${c}">${c}</option>`)).join('');
   }
-  function addEntry(){
-    if (!entriesRoot) return;
+
+  function ensurePerEntryRemoveButton(wrap){
+    if (!wrap) return;
+    if (!wrap.querySelector('.bulk-entry-remove')){
+      const ctrl = document.createElement('div');
+      ctrl.className = 'entry-actions';
+      ctrl.style.gridColumn = '1 / -1';
+      ctrl.style.textAlign = 'right';
+      ctrl.innerHTML = '<button type="button" class="bulk-entry-remove">この欄を消す</button>';
+      wrap.appendChild(ctrl);
+    }
+  }
+
+  function emptyEntryFields(wrap){
+    if (!wrap) return;
+    wrap.querySelectorAll('input').forEach(inp => {
+      if (inp.type === 'number') inp.value = '0'; else inp.value = '';
+    });
+    const dormSel = document.getElementById('bulk-form-dorm');
+    const dorm = (dormSel && dormSel.value) || 'shofu';
+    wrap.querySelectorAll('select').forEach(sel => {
+      if (sel.name === 'bulk-circle[]'){
+        sel.innerHTML = circleOptionsHTML(dorm);
+        sel.value = '';
+      } else {
+        sel.selectedIndex = 0;
+      }
+    });
+  }
+
+  function createTemplate(){
     const dormSel = document.getElementById('bulk-form-dorm');
     const dorm = (dormSel && dormSel.value) || 'shofu';
     const wrap = document.createElement('div');
@@ -1152,20 +1181,45 @@ function unifiedConfirm(action){
         <input type="number" name="bulk-mail[]" min="0" value="0">
       </div>
     `;
-    entriesRoot.appendChild(wrap);
-  }
-  function removeEntry(){
-    if (!entriesRoot) return;
-    const rows = entriesRoot.querySelectorAll('.bulk-add-entry');
-    if (rows.length) entriesRoot.removeChild(rows[rows.length - 1]);
+    ensurePerEntryRemoveButton(wrap);
+    return wrap;
   }
 
-  // クリック委任（ボタン反応しない問題の解消）
+  function addEntry(){
+    if (!entriesRoot) return;
+    const base = entriesRoot.querySelector('.bulk-add-entry');
+    let wrap;
+    if (base){
+      // 一人目と完全同一レイアウトで増やす
+      wrap = base.cloneNode(true);
+      ensurePerEntryRemoveButton(wrap);
+      emptyEntryFields(wrap);
+    } else {
+      wrap = createTemplate();
+    }
+    ensurePerEntryRemoveButton(wrap);
+    entriesRoot.appendChild(wrap);
+  }
+
+  function removeSpecificEntry(btn){
+    if (!entriesRoot) return;
+    const wrap = btn.closest('.bulk-add-entry');
+    if (!wrap) return;
+    const rows = entriesRoot.querySelectorAll('.bulk-add-entry');
+    if (rows.length <= 1){
+      // 最後の1行は消さず、内容だけクリア
+      emptyEntryFields(wrap);
+      return;
+    }
+    wrap.remove();
+  }
+
+  // クリック委任（ボタン反応しない問題の解消 & 個別削除対応）
   document.addEventListener('click', (ev) => {
     const addBtn = ev.target && ev.target.closest && ev.target.closest('#add-form-entry-btn');
     if (addBtn) { ev.preventDefault(); addEntry(); return; }
-    const rmBtn = ev.target && ev.target.closest && ev.target.closest('#remove-form-entry-btn');
-    if (rmBtn) { ev.preventDefault(); removeEntry(); return; }
+    const perRm = ev.target && ev.target.closest && ev.target.closest('.bulk-entry-remove');
+    if (perRm) { ev.preventDefault(); removeSpecificEntry(perRm); return; }
   }, true);
 
   // 寮切替時にサークル選択肢も切替
@@ -1178,9 +1232,10 @@ function unifiedConfirm(action){
     });
   }
 
-  // 初期行が無ければ 1 行だけ用意
+  // 初期行が無ければ 1 行だけ用意（個別削除ボタン付き）
   if (entriesRoot && !entriesRoot.querySelector('.bulk-add-entry')) addEntry();
 })();
+
 
 let currentCollectionName = localStorage.getItem('currentDorm') || 'all';
     let allResidents = []; 
@@ -3799,3 +3854,5 @@ if(elements.changePasswordForm){
 
 </body>
 </html>
+
+
