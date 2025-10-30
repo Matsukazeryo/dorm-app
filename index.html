@@ -376,6 +376,9 @@
           outline:1px dashed var(--header-border);
           cursor:text;
         }
+        #post-announcement-btn{
+          display:none;
+        }
         body.admin-logged-in #post-announcement-btn{
           display:inline-block;   /* 標準では非表示 → 管理者のみ表示 */
         }
@@ -1090,7 +1093,6 @@ function unifiedConfirm(action){
   });
 }
 
-// ==== 管理者用: お知らせUI起動（投稿モーダルを開く/閉じる） ====
 (function bindAnnouncementUI(){
   if (window.__postAnnBind) return; window.__postAnnBind = true;
   document.addEventListener('click', (ev) => {
@@ -1108,6 +1110,57 @@ function unifiedConfirm(action){
       if (modal) { modal.classList.remove('active'); }
       return;
     }
+  }, true);
+})();
+
+// ==== 管理者状態の強制同期 & ログアウト時クリーンアップ ====
+(function adminStateGuard(){
+  function cleanupAnnouncementEditUI(){
+    const list = document.getElementById('announcement-list');
+    if (!list) return;
+    // 編集状態解除
+    list.querySelectorAll('[contenteditable]')
+        .forEach(el => el.removeAttribute('contenteditable'));
+    list.querySelectorAll('li.editing')
+        .forEach(li => li.classList.remove('editing'));
+    // 編集ボタン群の除去
+    list.querySelectorAll('.announce-actions')
+        .forEach(el => el.remove());
+  }
+
+  function syncFromSession(){
+    const isAdmin = (sessionStorage.getItem('isAdminLoggedIn') === 'true');
+    if (isAdmin){
+      document.body.classList.add('admin-logged-in');
+    } else {
+      document.body.classList.remove('admin-logged-in');
+      cleanupAnnouncementEditUI();
+    }
+  }
+
+  // 初期同期（リロード直後の表示を正す）
+  try { syncFromSession(); } catch(_) {}
+
+  // storageイベントで他タブ/同タブの変更も拾う
+  window.addEventListener('storage', (e) => {
+    if (e && e.key === 'isAdminLoggedIn') syncFromSession();
+  });
+
+  // bodyのclass変化を監視して、admin-logged-in が外れたら即クリーン
+  try {
+    const obs = new MutationObserver(() => {
+      if (!document.body.classList.contains('admin-logged-in')) {
+        cleanupAnnouncementEditUI();
+      }
+    });
+    obs.observe(document.body, { attributes:true, attributeFilter:['class'] });
+  } catch(_) {}
+
+  // 既存のログイン/ログアウト処理実行後に状態を合せる（競合しないように遅延）
+  document.addEventListener('click', (ev) => {
+    const btn = ev.target && ev.target.closest && ev.target.closest('#login-logout-btn');
+    if (!btn) return;
+    setTimeout(syncFromSession, 0);
   }, true);
 })();
 
