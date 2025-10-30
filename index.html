@@ -1093,6 +1093,7 @@ function unifiedConfirm(action){
   });
 }
 
+// ==== お知らせ投稿モーダルのUIバインド ====
 (function bindAnnouncementUI(){
   if (window.__postAnnBind) return; window.__postAnnBind = true;
   document.addEventListener('click', (ev) => {
@@ -1111,6 +1112,107 @@ function unifiedConfirm(action){
       return;
     }
   }, true);
+})();
+
+// ==== お知らせ編集UI 遅延適用（ログイン直後でも再読み込み不要）====
+(function exposeAnnControls(){
+  if (!window.applyAnnouncementAdminControls){
+    window.applyAnnouncementAdminControls = function(){
+      if (!document.body.classList.contains('admin-logged-in')) return;
+      const list = document.getElementById('announcement-list');
+      if (!list) return;
+      list.querySelectorAll('li').forEach(li => {
+        if (li.querySelector('.announce-actions')) return;
+        // プレースホルダ行はスキップ
+        if ((li.textContent || '').trim() === 'お知らせはありません。') return;
+        const actions = document.createElement('div');
+        actions.className = 'announce-actions';
+        actions.innerHTML = '<button type="button" class="announce-edit-btn">編集</button>'+
+                            '<button type="button" class="announce-save-btn" style="display:none;">保存</button>'+
+                            '<button type="button" class="announce-cancel-btn" style="display:none;">キャンセル</button>';
+        li.appendChild(actions);
+      });
+    };
+  }
+  // クリック委任（未バインドなら一度だけ）
+  if (!window.__annEditDelegated){
+    document.addEventListener('click', (ev) => {
+      const li = ev.target && ev.target.closest && ev.target.closest('#announcement-list li');
+      if (!li) return;
+      if (!document.body.classList.contains('admin-logged-in')) return;
+
+      if (ev.target.closest('.announce-edit-btn')){
+        ev.preventDefault();
+        const titleEl = li.querySelector('.announce-title') || li.querySelector('strong');
+        const bodyEl  = li.querySelector('.announce-body')  || li.querySelector('p');
+        if (!titleEl || !bodyEl) return;
+        li.dataset.origTitle = titleEl.textContent || '';
+        li.dataset.origBody  = bodyEl.textContent || '';
+        titleEl.contentEditable = 'true';
+        bodyEl.contentEditable  = 'true';
+        li.classList.add('editing');
+        const a = li.querySelector('.announce-actions');
+        a.querySelector('.announce-edit-btn').style.display   = 'none';
+        a.querySelector('.announce-save-btn').style.display   = '';
+        a.querySelector('.announce-cancel-btn').style.display = '';
+        return;
+      }
+      if (ev.target.closest('.announce-save-btn')){
+        ev.preventDefault();
+        const titleEl = li.querySelector('.announce-title') || li.querySelector('strong');
+        const bodyEl  = li.querySelector('.announce-body')  || li.querySelector('p');
+        const newTitle = (titleEl && titleEl.textContent || '').trim();
+        const newBody  = (bodyEl  && bodyEl.textContent  || '').trim();
+        if (titleEl) titleEl.contentEditable = 'false';
+        if (bodyEl)  bodyEl.contentEditable  = 'false';
+        li.classList.remove('editing');
+        const a = li.querySelector('.announce-actions');
+        a.querySelector('.announce-edit-btn').style.display   = '';
+        a.querySelector('.announce-save-btn').style.display   = 'none';
+        a.querySelector('.announce-cancel-btn').style.display = 'none';
+        const annId = li.getAttribute('data-id') || li.id || null;
+        if (annId) {
+          db.collection('announcements').doc(annId).set({
+            title: newTitle,
+            body : newBody,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true }).then(()=>{
+            try { addLog('お知らせ編集', `[${annId}] ${newTitle}`); } catch(_){}
+          }).catch(e=>{
+            console.error('Announcement update failed', e);
+            alert('お知らせの保存に失敗しました。権限/ネットワークを確認してください。');
+          });
+        }
+        return;
+      }
+      if (ev.target.closest('.announce-cancel-btn')){
+        ev.preventDefault();
+        const titleEl = li.querySelector('.announce-title') || li.querySelector('strong');
+        const bodyEl  = li.querySelector('.announce-body')  || li.querySelector('p');
+        if (titleEl) titleEl.textContent = li.dataset.origTitle || titleEl.textContent;
+        if (bodyEl)  bodyEl.textContent  = li.dataset.origBody  || bodyEl.textContent;
+        if (titleEl) titleEl.contentEditable = 'false';
+        if (bodyEl)  bodyEl.contentEditable  = 'false';
+        li.classList.remove('editing');
+        const a = li.querySelector('.announce-actions');
+        a.querySelector('.announce-edit-btn').style.display   = '';
+        a.querySelector('.announce-save-btn').style.display   = 'none';
+        a.querySelector('.announce-cancel-btn').style.display = 'none';
+        return;
+      }
+    }, true);
+    window.__annEditDelegated = true;
+  }
+  // リストの内容が読み込まれた/差し替えられた時にも自動適用
+  (function observeList(){
+    const list = document.getElementById('announcement-list');
+    if (!list || list.__annObs) return;
+    const obs = new MutationObserver(() => {
+      try { window.applyAnnouncementAdminControls && window.applyAnnouncementAdminControls(); } catch(_){ }
+    });
+    obs.observe(list, { childList: true });
+    list.__annObs = obs;
+  })();
 })();
 
 // ==== 管理者状態の強制同期 & ログアウト時クリーンアップ ====
@@ -1132,9 +1234,36 @@ function unifiedConfirm(action){
     const isAdmin = (sessionStorage.getItem('isAdminLoggedIn') === 'true');
     if (isAdmin){
       document.body.classList.add('admin-logged-in');
+      // ログイン直後でも編集UIを即時適用
+      try { window.applyAnnouncementAdminControls && window.applyAnnouncementAdminControls(); } catch(_) {}
+      // 失敗時の再試行（最大10回 / 2秒程度）
+      let __tries = 0;
+      clearInterval(window.__annApplyRetryTimer);
+      window.__annApplyRetryTimer = setInterval(() => {
+        if (!document.body.classList.contains('admin-logged-in')){ clearInterval(window.__annApplyRetryTimer); return; }
+        try { window.applyAnnouncementAdminControls && window.applyAnnouncementAdminControls(); } catch(_) {}
+        __tries++;
+        if (__tries >= 10) clearInterval(window.__annApplyRetryTimer);
+      }, 200);
     } else {
       document.body.classList.remove('admin-logged-in');
       cleanupAnnouncementEditUI();
+      // === ログアウト時は「庶務モードONの閲覧」へ強制 ===
+      try {
+        // 閲覧モードへ
+        document.body.classList.remove('resident-edit-mode','count-edit-mode');
+        const viewRadio = document.getElementById('view-mode');
+        if (viewRadio) viewRadio.checked = true;
+        // 庶務ON（sohmu-off を外し、トグルをONに、イベントも飛ばす）
+        const sohmu = document.getElementById('sohmu-toggle');
+        if (sohmu) {
+          sohmu.checked = true;
+          try { sohmu.dispatchEvent(new Event('change')); } catch(_) {}
+        }
+        document.body.classList.remove('sohmu-off');
+        // 表を最新状態で再描画
+        if (typeof window.renderTable === 'function') window.renderTable();
+      } catch(_){ }
     }
   }
 
