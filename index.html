@@ -776,6 +776,22 @@
 </div>
 <!-- ==== 管理者パスワード変更モーダル ここまで ==== -->
 
+<!-- ==== 統一確認モーダル ==== -->
+<div id="unified-confirm-modal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 id="uconf-title">確認</h2>
+      <button id="uconf-close-btn" class="modal-close-btn">&times;</button>
+    </div>
+    <p id="uconf-body" style="white-space:pre-wrap; margin:0 0 10px 0;"></p>
+    <div class="form-actions">
+      <button id="uconf-cancel" class="header-btn" style="background:#7f8c8d;">キャンセル</button>
+      <button id="uconf-ok" class="header-btn" style="background:#27ae60;">OK</button>
+    </div>
+  </div>
+</div>
+<!-- ==== 統一確認モーダル ここまで ==== -->
+
 
 <footer class="footer">
     <span>表示テーマ:</span>
@@ -1014,6 +1030,66 @@
       // (Intentionally do not call new Notification(...) here to avoid duplicates)
     });
     /* ===================================== */
+
+// ===== 統一確認ダイアログ =====
+const __UCONF = { open:false, resolver:null };
+const UNIFIED_CONFIRM_TEXT = {
+  start: {
+    title: '朝の庶務を開始しますか？',
+    body : '直前の数を「参考」として保存し、松風寮・明善寮の「荷物/郵便」を0に初期化します。よろしいですか？'
+  },
+  cancel:{
+    title: '朝の庶務を取り消しますか？',
+    body : '参考に保存した数へ復元し、朝の庶務モードを終了します。よろしいですか？'
+  },
+  finish:{
+    title: '朝の庶務を終了しますか？',
+    body : '参考表示を消して通常表示に戻ります。よろしいですか？'
+  }
+};
+function unifiedConfirm(action){
+  const modal = document.getElementById('unified-confirm-modal');
+  const titleEl = document.getElementById('uconf-title');
+  const bodyEl  = document.getElementById('uconf-body');
+  const okBtn   = document.getElementById('uconf-ok');
+  const cancelBtn = document.getElementById('uconf-cancel');
+  const closeBtn = document.getElementById('uconf-close-btn');
+  if (!modal || !titleEl || !bodyEl || !okBtn || !cancelBtn){
+    const t = UNIFIED_CONFIRM_TEXT[action] || UNIFIED_CONFIRM_TEXT.start;
+    return Promise.resolve(window.confirm(t.title + '\n\n' + t.body));
+  }
+  const t = UNIFIED_CONFIRM_TEXT[action] || UNIFIED_CONFIRM_TEXT.start;
+  titleEl.textContent = t.title;
+  bodyEl.textContent  = t.body;
+
+  return new Promise((resolve) => {
+    if (__UCONF.open && __UCONF.resolver) { try { __UCONF.resolver(false); } catch(_){} }
+    __UCONF.open = true; __UCONF.resolver = resolve;
+
+    function cleanup(){
+      __UCONF.open = false; __UCONF.resolver = null;
+      modal.classList.remove('active'); modal.style.display = 'none';
+      okBtn.removeEventListener('click', onOk);
+      cancelBtn.removeEventListener('click', onCancel);
+      if (closeBtn) closeBtn.removeEventListener('click', onCancel);
+      modal.removeEventListener('click', onBackdrop);
+      document.removeEventListener('keydown', onKey);
+    }
+    function onOk(e){ e && e.preventDefault(); cleanup(); resolve(true); }
+    function onCancel(e){ e && e.preventDefault(); cleanup(); resolve(false); }
+    function onBackdrop(e){ if (e.target === modal) onCancel(e); }
+    function onKey(e){ if (e.key === 'Escape') onCancel(e); }
+
+    okBtn.addEventListener('click', onOk, { once:true });
+    cancelBtn.addEventListener('click', onCancel, { once:true });
+    if (closeBtn) closeBtn.addEventListener('click', onCancel, { once:true });
+    modal.addEventListener('click', onBackdrop);
+    document.addEventListener('keydown', onKey);
+
+    modal.style.display = 'flex';
+    modal.classList.add('active');
+  });
+}
 
 let currentCollectionName = localStorage.getItem('currentDorm') || 'all';
     let allResidents = []; 
@@ -1541,21 +1617,30 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'all';
         if (runEl) {
           if (runEl.disabled) return;
           ev.preventDefault();
-          try { startMorning(); } catch(_) {}
+          (async () => {
+            const ok = await unifiedConfirm('start');
+            if (ok) { try { startMorning(true); } catch(_) {} } // true = 内部確認をスキップ
+          })();
           return;
         }
         const cancelEl = ev.target && ev.target.closest && ev.target.closest('#morning-cancel-btn');
         if (cancelEl) {
           if (cancelEl.disabled) return;
           ev.preventDefault();
-          try { cancelMorningAndRestore(); } catch(_) {}
+          (async () => {
+            const ok = await unifiedConfirm('cancel');
+            if (ok) { try { cancelMorningAndRestore(); } catch(_) {} }
+          })();
           return;
         }
         const finishEl = ev.target && ev.target.closest && ev.target.closest('#morning-finish-btn');
         if (finishEl) {
           if (finishEl.disabled) return;
           ev.preventDefault();
-          try { finishMorning(); } catch(_) {}
+          (async () => {
+            const ok = await unifiedConfirm('finish');
+            if (ok) { try { finishMorning(); } catch(_) {} }
+          })();
           return;
         }
       }, true);
