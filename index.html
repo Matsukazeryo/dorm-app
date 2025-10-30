@@ -1847,7 +1847,13 @@ function applySohmuUI(){
       const active = document.querySelector('#dorm-selector button.active');
       let stored = null;
       try { stored = localStorage.getItem('currentDorm'); } catch(_){ stored = null; }
-      let desired = normalizeStoredDorm(stored) || 'all';
+      let desired = (function(v){
+        v = (v || '').toString();
+        if (v === 'residents_shofu' || v === 'shofu') return 'residents_shofu';
+        if (v === 'residents_meizen' || v === 'meizen') return 'residents_meizen';
+        if (v === 'all' || v === 'residents_all') return 'all';
+        return 'all'; // デフォルトは両方
+      })(stored);
 
       // ボタン要素
       const map = { 'residents_shofu':'shofu', 'residents_meizen':'meizen', 'all':'all' };
@@ -1866,6 +1872,34 @@ function applySohmuUI(){
       currentCollectionName = (desired === 'all') ? 'all' : desired;
       try { localStorage.setItem('currentDorm', currentCollectionName); } catch(_){}
     }
+
+    // ===== 起動時フォールバック: どれも選択されていない場合は必ず「両方」を選ぶ =====
+    (function enforceDormDefaultSelection(){
+      function ensure(){
+        // まずは既定ロジックを走らせる（存在すれば）
+        try { if (typeof ensureDormSelectionOnBoot === 'function') ensureDormSelectionOnBoot(); } catch(_) {}
+
+        const btns = document.querySelectorAll('#dorm-selector button');
+        const anyActive = Array.from(btns).some(b => b.classList.contains('active'));
+        if (!anyActive) {
+          const allBtn = document.querySelector('#dorm-selector button[data-dorm="all"]');
+          if (allBtn) {
+            try { allBtn.click(); } catch(_) {}
+            btns.forEach(b => b.classList.toggle('active', b === allBtn));
+            // 内部状態と保存も同期
+            try { localStorage.setItem('currentDorm', 'all'); } catch(_) {}
+            try { currentCollectionName = 'all'; } catch(_) {}
+          }
+        }
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => setTimeout(ensure, 0), { once: true });
+        // 念のため load 後にも一度（イベントバインドが遅い環境対策）
+        window.addEventListener('load', () => setTimeout(ensure, 0), { once: true });
+      } else {
+        setTimeout(ensure, 0);
+      }
+    })();
 
     // ===== 管理者ログイン / 自分選択 / 庶務OFF ヘルパ =====
     function applyAdminUI(){
