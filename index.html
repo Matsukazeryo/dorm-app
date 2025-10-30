@@ -1271,12 +1271,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'all';
       // すでに開始処理中なら無視（多重起動防止）
       if (__morningStarting) return;
 
-      // 確認ダイアログは全体で一度だけ
-      if (!skipConfirm && !__morningConfirmShown) {
-        const ok = confirm('朝の庶務モードを開始します。直前の数を参考として保存し、松風寮・明善寮の荷物/郵便を0に初期化します。よろしいですか？');
-        if (!ok) return;
-        __morningConfirmShown = true;
-      }
+      // 確認は unifiedConfirm() 側で実施する（ここでは二重表示を防ぐため何もしない）
 
       __morningStarting = true;
       const overlay = document.getElementById('loading-overlay');
