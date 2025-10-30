@@ -586,7 +586,7 @@
     <div id="announcement-container" class="announcement" style="display:none;">
         <div class="announcement-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
             <h2 style="margin:0;font-size:1.2em;">お知らせ</h2>
-            <button id="post-announcement-btn" class="header-btn" style="background:#27ae60;display:none;">投稿</button>
+            <button id="post-announcement-btn" class="header-btn" style="background:#27ae60;">投稿</button>
         </div>
         <ul id="announcement-list" class="announcement-list">
             <li>お知らせはありません。</li>
@@ -1090,6 +1090,97 @@ function unifiedConfirm(action){
     modal.classList.add('active');
   });
 }
+
+// ==== 管理者用: お知らせUI起動（投稿モーダルを開く/閉じる） ====
+(function bindAnnouncementUI(){
+  if (window.__postAnnBind) return; window.__postAnnBind = true;
+  document.addEventListener('click', (ev) => {
+    const openBtn = ev.target && ev.target.closest && ev.target.closest('#post-announcement-btn');
+    if (openBtn) {
+      ev.preventDefault();
+      const modal = document.getElementById('post-announcement-modal');
+      if (modal) { modal.classList.add('active'); }
+      return;
+    }
+    const closeBtn = ev.target && ev.target.closest && (ev.target.closest('#post-modal-close-btn') || ev.target.closest('#post-cancel-btn'));
+    if (closeBtn) {
+      ev.preventDefault();
+      const modal = document.getElementById('post-announcement-modal');
+      if (modal) { modal.classList.remove('active'); }
+      return;
+    }
+  }, true);
+})();
+
+// ==== 寮生一括追加: 行の追加/削除（モーダル内） ====
+(function bindBulkAddButtons(){
+  if (window.__bulkBind) return; window.__bulkBind = true;
+  const entriesRoot = document.getElementById('bulk-form-entries');
+  function circleOptionsHTML(dorm){
+    const list = (CIRCLE_OPTIONS[dorm] || []);
+    return ['<option value=""></option>'].concat(list.map(c => `<option value="${c}">${c}</option>`)).join('');
+  }
+  function addEntry(){
+    if (!entriesRoot) return;
+    const dormSel = document.getElementById('bulk-form-dorm');
+    const dorm = (dormSel && dormSel.value) || 'shofu';
+    const wrap = document.createElement('div');
+    wrap.className = 'bulk-add-entry';
+    wrap.innerHTML = `
+      <div>
+        <label>名前*</label>
+        <input type="text" name="bulk-name[]" required>
+      </div>
+      <div>
+        <label>部屋番号</label>
+        <input type="text" name="bulk-room[]">
+      </div>
+      <div>
+        <label>ふりがな</label>
+        <input type="text" name="bulk-furigana[]">
+      </div>
+      <div>
+        <label>サークル</label>
+        <select name="bulk-circle[]">${circleOptionsHTML(dorm)}</select>
+      </div>
+      <div>
+        <label>荷物</label>
+        <input type="number" name="bulk-luggage[]" min="0" value="0">
+      </div>
+      <div>
+        <label>郵便</label>
+        <input type="number" name="bulk-mail[]" min="0" value="0">
+      </div>
+    `;
+    entriesRoot.appendChild(wrap);
+  }
+  function removeEntry(){
+    if (!entriesRoot) return;
+    const rows = entriesRoot.querySelectorAll('.bulk-add-entry');
+    if (rows.length) entriesRoot.removeChild(rows[rows.length - 1]);
+  }
+
+  // クリック委任（ボタン反応しない問題の解消）
+  document.addEventListener('click', (ev) => {
+    const addBtn = ev.target && ev.target.closest && ev.target.closest('#add-form-entry-btn');
+    if (addBtn) { ev.preventDefault(); addEntry(); return; }
+    const rmBtn = ev.target && ev.target.closest && ev.target.closest('#remove-form-entry-btn');
+    if (rmBtn) { ev.preventDefault(); removeEntry(); return; }
+  }, true);
+
+  // 寮切替時にサークル選択肢も切替
+  const dormSel = document.getElementById('bulk-form-dorm');
+  if (dormSel) {
+    dormSel.addEventListener('change', () => {
+      const dorm = dormSel.value || 'shofu';
+      const html = circleOptionsHTML(dorm);
+      entriesRoot && entriesRoot.querySelectorAll('select[name="bulk-circle[]"]').forEach(sel => sel.innerHTML = html);
+    });
+  }
+
+  // 初期行が無ければ 1 行だけ用意
+  if (entriesRoot && !entriesRoot.querySelector('.bulk-add-entry')) addEntry();
+})();
 
 let currentCollectionName = localStorage.getItem('currentDorm') || 'all';
     let allResidents = []; 
