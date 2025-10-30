@@ -1036,6 +1036,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'all';
     let __morningObserver = null;
     let __annotating = false;
     let __annotateTimer = null;
+    let __morningConfirmShown = false; // 初回だけ確認ダイアログを出すためのフラグ
     function scheduleAnnotate(){
       if (!isMorningMode) return;
       if (__annotateTimer) return;
@@ -1535,6 +1536,14 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'all';
     // === Fallback delegation (DOM差し替えでも確実に反応) ※一度だけ登録 ===
     if (!window.__morningDelegationBound) {
       document.addEventListener('click', (ev) => {
+        // 朝の庶務開始ボタン（DOM再描画にも強い委任ハンドラ）
+        const runEl = ev.target && ev.target.closest && ev.target.closest('#morning-run-btn');
+        if (runEl) {
+          if (runEl.disabled) return;
+          ev.preventDefault();
+          try { startMorning(); } catch(_) {}
+          return;
+        }
         const cancelEl = ev.target && ev.target.closest && ev.target.closest('#morning-cancel-btn');
         if (cancelEl) {
           if (cancelEl.disabled) return;
