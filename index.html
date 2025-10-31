@@ -1134,6 +1134,26 @@ function unifiedConfirm(action){
       });
     };
   }
+  // プログラムで最初のお知らせを編集モードに入れるヘルパー
+  if (!window.__autoEnterFirstAnnEdit){
+    window.__autoEnterFirstAnnEdit = function(){
+      if (!document.body.classList.contains('admin-logged-in')) return false;
+      const list = document.getElementById('announcement-list');
+      if (!list) return false;
+      // 最初の有効なお知らせ（プレースホルダ以外）
+      const li = Array.from(list.querySelectorAll('li')).find(n => ((n.textContent || '').trim() !== 'お知らせはありません。'));
+      if (!li) return false;
+      // アクションが無ければ付与
+      if (!li.querySelector('.announce-actions')){
+        try { window.applyAnnouncementAdminControls && window.applyAnnouncementAdminControls(); } catch(_){}
+      }
+      const editBtn = li.querySelector('.announce-actions .announce-edit-btn');
+      if (editBtn){
+        try { editBtn.click(); return true; } catch(_){}
+      }
+      return false;
+    };
+  }
   // クリック委任（未バインドなら一度だけ）
   if (!window.__annEditDelegated){
     document.addEventListener('click', (ev) => {
@@ -1245,8 +1265,21 @@ function unifiedConfirm(action){
         __tries++;
         if (__tries >= 10) clearInterval(window.__annApplyRetryTimer);
       }, 200);
+      // ログイン直後に自動で「編集モード」を開く（最大10回リトライ）
+      let __aeTries = 0;
+      clearInterval(window.__annAutoEditTimer);
+      window.__annAutoEditTimer = setInterval(() => {
+        if (!document.body.classList.contains('admin-logged-in')){ clearInterval(window.__annAutoEditTimer); return; }
+        // 既に何か編集中なら終了
+        if (document.querySelector('#announcement-list li.editing')) { clearInterval(window.__annAutoEditTimer); return; }
+        let ok = false;
+        try { ok = window.__autoEnterFirstAnnEdit && window.__autoEnterFirstAnnEdit(); } catch(_){ }
+        __aeTries++;
+        if (ok || __aeTries >= 10) clearInterval(window.__annAutoEditTimer);
+      }, 200);
     } else {
       document.body.classList.remove('admin-logged-in');
+      clearInterval(window.__annAutoEditTimer);
       cleanupAnnouncementEditUI();
       // === ログアウト時は「庶務モードONの閲覧」へ強制 ===
       try {
