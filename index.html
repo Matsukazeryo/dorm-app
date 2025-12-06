@@ -97,8 +97,7 @@
         .mode-selector label { padding: 10px 12px; cursor: pointer; background-color: var(--mode-label-bg); color: var(--mode-label-text); transition: background-color 0.2s; border-left: 1px solid var(--mode-selector-border); white-space: nowrap; }
         .mode-selector label:first-child { border-left: none; }
         .mode-selector input:checked + label { background-color: var(--mode-label-checked-bg); color: var(--mode-label-checked-text); font-weight: bold; }
-        #resident-edit-mode-label { display: none; }
-        body.admin-logged-in #resident-edit-mode-label { display: block; }
+        #resident-edit-mode-label { display: block; }
         body.resident-edit-mode .mode-selector input:checked + label { background-color: var(--admin-mode-bg); }
         
         .middle-controls {
@@ -1364,12 +1363,6 @@ function unifiedConfirm(action){
 // ==== 「寮生変更」ボタン：押せない問題の修正（常に反応 & モード切替） ====
 (function bindChangeResidentButton(){
   function forceResidentEditMode(){
-    // 管理者限定の機能ならログイン確認
-    if (!document.body.classList.contains('admin-logged-in')){
-      alert('寮生編集は管理者ログインが必要です。');
-      try { document.getElementById('login-logout-btn').focus(); } catch(_) {}
-      return;
-    }
     const viewRadio = document.getElementById('view-mode');
     const countRadio = document.getElementById('count-edit-mode');
     const residentRadio = document.getElementById('resident-edit-mode');
