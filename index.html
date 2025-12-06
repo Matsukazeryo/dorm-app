@@ -1657,6 +1657,21 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'all';
 
       isMorningMode = true;
       document.body.classList.add('morning-mode');
+      // ★ 朝の庶務開始時は「個数変更」モードを強制ON
+      try {
+        const viewRadio = document.getElementById('view-mode');
+        const countRadio = document.getElementById('count-edit-mode');
+        const residentRadio = document.getElementById('resident-edit-mode');
+        if (viewRadio) viewRadio.checked = false;
+        if (residentRadio) residentRadio.checked = false;
+        if (countRadio) {
+          countRadio.checked = true;
+          // 既存のモード切替ロジックに対応するため、class操作とchange発火を両方やる
+          document.body.classList.add('count-edit-mode');
+          document.body.classList.remove('resident-edit-mode');
+          try { countRadio.dispatchEvent(new Event('change', { bubbles: true })); } catch(_) {}
+        }
+      } catch(_) {}
       morningRef.dorm = 'both';
       const mergeMap = (a, b) => {
         const m = new Map();
