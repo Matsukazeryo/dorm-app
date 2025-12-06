@@ -1632,7 +1632,9 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'all';
       // すでに開始処理中なら無視（多重起動防止）
       if (__morningStarting) return;
 
-      // 確認は unifiedConfirm() 側で実施する（ここでは二重表示を防ぐため何もしない）
+      // ★ここで必ず確認ダイアログを出し、OKのときだけスナップショット＋0リセットを実行する
+      const ok = await unifiedConfirm('start');
+      if (!ok) return;
 
       __morningStarting = true;
       const overlay = document.getElementById('loading-overlay');
