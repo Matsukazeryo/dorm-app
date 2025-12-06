@@ -1236,6 +1236,7 @@ function unifiedConfirm(action){
 })();
 
 // ==== 管理者状態の強制同期 & ログアウト時クリーンアップ ====
+// ==== 管理者状態の強制同期 & ログアウト時クリーンアップ ====
 (function adminStateGuard(){
   function cleanupAnnouncementEditUI(){
     const list = document.getElementById('announcement-list');
@@ -1323,6 +1324,72 @@ function unifiedConfirm(action){
     const btn = ev.target && ev.target.closest && ev.target.closest('#login-logout-btn');
     if (!btn) return;
     setTimeout(syncFromSession, 0);
+  }, true);
+})();
+
+// ==== 表示テーマ（昼/夜/システム）修正：強制ダーク固定の解消 ====
+(function themeManager(){
+  const KEY = 'themeSetting';
+  function applyTheme(val){
+    let v = val || localStorage.getItem(KEY) || 'system';
+    if (!/^(system|light|dark)$/.test(v)) v = 'system';
+    localStorage.setItem(KEY, v);
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const useDark = (v === 'dark') || (v === 'system' && prefersDark);
+    document.body.classList.toggle('dark-theme', !!useDark);
+    const sel = document.getElementById('theme-selector');
+    if (sel) sel.value = v;
+  }
+  // 初期適用
+  try { applyTheme(); } catch(_) {}
+  // セレクタ変更時
+  document.addEventListener('change', (ev)=>{
+    const sel = ev.target && ev.target.closest && ev.target.closest('#theme-selector');
+    if (!sel) return;
+    applyTheme(sel.value);
+  }, true);
+  // システム設定が変わったら追従（system選択時のみ）
+  try {
+    const mq = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+    if (mq && mq.addEventListener){
+      mq.addEventListener('change', () => {
+        if ((localStorage.getItem(KEY) || 'system') === 'system') applyTheme('system');
+      });
+    }
+  } catch(_){}
+  // 安全策：ロード時に誤って overlay が残っていたら消す
+  try { const overlay = document.getElementById('loading-overlay'); if (overlay) overlay.style.display = 'none'; } catch(_) {}
+})();
+
+// ==== 「寮生変更」ボタン：押せない問題の修正（常に反応 & モード切替） ====
+(function bindChangeResidentButton(){
+  function forceResidentEditMode(){
+    // 管理者限定の機能ならログイン確認
+    if (!document.body.classList.contains('admin-logged-in')){
+      alert('寮生編集は管理者ログインが必要です。');
+      try { document.getElementById('login-logout-btn').focus(); } catch(_) {}
+      return;
+    }
+    const viewRadio = document.getElementById('view-mode');
+    const countRadio = document.getElementById('count-edit-mode');
+    const residentRadio = document.getElementById('resident-edit-mode');
+    if (viewRadio) viewRadio.checked = false;
+    if (countRadio) countRadio.checked = false;
+    if (residentRadio){
+      residentRadio.checked = true;
+      document.body.classList.add('resident-edit-mode');
+      document.body.classList.remove('count-edit-mode');
+      try { residentRadio.dispatchEvent(new Event('change', { bubbles: true })); } catch(_) {}
+    }
+    // 表を最新状態で再描画
+    try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_) {}
+  }
+  // クリック委任（確実に拾う）
+  document.addEventListener('click', (ev)=>{
+    const btn = ev.target && ev.target.closest && ev.target.closest('#change-resident-btn');
+    if (!btn) return;
+    ev.preventDefault();
+    forceResidentEditMode();
   }, true);
 })();
 
