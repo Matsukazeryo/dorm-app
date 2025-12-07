@@ -97,7 +97,8 @@
         .mode-selector label { padding: 10px 12px; cursor: pointer; background-color: var(--mode-label-bg); color: var(--mode-label-text); transition: background-color 0.2s; border-left: 1px solid var(--mode-selector-border); white-space: nowrap; }
         .mode-selector label:first-child { border-left: none; }
         .mode-selector input:checked + label { background-color: var(--mode-label-checked-bg); color: var(--mode-label-checked-text); font-weight: bold; }
-        #resident-edit-mode-label { display: block; }
+        #resident-edit-mode-label { display: none; }
+        body.admin-logged-in #resident-edit-mode-label { display: block; }
         body.resident-edit-mode .mode-selector input:checked + label { background-color: var(--admin-mode-bg); }
         
         .middle-controls {
@@ -1235,7 +1236,6 @@ function unifiedConfirm(action){
 })();
 
 // ==== 管理者状態の強制同期 & ログアウト時クリーンアップ ====
-// ==== 管理者状態の強制同期 & ログアウト時クリーンアップ ====
 (function adminStateGuard(){
   function cleanupAnnouncementEditUI(){
     const list = document.getElementById('announcement-list');
@@ -1323,66 +1323,6 @@ function unifiedConfirm(action){
     const btn = ev.target && ev.target.closest && ev.target.closest('#login-logout-btn');
     if (!btn) return;
     setTimeout(syncFromSession, 0);
-  }, true);
-})();
-
-// ==== 表示テーマ（昼/夜/システム）修正：強制ダーク固定の解消 ====
-(function themeManager(){
-  const KEY = 'themeSetting';
-  function applyTheme(val){
-    let v = val || localStorage.getItem(KEY) || 'system';
-    if (!/^(system|light|dark)$/.test(v)) v = 'system';
-    localStorage.setItem(KEY, v);
-    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const useDark = (v === 'dark') || (v === 'system' && prefersDark);
-    document.body.classList.toggle('dark-theme', !!useDark);
-    const sel = document.getElementById('theme-selector');
-    if (sel) sel.value = v;
-  }
-  // 初期適用
-  try { applyTheme(); } catch(_) {}
-  // セレクタ変更時
-  document.addEventListener('change', (ev)=>{
-    const sel = ev.target && ev.target.closest && ev.target.closest('#theme-selector');
-    if (!sel) return;
-    applyTheme(sel.value);
-  }, true);
-  // システム設定が変わったら追従（system選択時のみ）
-  try {
-    const mq = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
-    if (mq && mq.addEventListener){
-      mq.addEventListener('change', () => {
-        if ((localStorage.getItem(KEY) || 'system') === 'system') applyTheme('system');
-      });
-    }
-  } catch(_){}
-  // 安全策：ロード時に誤って overlay が残っていたら消す
-  try { const overlay = document.getElementById('loading-overlay'); if (overlay) overlay.style.display = 'none'; } catch(_) {}
-})();
-
-// ==== 「寮生変更」ボタン：押せない問題の修正（常に反応 & モード切替） ====
-(function bindChangeResidentButton(){
-  function forceResidentEditMode(){
-    const viewRadio = document.getElementById('view-mode');
-    const countRadio = document.getElementById('count-edit-mode');
-    const residentRadio = document.getElementById('resident-edit-mode');
-    if (viewRadio) viewRadio.checked = false;
-    if (countRadio) countRadio.checked = false;
-    if (residentRadio){
-      residentRadio.checked = true;
-      document.body.classList.add('resident-edit-mode');
-      document.body.classList.remove('count-edit-mode');
-      try { residentRadio.dispatchEvent(new Event('change', { bubbles: true })); } catch(_) {}
-    }
-    // 表を最新状態で再描画
-    try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_) {}
-  }
-  // クリック委任（確実に拾う）
-  document.addEventListener('click', (ev)=>{
-    const btn = ev.target && ev.target.closest && ev.target.closest('#change-resident-btn');
-    if (!btn) return;
-    ev.preventDefault();
-    forceResidentEditMode();
   }, true);
 })();
 
@@ -1978,6 +1918,119 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'all';
       out += escapeHtml(tail);
       return out;
     }
+
+    /* ==== 表示テーマ（昼/夜/システム） ==== */
+    (function initThemeSelector(){
+      const KEY = 'theme';
+      function applyTheme(mode){
+        // 基本: まず dark を外す
+        document.body.classList.remove('dark-theme');
+        if (mode === 'dark') {
+          document.body.classList.add('dark-theme');
+        } else if (mode === 'system') {
+          try{
+            const m = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+            if (m && m.matches) document.body.classList.add('dark-theme');
+          }catch(_){/* noop */}
+        }
+      }
+      function current(){ return localStorage.getItem(KEY) || 'system'; }
+      // 初期適用
+      const sel = document.getElementById('theme-selector');
+      if (sel){
+        const initVal = current();
+        sel.value = initVal;
+        applyTheme(initVal);
+        sel.addEventListener('change', () => {
+          const v = sel.value || 'system';
+          try { localStorage.setItem(KEY, v); } catch(_){}
+          applyTheme(v);
+        });
+      } else {
+        // セレクタ無くても保存値は反映
+        applyTheme(current());
+      }
+      // システム設定が変わったときに system 選択中なら追従
+      try{
+        const mq = window.matchMedia('(prefers-color-scheme: dark)');
+        const onChange = () => { if (current() === 'system') applyTheme('system'); };
+        if (mq && mq.addEventListener) mq.addEventListener('change', onChange);
+        else if (mq && mq.addListener) mq.addListener(onChange);
+      }catch(_){/* noop */}
+    })();
+
+    /* ==== 自分選択（寮生変更） ==== */
+    (function bindSelfSelect(){
+      if (window.__selfBind) return; window.__selfBind = true;
+      const modal = document.getElementById('self-select-modal');
+      const selectEl = document.getElementById('self-select');
+      const cancelBtn = document.getElementById('self-cancel-btn');
+      const okBtn = document.getElementById('self-select-btn');
+
+      function labelOf(r){
+        const dorm = r && r.dorm === 'meizen' ? '明' : r && r.dorm === 'shofu' ? '松' : '';
+        const room = (r && r.roomNumber) ? String(r.roomNumber) : '';
+        const name = (r && r.name) ? String(r.name) : '(名称未設定)';
+        return `${dorm}${room ? room + ' ' : ''}${name}`.trim();
+      }
+
+      function populate(){
+        if (!selectEl) return;
+        const mine = (localStorage.getItem('myResidentId') || '').trim();
+        const list = Array.isArray(window.allResidents) ? window.allResidents.slice() : [];
+        // 寮 -> 部屋番号（数値比較）-> 名前 の順で並べる
+        list.sort((a,b)=>{
+          const dA = a && a.dorm || '', dB = b && b.dorm || '';
+          if (dA !== dB) return dA.localeCompare(dB);
+          const rnA = parseInt(a && a.roomNumber, 10) || 0;
+          const rnB = parseInt(b && b.roomNumber, 10) || 0;
+          if (rnA !== rnB) return rnA - rnB;
+          const nA = (a && a.name || '').localeCompare(b && b.name || '');
+          return nA;
+        });
+        selectEl.innerHTML = '';
+        // 空行
+        const empty = document.createElement('option');
+        empty.value = '';
+        empty.textContent = '（未選択）';
+        selectEl.appendChild(empty);
+        // 実データ
+        list.forEach(r=>{
+          if (!r || !r.id) return;
+          const opt = document.createElement('option');
+          opt.value = r.id;
+          opt.textContent = labelOf(r);
+          if (mine && mine === r.id) opt.selected = true;
+          selectEl.appendChild(opt);
+        });
+      }
+
+      function open(){ if (modal){ populate(); modal.classList.add('active'); } }
+      function close(){ if (modal){ modal.classList.remove('active'); } }
+
+      // ボタンでモーダルを開く
+      document.addEventListener('click', (ev)=>{
+        const btn = ev.target && ev.target.closest && ev.target.closest('#change-resident-btn');
+        if (!btn) return;
+        ev.preventDefault();
+        open();
+      }, true);
+
+      // モーダル内の操作
+      if (cancelBtn) cancelBtn.addEventListener('click', (e)=>{ e.preventDefault(); close(); });
+      if (okBtn) okBtn.addEventListener('click', async (e)=>{
+        e.preventDefault();
+        if (!selectEl) { close(); return; }
+        const id = (selectEl.value || '').trim();
+        try { localStorage.setItem('myResidentId', id || ''); } catch(_){}
+        // FCMトークンの residentId を同期
+        try { if (typeof window.resyncFcmToken === 'function') await window.resyncFcmToken(); } catch(_){}
+        // 画面更新（既存の強調等のロジックに委ねる）
+        try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_){}
+        try { window.addLog && addLog('自分選択', id ? ('residentId=' + id) : '(未選択)'); } catch(_){}
+        close();
+      });
+    })();
 
     // ===== 朝の庶務「取り消し」ボタン処理 =====
     async function cancelMorningAndRestore(){
