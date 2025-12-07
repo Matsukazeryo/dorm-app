@@ -1974,12 +1974,16 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'all';
         return `${dorm}${room ? room + ' ' : ''}${name}`.trim();
       }
 
+    　
       function populate(){
         if (!selectEl) return;
         const mine = (localStorage.getItem('myResidentId') || '').trim();
-        const list = Array.isArray(window.allResidents) ? window.allResidents.slice() : [];
+        const src = (Array.isArray(window.allResidents) && window.allResidents.length)
+         ? window.allResidents
+         : (Array.isArray(allResidents) ? allResidents : []);
+        const list = src.slice();
         // 寮 -> 部屋番号（数値比較）-> 名前 の順で並べる
-        list.sort((a,b)=>{
+       list.sort((a,b)=>{  
           const dA = a && a.dorm || '', dB = b && b.dorm || '';
           if (dA !== dB) return dA.localeCompare(dB);
           const rnA = parseInt(a && a.roomNumber, 10) || 0;
