@@ -1447,8 +1447,47 @@ function unifiedConfirm(action){
     });
   }
 
-  // 初期行が無ければ 1 行だけ用意（個別削除ボタン付き）
+// 初期行が無ければ 1 行だけ用意（個別削除ボタン付き）
   if (entriesRoot && !entriesRoot.querySelector('.bulk-add-entry')) addEntry();
+})();
+
+/* ==== 庶務モードの状態を保存・復元 ==== */
+(function persistSohmuMode(){
+  window.addEventListener('load', () => {
+    // 既存の初期化処理が終わったあとで実行するために、タイマーで少し遅らせる
+    setTimeout(() => {
+      const toggle = document.getElementById('sohmu-toggle');
+      if (!toggle) return;
+
+      // 変更時に状態を保存
+      toggle.addEventListener('change', () => {
+        try {
+          localStorage.setItem('sohmuMode', toggle.checked ? 'on' : 'off');
+        } catch(_) {}
+      });
+
+      // 初期状態の復元
+      let saved = null;
+      try {
+        saved = localStorage.getItem('sohmuMode');
+      } catch(_) {}
+
+      if (saved === 'on' || saved === 'off') {
+        const desired = (saved === 'on');
+        if (toggle.checked !== desired) {
+          toggle.checked = desired;
+          try {
+            toggle.dispatchEvent(new Event('change'));
+          } catch(_) {}
+        }
+      } else {
+        // 初回は現在の状態を保存だけしておく
+        try {
+          localStorage.setItem('sohmuMode', toggle.checked ? 'on' : 'off');
+        } catch(_) {}
+      }
+    }, 0);
+  });
 })();
 
 
