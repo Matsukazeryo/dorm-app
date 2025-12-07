@@ -1985,7 +1985,8 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'all';
         // 寮 -> 部屋番号（数値比較）-> 名前 の順で並べる
        list.sort((a,b)=>{  
           const dA = a && a.dorm || '', dB = b && b.dorm || '';
-          if (dA !== dB) return dA.localeCompare(dB);
+          const order = { shofu: 0, meizen: 1 };
+          if (dA !== dB) return (order[dA] ?? 99) - (order[dB] ?? 99);
           const rnA = parseInt(a && a.roomNumber, 10) || 0;
           const rnB = parseInt(b && b.roomNumber, 10) || 0;
           if (rnA !== rnB) return rnA - rnB;
