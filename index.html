@@ -1030,24 +1030,33 @@
       try { updatePwaHint(); } catch(_) {}
     }
 
-    // 自分の寮生を選択したタイミングで、PWA(ウェブアプリ)なら一度だけ通知の許可をお願いする
+    // 自分の寮生を選択したタイミングで、一度だけ通知の許可をお願いする
     function maybeRequestNotifAfterSelfSelect(){
-      // スタンドアロン(PWA)以外では何もしない（LINEブラウザや普通のブラウザでの自動ポップアップは避ける）
-      try {
-        if (!isStandaloneDisplayMode()) return;
-      } catch(_) {
-        return;
-      }
       // 通知・Service Worker が使えない環境では何もしない
       if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
-      // すでに許可済み or 拒否済みならここでは再度聞かない
-      try {
-        if (Notification.permission === 'granted' || Notification.permission === 'denied') return;
-      } catch(_) {}
+
+      let perm = 'default';
+      try { perm = Notification.permission; } catch(_) {}
+
+      // すでに許可済みなら何もしない
+      if (perm === 'granted') return;
+
+      // すでに「ブロック」されている場合は、ブラウザ設定から解除してねと一度だけ案内
+      if (perm === 'denied') {
+        try {
+          if (localStorage.getItem('notifDeniedHintShown') !== 'yes') {
+            showNotificationUnblockHelp();
+            localStorage.setItem('notifDeniedHintShown', 'yes');
+          }
+        } catch(_) {}
+        return;
+      }
+
       // 一度聞いた端末では再度出さない
       try {
         if (localStorage.getItem('notifRequestedOnce') === 'yes') return;
       } catch(_) {}
+
       // 非同期で権限リクエスト（結果は待たなくてOK）
       try {
         requestNotificationPermission();
@@ -1660,6 +1669,29 @@ function unifiedConfirm(action){
             if (overlay) overlay.style.display = 'none';
           }
         }, 250);
+      });
+    })();
+
+    /* ==== 自分選択「決定」後に通知許可をチェック ==== */
+    (function bindSelfSelectNotificationTrigger(){
+      if (window.__selfSelectNotifBound) return;
+      window.__selfSelectNotifBound = true;
+
+      window.addEventListener('load', function(){
+        const btn = document.getElementById('self-select-btn');
+        if (!btn) return;
+
+        btn.addEventListener('click', function(){
+          // 既存の決定処理（myResidentId保存やモーダルを閉じる処理）が終わったあとで判定したいので、0ms遅延
+          setTimeout(function(){
+            let myId = null;
+            try { myId = localStorage.getItem('myResidentId'); } catch(_) {}
+            // 本当に自分の寮生が登録されたときだけ通知を確認
+            if (myId) {
+              try { maybeRequestNotifAfterSelfSelect(); } catch(_) {}
+            }
+          }, 0);
+        }, false);
       });
     })();
 
