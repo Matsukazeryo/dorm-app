@@ -491,6 +491,21 @@
     justify-content: space-between;
     gap: 8px;
   }
+  .pwa-hint{
+    background:#fff3cd;
+    border:1px solid #ffeeba;
+    color:#856404;
+    padding:8px 10px;
+    border-radius:6px;
+    margin:8px 0;
+    font-size:0.9em;
+    display:none;
+  }
+  body.dark-theme .pwa-hint{
+    background:rgba(255,243,205,0.06);
+    border-color:rgba(255,238,186,0.4);
+    color:#f9e79f;
+  }
   .morning-banner .left{ font-weight:600; color:var(--header-text); }
   .ref-line{ display:block; font-size:0.78em; opacity:.85; margin-top:2px; color:#7f8c8d; }
   body.dark-theme .ref-line{ color:#bdc3c7; }
@@ -568,6 +583,12 @@
       </div>
     </div>
     <!-- ===== 朝の庶務バナーここまで ===== -->
+
+    <!-- ===== PWA利用ヒント ===== -->
+    <div id="pwa-hint" class="pwa-hint">
+      通知をちゃんと受け取るには、このページをブラウザやLINEのメニューからホーム画面に追加して、ホーム画面のアイコンから開いてね。
+    </div>
+    <!-- ===== PWA利用ヒントここまで ===== -->
 
     <div class="table-container">
         <table id="resident-table">
@@ -958,6 +979,27 @@
       return __notifInFlight;
     }
 
+    function isStandaloneDisplayMode(){
+      try{
+        if (window.matchMedia) {
+          if (window.matchMedia('(display-mode: standalone)').matches) return true;
+          if (window.matchMedia('(display-mode: fullscreen)').matches) return true;
+          if (window.matchMedia('(display-mode: minimal-ui)').matches) return true;
+        }
+      }catch(_){ }
+      if (window.navigator && window.navigator.standalone) return true; // iOS Safari
+      if (document.referrer && document.referrer.indexOf('android-app://') === 0) return true; // TWA等
+      return false;
+    }
+
+    function updatePwaHint(){
+      var el = document.getElementById('pwa-hint');
+      if (!el) return;
+      var standalone = false;
+      try { standalone = isStandaloneDisplayMode(); } catch(_){ standalone = false; }
+      el.style.display = standalone ? 'none' : 'block';
+    }
+
     // ===== 通知UIの更新 & アンブロック案内 =====
     function updateNotificationUI(){
       const btn = document.getElementById('enable-notif-btn');
@@ -980,6 +1022,8 @@
         btn.style.display = 'inline-block';
         btn.textContent = '通知をオンにする';
       }
+      // PWAヒントも合わせて更新
+      try { updatePwaHint(); } catch(_) {}
     }
 
     function showNotificationUnblockHelp(){
@@ -1452,43 +1496,75 @@ function unifiedConfirm(action){
 })();
 
 /* ==== 庶務モードの状態を保存・復元 ==== */
-(function persistSohmuMode(){
-  window.addEventListener('load', () => {
-    // 既存の初期化処理が終わったあとで実行するために、タイマーで少し遅らせる
-    setTimeout(() => {
-      const toggle = document.getElementById('sohmu-toggle');
-      if (!toggle) return;
+    (function persistSohmuMode(){
+      window.addEventListener('load', () => {
+        // 既存の初期化処理が終わったあとで実行するために、タイマーで少し遅らせる
+        setTimeout(() => {
+          const toggle = document.getElementById('sohmu-toggle');
+          if (!toggle) return;
 
-      // 変更時に状態を保存
-      toggle.addEventListener('change', () => {
-        try {
-          localStorage.setItem('sohmuMode', toggle.checked ? 'on' : 'off');
-        } catch(_) {}
-      });
+          // 変更時に状態を保存
+          toggle.addEventListener('change', () => {
+            try {
+              localStorage.setItem('sohmuMode', toggle.checked ? 'on' : 'off');
+            } catch(_) {}
+          });
 
-      // 初期状態の復元
-      let saved = null;
-      try {
-        saved = localStorage.getItem('sohmuMode');
-      } catch(_) {}
-
-      if (saved === 'on' || saved === 'off') {
-        const desired = (saved === 'on');
-        if (toggle.checked !== desired) {
-          toggle.checked = desired;
+          // 初期状態の復元
+          let saved = null;
           try {
-            toggle.dispatchEvent(new Event('change'));
+            saved = localStorage.getItem('sohmuMode');
           } catch(_) {}
-        }
-      } else {
-        // 初回は現在の状態を保存だけしておく
+
+          if (saved === 'on' || saved === 'off') {
+            const desired = (saved === 'on');
+            if (toggle.checked !== desired) {
+              toggle.checked = desired;
+              try {
+                toggle.dispatchEvent(new Event('change'));
+              } catch(_) {}
+            }
+          } else {
+            // 初回は現在の状態を保存だけしておく
+            try {
+              localStorage.setItem('sohmuMode', toggle.checked ? 'on' : 'off');
+            } catch(_) {}
+          }
+        }, 0);
+      });
+    })();
+
+    /* ==== 初回起動時: 自動で寮生選択モーダルを開く ==== */
+    (function autoOpenSelfSelectOnFirstLaunch(){
+      window.addEventListener('load', function(){
+        var hasId = null;
         try {
-          localStorage.setItem('sohmuMode', toggle.checked ? 'on' : 'off');
-        } catch(_) {}
-      }
-    }, 0);
-  });
-})();
+          hasId = localStorage.getItem('myResidentId');
+        } catch(_){ hasId = null; }
+        if (hasId) return; // 既に自分が登録されている端末は対象外
+
+        var btn = document.getElementById('change-resident-btn');
+        if (!btn) return;
+
+        // 初期描画や購読のセットアップが落ち着いてから開く
+        setTimeout(function(){
+          try {
+            var nowId = localStorage.getItem('myResidentId');
+            if (nowId) return; // ロード中に登録された場合は何もしない
+          } catch(_){ }
+          var modal = document.getElementById('self-select-modal');
+          if (modal && modal.classList.contains('active')) return; // 既に開いている場合は二重オープンしない
+          try { btn.click(); } catch(_){ }
+        }, 300);
+      });
+    })();
+
+    /* ==== PWAヒントの初期表示 ==== */
+    (function initPwaHintOnLoad(){
+      window.addEventListener('load', function(){
+        try { updatePwaHint(); } catch(_){ }
+      });
+    })();
 
 
 let currentCollectionName = localStorage.getItem('currentDorm') || 'all';
