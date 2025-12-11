@@ -1523,6 +1523,20 @@ function unifiedConfirm(action){
   })();
 })();
 
+// お知らせ欄の表示切り替え（庶務OFF または 管理者ログイン中なら表示）
+function updateAnnouncementVisibility(){
+  const box = document.getElementById('announcement-container');
+  if (!box) return;
+  const isOff   = document.body.classList.contains('sohmu-off');
+  const isAdmin = document.body.classList.contains('admin-logged-in');
+  if (isOff || isAdmin){
+    // デフォルトCSSに任せる（.announcement は block）
+    box.style.display = '';
+  } else {
+    box.style.display = 'none';
+  }
+}
+
 // ==== 管理者状態の強制同期 & ログアウト時クリーンアップ ====
 (function adminStateGuard(){
   function cleanupAnnouncementEditUI(){
@@ -1565,6 +1579,7 @@ function unifiedConfirm(action){
         __aeTries++;
         if (ok || __aeTries >= 10) clearInterval(window.__annAutoEditTimer);
       }, 200);
+      try { updateAnnouncementVisibility(); } catch(_) {}
     } else {
       document.body.classList.remove('admin-logged-in');
       clearInterval(window.__annAutoEditTimer);
@@ -1585,6 +1600,7 @@ function unifiedConfirm(action){
         // 表を最新状態で再描画
         if (typeof window.renderTable === 'function') window.renderTable();
       } catch(_){ }
+      try { updateAnnouncementVisibility(); } catch(_) {}
     }
   }
 
@@ -1596,12 +1612,13 @@ function unifiedConfirm(action){
     if (e && e.key === 'isAdminLoggedIn') syncFromSession();
   });
 
-  // bodyのclass変化を監視して、admin-logged-in が外れたら即クリーン
+  // bodyのclass変化を監視して、admin-logged-in が外れたら即クリーン & お知らせ欄の表示更新
   try {
     const obs = new MutationObserver(() => {
       if (!document.body.classList.contains('admin-logged-in')) {
         cleanupAnnouncementEditUI();
       }
+      try { updateAnnouncementVisibility(); } catch(_) {}
     });
     obs.observe(document.body, { attributes:true, attributeFilter:['class'] });
   } catch(_) {}
@@ -1614,52 +1631,10 @@ function unifiedConfirm(action){
   }, true);
 })();
 
-// ==== お知らせ欄の表示制御（庶務モードON/OFFで切り替え） ====
-(function bindAnnouncementVisibility(){
-  if (window.__annVisibilityBound) return;
-  window.__annVisibilityBound = true;
-
-  function refreshAnnouncementVisibility(){
-    const box = document.getElementById('announcement-container');
-    if (!box) return;
-    // 庶務モードOFF（body.sohmu-off が付いている時）だけ表示
-    if (document.body.classList.contains('sohmu-off')) {
-      // 空文字にしておけば、CSSに任せた通常表示になる
-      box.style.display = '';
-    } else {
-      box.style.display = 'none';
-    }
-  }
-
-  // ロード時に一度だけ反映
-  window.addEventListener('load', function(){
-    try { refreshAnnouncementVisibility(); } catch(_) {}
-  });
-
-  // 庶務トグル変更時に反映（既存の処理とは別に、追加で動く）
-  document.addEventListener('change', function(ev){
-    if (!ev.target) return;
-    if (ev.target.id === 'sohmu-toggle') {
-      // 既存のchangeハンドラが先にclassをいじる可能性があるので、少し遅らせてから実行
-      setTimeout(function(){
-        try { refreshAnnouncementVisibility(); } catch(_) {}
-      }, 0);
-    }
-  }, true);
-
-  // body.classList の変化も監視しておく（他の処理からsohmu-offを付け替えた場合も追従）
-  try {
-    const obs = new MutationObserver(function(mutations){
-      for (const m of mutations){
-        if (m.type === 'attributes' && m.attributeName === 'class'){
-          try { refreshAnnouncementVisibility(); } catch(_) {}
-          break;
-        }
-      }
-    });
-    obs.observe(document.body, { attributes:true, attributeFilter:['class'] });
-  } catch(_) {}
-})();
+// 初期表示時にもお知らせ欄の表示/非表示を整える
+window.addEventListener('load', function(){
+  try { updateAnnouncementVisibility(); } catch(_) {}
+});
 
 // ==== 寮生一括追加: 行の追加/個別削除（モーダル内） ====
 (function bindBulkAddButtons(){
