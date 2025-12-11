@@ -616,10 +616,7 @@
     <div id="announcement-container" class="announcement" style="display:none;">
         <div class="announcement-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
             <h2 style="margin:0;font-size:1.2em;">お知らせ</h2>
-            <div style="display:flex; gap:6px;">
-              <button id="edit-announcement-btn" class="header-btn" style="background:#2980b9;">編集</button>
-              <button id="post-announcement-btn" class="header-btn" style="background:#27ae60;">投稿</button>
-            </div>
+            <button id="post-announcement-btn" class="header-btn" style="background:#27ae60;">投稿</button>
         </div>
         <ul id="announcement-list" class="announcement-list">
             <li>お知らせはありません。</li>
@@ -779,20 +776,6 @@
 </div>
 <!-- ==== お知らせ投稿モーダル ここまで ==== -->
 
-<!-- ==== お知らせ編集モーダル ==== -->
-<div id="edit-announcement-modal" class="modal-overlay">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h2>お知らせの編集</h2>
-      <button id="edit-ann-modal-close-btn" class="modal-close-btn">&times;</button>
-    </div>
-    <div id="edit-ann-list"></div>
-    <div class="form-actions">
-      <button type="button" id="edit-ann-cancel-btn" class="header-btn" style="background:#7f8c8d;">閉じる</button>
-    </div>
-  </div>
-</div>
-<!-- ==== お知らせ編集モーダル ここまで ==== -->
 
 <!-- ==== 管理者パスワード変更モーダル ==== -->
 <div id="change-password-modal" class="modal-overlay">
@@ -1274,175 +1257,149 @@ function unifiedConfirm(action){
   }, true);
 })();
 
-// ==== お知らせ編集画面（一覧編集） ====
-(function bindAnnouncementEditScreen(){
-  if (window.__annEditScreenBound) return;
-  window.__annEditScreenBound = true;
+// ==== お知らせの購読 & 描画 ====
+(function subscribeAnnouncements(){
+  if (window.__annSubBound) return;
+  window.__annSubBound = true;
 
-  function buildEditList(){
-    const container = document.getElementById('edit-ann-list');
-    if (!container) return;
-    container.innerHTML = '';
+  function renderAnnouncementsFromSnapshot(snap){
+    const listEl = document.getElementById('announcement-list');
+    if (!listEl) return;
 
-    const list = document.getElementById('announcement-list');
-    if (!list) {
-      container.textContent = 'お知らせが見つかりません。';
+    if (!snap || snap.empty){
+      listEl.innerHTML = '<li>お知らせはありません。</li>';
       return;
     }
 
-    const items = Array.from(list.querySelectorAll('li'));
-    let hasReal = false;
+    const frag = document.createDocumentFragment();
+    snap.forEach(doc => {
+      const d = doc.data() || {};
+      const li = document.createElement('li');
+      li.setAttribute('data-id', doc.id);
 
-    items.forEach(li => {
-      const text = (li.textContent || '').trim();
-      if (!text || text === 'お知らせはありません。') return;
-
-      const id = li.getAttribute('data-id') || li.id;
-      if (!id) return;
-
-      hasReal = true;
-
-      const titleEl = li.querySelector('.announce-title') || li.querySelector('strong');
-      const bodyEl  = li.querySelector('.announce-body')  || li.querySelector('p');
-      const title = titleEl ? (titleEl.textContent || '').trim() : '';
-      let body  = '';
-      if (bodyEl) {
-        body = (bodyEl.textContent || '').trim();
-      } else {
-        body = text;
-        if (title && body.startsWith(title)) {
-          body = body.slice(title.length).trim();
+      const title = (d.title || '').trim();
+      const body  = (d.body  || '').trim();
+      const pinned = !!d.pinned;
+      const ts = d.updatedAt || d.createdAt || null;
+      let timeStr = '';
+      try {
+        if (ts && ts.toDate) {
+          const dt = ts.toDate();
+          const y  = dt.getFullYear();
+          const m  = ('0' + (dt.getMonth() + 1)).slice(-2);
+          const da = ('0' + dt.getDate()).slice(-2);
+          const hh = ('0' + dt.getHours()).slice(-2);
+          const mm = ('0' + dt.getMinutes()).slice(-2);
+          timeStr = `${y}/${m}/${da} ${hh}:${mm}`;
         }
+      } catch(_){}
+
+      const headDiv = document.createElement('div');
+      const titleSpan = document.createElement('span');
+      titleSpan.className = 'announce-title';
+      titleSpan.textContent = title || '(タイトルなし)';
+
+      if (pinned){
+        const pinSpan = document.createElement('span');
+        pinSpan.className = 'pin-tag';
+        pinSpan.textContent = '📌';
+        headDiv.appendChild(pinSpan);
       }
 
-      const wrap = document.createElement('div');
-      wrap.className = 'edit-ann-row';
-      wrap.dataset.id = id;
+      headDiv.appendChild(titleSpan);
 
-      const fg1 = document.createElement('div');
-      fg1.className = 'form-group';
-      const lb1 = document.createElement('label');
-      lb1.textContent = 'タイトル';
-      const inp = document.createElement('input');
-      inp.type = 'text';
-      inp.className = 'edit-ann-title';
-      inp.value = title;
-      fg1.appendChild(lb1);
-      fg1.appendChild(inp);
+      if (timeStr){
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'announce-time';
+        timeSpan.textContent = timeStr;
+        headDiv.appendChild(timeSpan);
+      }
 
-      const fg2 = document.createElement('div');
-      fg2.className = 'form-group';
-      const lb2 = document.createElement('label');
-      lb2.textContent = '本文';
-      const ta = document.createElement('textarea');
-      ta.rows = 4;
-      ta.className = 'edit-ann-body';
-      ta.value = body;
-      fg2.appendChild(lb2);
-      fg2.appendChild(ta);
+      const bodyP = document.createElement('p');
+      bodyP.className = 'announce-body';
+      bodyP.textContent = body;
 
-      const actions = document.createElement('div');
-      actions.className = 'form-actions';
-      const saveBtn = document.createElement('button');
-      saveBtn.type = 'button';
-      saveBtn.className = 'header-btn edit-ann-save-btn';
-      saveBtn.style.background = '#27ae60';
-      saveBtn.textContent = '保存';
-      actions.appendChild(saveBtn);
-
-      wrap.appendChild(fg1);
-      wrap.appendChild(fg2);
-      wrap.appendChild(actions);
-
-      container.appendChild(wrap);
+      li.appendChild(headDiv);
+      li.appendChild(bodyP);
+      frag.appendChild(li);
     });
 
-    if (!hasReal) {
-      container.textContent = '編集できるお知らせがありません。';
-    }
-  }
+    listEl.innerHTML = '';
+    listEl.appendChild(frag);
 
-  function openEditModal(){
-    const modal = document.getElementById('edit-announcement-modal');
-    if (!modal) return;
-    buildEditList();
-    modal.style.display = 'flex';
-    modal.classList.add('active');
-  }
-
-  function closeEditModal(){
-    const modal = document.getElementById('edit-announcement-modal');
-    if (!modal) return;
-    modal.classList.remove('active');
-    modal.style.display = 'none';
-  }
-
-  async function saveRow(row){
-    if (!row) return;
-    const id = row.dataset.id;
-    if (!id) return;
-    const titleInput = row.querySelector('.edit-ann-title');
-    const bodyInput  = row.querySelector('.edit-ann-body');
-    if (!titleInput || !bodyInput) return;
-
-    const title = (titleInput.value || '').trim();
-    const body  = (bodyInput.value || '').trim();
-
+    // 管理者ログイン時は、昔の「1件ごとの編集ボタン」を再適用
     try {
-      await db.collection('announcements').doc(id).set({
-        title,
-        body,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-
-      // DOM側も更新しておく（元のお知らせ表示に即反映）
-      try {
-        const list = document.getElementById('announcement-list');
-        if (list) {
-          const li = list.querySelector(`li[data-id="${id}"]`) || document.getElementById(id);
-          if (li) {
-            const titleEl = li.querySelector('.announce-title') || li.querySelector('strong');
-            const bodyEl  = li.querySelector('.announce-body')  || li.querySelector('p');
-            if (titleEl) titleEl.textContent = title;
-            if (bodyEl)  bodyEl.textContent  = body;
-          }
-        }
-      } catch(_) {}
-
-      alert('お知らせを保存しました。');
-    } catch(e) {
-      console.error('edit-ann save failed', e);
-      alert('お知らせの保存に失敗しました。権限やネットワークを確認してください。');
-    }
+      window.applyAnnouncementAdminControls && window.applyAnnouncementAdminControls();
+    } catch(_){}
   }
 
-  document.addEventListener('click', (ev) => {
-    const openBtn = ev.target && ev.target.closest && ev.target.closest('#edit-announcement-btn');
-    if (openBtn) {
+  try {
+    // createdAt が無い場合は updatedAt でソート、それも無ければ全件そのままを拾う
+    db.collection('announcements')
+      .orderBy('createdAt', 'desc')
+      .onSnapshot(renderAnnouncementsFromSnapshot, (e) => {
+        console.error('announcements onSnapshot error', e);
+      });
+  } catch(e){
+    console.error('subscribeAnnouncements failed (fallback without orderBy)', e);
+    try {
+      db.collection('announcements')
+        .onSnapshot(renderAnnouncementsFromSnapshot, (err) => {
+          console.error('announcements onSnapshot error (no orderBy)', err);
+        });
+    } catch(e2){
+      console.error('subscribeAnnouncements second failure', e2);
+    }
+  }
+})();
+
+// ==== お知らせ投稿フォーム送信処理 ====
+(function bindPostAnnouncementSubmit(){
+  if (window.__postAnnSubmitBound) return;
+  window.__postAnnSubmitBound = true;
+
+  window.addEventListener('load', function(){
+    const form = document.getElementById('post-announcement-form');
+    if (!form) return;
+
+    form.addEventListener('submit', async function(ev){
       ev.preventDefault();
-      if (!document.body.classList.contains('admin-logged-in')) {
-        alert('管理者ログインすると編集できます。');
+      const titleInput = document.getElementById('post-title');
+      const bodyInput  = document.getElementById('post-body');
+      const title = (titleInput && titleInput.value || '').trim();
+      const body  = (bodyInput && bodyInput.value  || '').trim();
+
+      if (!title && !body){
+        alert('タイトルか本文を入力してください。');
         return;
       }
-      openEditModal();
-      return;
-    }
 
-    const closeBtn = ev.target && ev.target.closest && (ev.target.closest('#edit-ann-modal-close-btn') || ev.target.closest('#edit-ann-cancel-btn'));
-    if (closeBtn) {
-      ev.preventDefault();
-      closeEditModal();
-      return;
-    }
+      try {
+        await db.collection('announcements').add({
+          title,
+          body,
+          pinned   : false,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
 
-    const saveBtn = ev.target && ev.target.closest && ev.target.closest('.edit-ann-save-btn');
-    if (saveBtn) {
-      ev.preventDefault();
-      const row = saveBtn.closest('.edit-ann-row');
-      saveRow(row);
-      return;
-    }
-  }, true);
+        if (titleInput) titleInput.value = '';
+        if (bodyInput)  bodyInput.value  = '';
+
+        const modal = document.getElementById('post-announcement-modal');
+        if (modal) modal.classList.remove('active');
+
+        try {
+          if (typeof addLog === 'function') {
+            addLog('お知らせ投稿', title || body.slice(0, 20));
+          }
+        } catch(_){}
+      } catch(e){
+        console.error('announcement post failed', e);
+        alert('お知らせの投稿に失敗しました。権限やネットワークを確認してください。');
+      }
+    });
+  });
 })();
 
 // ==== お知らせ編集UI 遅延適用（ログイン直後でも再読み込み不要）====
@@ -1655,162 +1612,6 @@ function unifiedConfirm(action){
     if (!btn) return;
     setTimeout(syncFromSession, 0);
   }, true);
-})();
-
-// ==== お知らせ購読 & 投稿処理の再構築 ====
-(function initAnnouncementsModule(){
-  if (window.__announcementsInit) return;
-  window.__announcementsInit = true;
-
-  let annUnsub = null;
-
-  function formatAnnTime(date){
-    if (!(date instanceof Date)) return '';
-    const y  = date.getFullYear();
-    const m  = ('0' + (date.getMonth() + 1)).slice(-2);
-    const d  = ('0' + date.getDate()).slice(-2);
-    const hh = ('0' + date.getHours()).slice(-2);
-    const mm = ('0' + date.getMinutes()).slice(-2);
-    return `${y}/${m}/${d} ${hh}:${mm}`;
-  }
-
-  function renderAnnouncements(docs){
-    const container = document.getElementById('announcement-container');
-    const list = document.getElementById('announcement-list');
-    if (!list) return;
-
-    if (!docs || !docs.length){
-      list.innerHTML = '<li>お知らせはありません。</li>';
-      return;
-    }
-
-    const frag = document.createDocumentFragment();
-    docs.forEach(doc => {
-      const data = (doc && doc.data && doc.data()) || {};
-      const li = document.createElement('li');
-      li.className = 'announcement-item';
-      li.setAttribute('data-id', doc.id);
-
-      const head = document.createElement('div');
-      head.className = 'announce-head';
-
-      const titleSpan = document.createElement('span');
-      titleSpan.className = 'announce-title';
-      titleSpan.textContent = data.title || '';
-
-      const timeSpan = document.createElement('span');
-      timeSpan.className = 'announce-time';
-      const ts = data.updatedAt || data.createdAt;
-      if (ts && typeof ts.toDate === 'function'){
-        timeSpan.textContent = formatAnnTime(ts.toDate());
-      } else {
-        timeSpan.textContent = '';
-      }
-
-      head.appendChild(titleSpan);
-      head.appendChild(timeSpan);
-
-      const bodyP = document.createElement('p');
-      bodyP.className = 'announce-body';
-      bodyP.textContent = data.body || '';
-
-      li.appendChild(head);
-      li.appendChild(bodyP);
-
-      frag.appendChild(li);
-    });
-
-    list.innerHTML = '';
-    list.appendChild(frag);
-
-    // 管理者用のインライン編集UIを再適用
-    try {
-      window.applyAnnouncementAdminControls && window.applyAnnouncementAdminControls();
-    } catch(_){}
-
-    // 庶務モードOFFのときにのみ表示したい場合は container の表示をここで制御
-    if (container){
-      // ここではとりあえずデータがあれば display:block にしておく（実際の表示切替は既存ロジックに任せてもOK）
-      if (docs.length > 0){
-        // container.style.display = 'block'; // 必要なら有効化
-      }
-    }
-  }
-
-  function startAnnouncementsListener(){
-    if (!db || typeof db.collection !== 'function') return;
-    try {
-      if (typeof annUnsub === 'function') annUnsub();
-    } catch(_){}
-
-    try {
-      annUnsub = db.collection('announcements')
-        .orderBy('createdAt', 'desc')
-        .limit(50)
-        .onSnapshot((snap) => {
-          try {
-            renderAnnouncements(snap.docs || []);
-          } catch(e){
-            console.error('renderAnnouncements failed', e);
-          }
-        }, (err) => {
-          console.error('announcements onSnapshot error', err);
-        });
-    } catch(e){
-      console.error('startAnnouncementsListener error', e);
-    }
-  }
-
-  function bindPostAnnouncementForm(){
-    const form = document.getElementById('post-announcement-form');
-    if (!form) return;
-
-    form.addEventListener('submit', async function(ev){
-      ev.preventDefault();
-      const titleEl = document.getElementById('post-title');
-      const bodyEl  = document.getElementById('post-body');
-      const title = (titleEl && titleEl.value || '').trim();
-      const body  = (bodyEl  && bodyEl.value  || '').trim();
-
-      if (!title && !body){
-        alert('タイトルか本文を入力してください。');
-        return;
-      }
-      try {
-        await db.collection('announcements').add({
-          title,
-          body,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-          pinned: false
-        });
-
-        if (titleEl) titleEl.value = '';
-        if (bodyEl)  bodyEl.value  = '';
-
-        // モーダルを閉じる
-        const modal = document.getElementById('post-announcement-modal');
-        if (modal) modal.classList.remove('active');
-
-        try {
-          if (typeof addLog === 'function'){
-            addLog('お知らせ投稿', title || body.slice(0, 20));
-          }
-        } catch(_){}
-      } catch(e){
-        console.error('post-announcement error', e);
-        alert('お知らせの投稿に失敗しました。権限やネットワークを確認してください。');
-      }
-    }, { passive:false });
-  }
-
-  window.addEventListener('load', function(){
-    try { startAnnouncementsListener(); } catch(e){ console.error(e); }
-    try { bindPostAnnouncementForm(); } catch(e){ console.error(e); }
-  });
-
-  // デバッグ/強制再接続用
-  window.__restartAnnouncementsListener = startAnnouncementsListener;
 })();
 
 // ==== 寮生一括追加: 行の追加/個別削除（モーダル内） ====
