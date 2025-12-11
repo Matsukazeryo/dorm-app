@@ -382,6 +382,12 @@
         body.admin-logged-in #post-announcement-btn{
           display:inline-block;   /* 標準では非表示 → 管理者のみ表示 */
         }
+        #edit-announcement-btn{
+          display:none;
+        }
+        body.admin-logged-in #edit-announcement-btn{
+          display:inline-block;
+        }
         /* 複数お知らせ表示用リスト */
         .announcement-list{
           list-style:none;
@@ -610,7 +616,10 @@
     <div id="announcement-container" class="announcement" style="display:none;">
         <div class="announcement-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
             <h2 style="margin:0;font-size:1.2em;">お知らせ</h2>
-            <button id="post-announcement-btn" class="header-btn" style="background:#27ae60;">投稿</button>
+            <div style="display:flex; gap:6px;">
+              <button id="edit-announcement-btn" class="header-btn" style="background:#2980b9;">編集</button>
+              <button id="post-announcement-btn" class="header-btn" style="background:#27ae60;">投稿</button>
+            </div>
         </div>
         <ul id="announcement-list" class="announcement-list">
             <li>お知らせはありません。</li>
@@ -769,6 +778,21 @@
   </div>
 </div>
 <!-- ==== お知らせ投稿モーダル ここまで ==== -->
+
+<!-- ==== お知らせ編集モーダル ==== -->
+<div id="edit-announcement-modal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>お知らせの編集</h2>
+      <button id="edit-ann-modal-close-btn" class="modal-close-btn">&times;</button>
+    </div>
+    <div id="edit-ann-list"></div>
+    <div class="form-actions">
+      <button type="button" id="edit-ann-cancel-btn" class="header-btn" style="background:#7f8c8d;">閉じる</button>
+    </div>
+  </div>
+</div>
+<!-- ==== お知らせ編集モーダル ここまで ==== -->
 
 <!-- ==== 管理者パスワード変更モーダル ==== -->
 <div id="change-password-modal" class="modal-overlay">
@@ -1196,6 +1220,177 @@ function unifiedConfirm(action){
       ev.preventDefault();
       const modal = document.getElementById('post-announcement-modal');
       if (modal) { modal.classList.remove('active'); }
+      return;
+    }
+  }, true);
+})();
+
+// ==== お知らせ編集画面（一覧編集） ====
+(function bindAnnouncementEditScreen(){
+  if (window.__annEditScreenBound) return;
+  window.__annEditScreenBound = true;
+
+  function buildEditList(){
+    const container = document.getElementById('edit-ann-list');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const list = document.getElementById('announcement-list');
+    if (!list) {
+      container.textContent = 'お知らせが見つかりません。';
+      return;
+    }
+
+    const items = Array.from(list.querySelectorAll('li'));
+    let hasReal = false;
+
+    items.forEach(li => {
+      const text = (li.textContent || '').trim();
+      if (!text || text === 'お知らせはありません。') return;
+
+      const id = li.getAttribute('data-id') || li.id;
+      if (!id) return;
+
+      hasReal = true;
+
+      const titleEl = li.querySelector('.announce-title') || li.querySelector('strong');
+      const bodyEl  = li.querySelector('.announce-body')  || li.querySelector('p');
+      const title = titleEl ? (titleEl.textContent || '').trim() : '';
+      let body  = '';
+      if (bodyEl) {
+        body = (bodyEl.textContent || '').trim();
+      } else {
+        body = text;
+        if (title && body.startsWith(title)) {
+          body = body.slice(title.length).trim();
+        }
+      }
+
+      const wrap = document.createElement('div');
+      wrap.className = 'edit-ann-row';
+      wrap.dataset.id = id;
+
+      const fg1 = document.createElement('div');
+      fg1.className = 'form-group';
+      const lb1 = document.createElement('label');
+      lb1.textContent = 'タイトル';
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.className = 'edit-ann-title';
+      inp.value = title;
+      fg1.appendChild(lb1);
+      fg1.appendChild(inp);
+
+      const fg2 = document.createElement('div');
+      fg2.className = 'form-group';
+      const lb2 = document.createElement('label');
+      lb2.textContent = '本文';
+      const ta = document.createElement('textarea');
+      ta.rows = 4;
+      ta.className = 'edit-ann-body';
+      ta.value = body;
+      fg2.appendChild(lb2);
+      fg2.appendChild(ta);
+
+      const actions = document.createElement('div');
+      actions.className = 'form-actions';
+      const saveBtn = document.createElement('button');
+      saveBtn.type = 'button';
+      saveBtn.className = 'header-btn edit-ann-save-btn';
+      saveBtn.style.background = '#27ae60';
+      saveBtn.textContent = '保存';
+      actions.appendChild(saveBtn);
+
+      wrap.appendChild(fg1);
+      wrap.appendChild(fg2);
+      wrap.appendChild(actions);
+
+      container.appendChild(wrap);
+    });
+
+    if (!hasReal) {
+      container.textContent = '編集できるお知らせがありません。';
+    }
+  }
+
+  function openEditModal(){
+    const modal = document.getElementById('edit-announcement-modal');
+    if (!modal) return;
+    buildEditList();
+    modal.style.display = 'flex';
+    modal.classList.add('active');
+  }
+
+  function closeEditModal(){
+    const modal = document.getElementById('edit-announcement-modal');
+    if (!modal) return;
+    modal.classList.remove('active');
+    modal.style.display = 'none';
+  }
+
+  async function saveRow(row){
+    if (!row) return;
+    const id = row.dataset.id;
+    if (!id) return;
+    const titleInput = row.querySelector('.edit-ann-title');
+    const bodyInput  = row.querySelector('.edit-ann-body');
+    if (!titleInput || !bodyInput) return;
+
+    const title = (titleInput.value || '').trim();
+    const body  = (bodyInput.value || '').trim();
+
+    try {
+      await db.collection('announcements').doc(id).set({
+        title,
+        body,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      // DOM側も更新しておく（元のお知らせ表示に即反映）
+      try {
+        const list = document.getElementById('announcement-list');
+        if (list) {
+          const li = list.querySelector(`li[data-id="${id}"]`) || document.getElementById(id);
+          if (li) {
+            const titleEl = li.querySelector('.announce-title') || li.querySelector('strong');
+            const bodyEl  = li.querySelector('.announce-body')  || li.querySelector('p');
+            if (titleEl) titleEl.textContent = title;
+            if (bodyEl)  bodyEl.textContent  = body;
+          }
+        }
+      } catch(_) {}
+
+      alert('お知らせを保存しました。');
+    } catch(e) {
+      console.error('edit-ann save failed', e);
+      alert('お知らせの保存に失敗しました。権限やネットワークを確認してください。');
+    }
+  }
+
+  document.addEventListener('click', (ev) => {
+    const openBtn = ev.target && ev.target.closest && ev.target.closest('#edit-announcement-btn');
+    if (openBtn) {
+      ev.preventDefault();
+      if (!document.body.classList.contains('admin-logged-in')) {
+        alert('管理者ログインすると編集できます。');
+        return;
+      }
+      openEditModal();
+      return;
+    }
+
+    const closeBtn = ev.target && ev.target.closest && (ev.target.closest('#edit-ann-modal-close-btn') || ev.target.closest('#edit-ann-cancel-btn'));
+    if (closeBtn) {
+      ev.preventDefault();
+      closeEditModal();
+      return;
+    }
+
+    const saveBtn = ev.target && ev.target.closest && ev.target.closest('.edit-ann-save-btn');
+    if (saveBtn) {
+      ev.preventDefault();
+      const row = saveBtn.closest('.edit-ann-row');
+      saveRow(row);
       return;
     }
   }, true);
