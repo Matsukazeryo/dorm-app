@@ -1495,7 +1495,7 @@ function unifiedConfirm(action){
   if (entriesRoot && !entriesRoot.querySelector('.bulk-add-entry')) addEntry();
 })();
 
-/* ==== 庶務モードの状態を保存・復元 ==== */
+    /* ==== 庶務モードの状態を保存・復元 ==== */
     (function persistSohmuMode(){
       window.addEventListener('load', () => {
         // 既存の初期化処理が終わったあとで実行するために、タイマーで少し遅らせる
@@ -1515,6 +1515,24 @@ function unifiedConfirm(action){
           try {
             saved = localStorage.getItem('sohmuMode');
           } catch(_) {}
+
+          // PWA(ホーム画面から起動したとき)の「初回だけ」は庶務モードOFFをデフォルトにする
+          if (saved === null) {
+            let standalone = false;
+            try { standalone = isStandaloneDisplayMode(); } catch(_) {}
+            if (standalone) {
+              if (toggle.checked !== false) {
+                toggle.checked = false;
+                try {
+                  toggle.dispatchEvent(new Event('change'));
+                } catch(_) {}
+              }
+              try {
+                localStorage.setItem('sohmuMode', 'off');
+              } catch(_) {}
+              return;
+            }
+          }
 
           if (saved === 'on' || saved === 'off') {
             const desired = (saved === 'on');
@@ -1550,6 +1568,12 @@ function unifiedConfirm(action){
         var opened = document.getElementById('self-select-modal');
         if (opened && opened.classList.contains('active')) return;
 
+        // 初回の寮生選択画面が出るまでは全画面をブロックしておく
+        var overlay = document.getElementById('loading-overlay');
+        if (overlay) {
+          overlay.style.display = 'flex';
+        }
+
         // 寮生リスト(allResidents)がロードされるまで待ってから開く
         var tries = 0;
         var maxTries = 40; // 約 40 * 250ms ≒ 10秒までリトライ
@@ -1557,6 +1581,15 @@ function unifiedConfirm(action){
           // 途中で myResidentId が設定されたら中止
           if (hasMyId()) {
             clearInterval(timer);
+            if (overlay) overlay.style.display = 'none';
+            return;
+          }
+
+          // すでにモーダルが開いている場合はブロック解除だけして終了
+          var modalNow = document.getElementById('self-select-modal');
+          if (modalNow && modalNow.classList.contains('active')) {
+            clearInterval(timer);
+            if (overlay) overlay.style.display = 'none';
             return;
           }
 
@@ -1566,20 +1599,28 @@ function unifiedConfirm(action){
               clearInterval(timer);
 
               var b = document.getElementById('change-resident-btn');
-              if (!b) return;
+              if (!b) {
+                if (overlay) overlay.style.display = 'none';
+                return;
+              }
 
               var modal = document.getElementById('self-select-modal');
-              if (modal && modal.classList.contains('active')) return;
+              if (modal && modal.classList.contains('active')) {
+                if (overlay) overlay.style.display = 'none';
+                return;
+              }
 
               try { b.click(); } catch(_) {}
+              if (overlay) overlay.style.display = 'none';
               return;
             }
           } catch(_) {}
 
           tries++;
           if (tries >= maxTries) {
-            // 住民リストが取得できなかった場合はあきらめる
+            // 住民リストが取得できなかった場合はあきらめる（ブロックも解除）
             clearInterval(timer);
+            if (overlay) overlay.style.display = 'none';
           }
         }, 250);
       });
