@@ -1274,12 +1274,14 @@ function unifiedConfirm(action){
     const frag = document.createDocumentFragment();
     snap.forEach(doc => {
       const d = doc.data() || {};
+      const pinned = !!d.pinned;
       const li = document.createElement('li');
+      li.className = 'announce-item';
+      if (pinned) li.classList.add('pinned');
       li.setAttribute('data-id', doc.id);
 
       const title = (d.title || '').trim();
       const body  = (d.body  || '').trim();
-      const pinned = !!d.pinned;
       const ts = d.updatedAt || d.createdAt || null;
       let timeStr = '';
       try {
@@ -1317,7 +1319,7 @@ function unifiedConfirm(action){
 
       const bodyP = document.createElement('p');
       bodyP.className = 'announce-body';
-      bodyP.textContent = body;
+      bodyP.innerHTML = body;
 
       li.appendChild(headDiv);
       li.appendChild(bodyP);
@@ -1415,9 +1417,12 @@ function unifiedConfirm(action){
         if ((li.textContent || '').trim() === 'お知らせはありません。') return;
         const actions = document.createElement('div');
         actions.className = 'announce-actions';
-        actions.innerHTML = '<button type="button" class="announce-edit-btn">編集</button>'+
-                            '<button type="button" class="announce-save-btn" style="display:none;">保存</button>'+
-                            '<button type="button" class="announce-cancel-btn" style="display:none;">キャンセル</button>';
+        const isPinned = li.classList.contains('pinned');
+        actions.innerHTML =
+          '<button type="button" class="announce-pin-btn">' + (isPinned ? 'ピン解除' : 'ピン留め') + '</button>' +
+          '<button type="button" class="announce-edit-btn">編集</button>' +
+          '<button type="button" class="announce-save-btn" style="display:none;">保存</button>' +
+          '<button type="button" class="announce-cancel-btn" style="display:none;">キャンセル</button>';
         li.appendChild(actions);
       });
     };
@@ -1449,6 +1454,27 @@ function unifiedConfirm(action){
       if (!li) return;
       if (!document.body.classList.contains('admin-logged-in')) return;
 
+      if (ev.target.closest('.announce-pin-btn')){
+        ev.preventDefault();
+        const annId = li.getAttribute('data-id') || li.id || null;
+        if (!annId) return;
+        const currentlyPinned = li.classList.contains('pinned');
+        const newPinned = !currentlyPinned;
+        db.collection('announcements').doc(annId).set({
+          pinned: newPinned,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true }).then(() => {
+          li.classList.toggle('pinned', newPinned);
+          const btn = li.querySelector('.announce-actions .announce-pin-btn');
+          if (btn) btn.textContent = newPinned ? 'ピン解除' : 'ピン留め';
+          try { addLog && addLog('お知らせピン変更', `[${annId}] ${newPinned ? 'ピン留め' : 'ピン解除'}`); } catch(_){}
+        }).catch(e => {
+          console.error('Announcement pin toggle failed', e);
+          alert('ピン留めの変更に失敗しました。権限/ネットワークを確認してください。');
+        });
+        return;
+      }
+
       if (ev.target.closest('.announce-edit-btn')){
         ev.preventDefault();
         const titleEl = li.querySelector('.announce-title') || li.querySelector('strong');
@@ -1470,7 +1496,7 @@ function unifiedConfirm(action){
         const titleEl = li.querySelector('.announce-title') || li.querySelector('strong');
         const bodyEl  = li.querySelector('.announce-body')  || li.querySelector('p');
         const newTitle = (titleEl && titleEl.textContent || '').trim();
-        const newBody  = (bodyEl  && bodyEl.textContent  || '').trim();
+        const newBody  = bodyEl ? (bodyEl.innerHTML || '').trim() : '';
         if (titleEl) titleEl.contentEditable = 'false';
         if (bodyEl)  bodyEl.contentEditable  = 'false';
         li.classList.remove('editing');
@@ -1493,6 +1519,56 @@ function unifiedConfirm(action){
         }
         return;
       }
+// ==== お知らせ投稿モーダル: 文字強調ツール ====
+(function bindAnnouncementEmphasisTools(){
+  if (window.__annEmphasisBound) return;
+  window.__annEmphasisBound = true;
+
+  window.addEventListener('load', function(){
+    const bodyInput = document.getElementById('post-body');
+    const applyBtn  = document.getElementById('apply-red');
+    const removeBtn = document.getElementById('remove-emphasis');
+    if (!bodyInput || !applyBtn || !removeBtn) return;
+
+    applyBtn.addEventListener('click', function(ev){
+      ev.preventDefault();
+      const ta = bodyInput;
+      if (typeof ta.selectionStart !== 'number' || typeof ta.selectionEnd !== 'number') {
+        alert('赤で強調したい部分を選択してください。');
+        return;
+      }
+      const start = ta.selectionStart;
+      const end   = ta.selectionEnd;
+      if (start === end) {
+        alert('赤で強調したい部分を選択してください。');
+        return;
+      }
+      const val = ta.value || '';
+      const before   = val.slice(0, start);
+      const selected = val.slice(start, end);
+      const after    = val.slice(end);
+      const wrapped = '<span style="color:#c0392b;font-weight:bold;">' + selected + '</span>';
+      ta.value = before + wrapped + after;
+      const pos = (before + wrapped).length;
+      ta.focus();
+      try {
+        ta.setSelectionRange(pos, pos);
+      } catch(_){}
+    });
+
+    removeBtn.addEventListener('click', function(ev){
+      ev.preventDefault();
+      const ta = bodyInput;
+      const v = ta.value || '';
+      // 自分が付けたspanによる赤強調をざっくり削除し、中身のテキストだけ残す
+      const stripped = v
+        .replace(/<span[^>]*style="[^"]*color:\s*#?c0392b[^"]*"[^>]*>(.*?)<\/span>/gi, '$1')
+        .replace(/<span[^>]*>(.*?)<\/span>/gi, '$1');
+      ta.value = stripped;
+    });
+  });
+})();
+
       if (ev.target.closest('.announce-cancel-btn')){
         ev.preventDefault();
         const titleEl = li.querySelector('.announce-title') || li.querySelector('strong');
