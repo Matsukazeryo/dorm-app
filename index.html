@@ -1634,10 +1634,111 @@ function unifiedConfirm(action){
     })();
 
 
-let currentCollectionName = localStorage.getItem('currentDorm') || 'all';
+let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_shofu';
     let allResidents = []; 
     let unsubscribe; 
     let logUnsubscribe = null;  // 操作履歴 listener
+
+// ==== 両寮表示("両方")の購読を明示的に修正するパッチ ====
+(function patchSubscribeResidentsForAllDorms(){
+  if (window.__subscribeAllPatched) return;
+  window.__subscribeAllPatched = true;
+
+  // 元の subscribeResidents が無ければ何もしない
+  if (typeof subscribeResidents !== 'function') return;
+
+  const originalSubscribeResidents = subscribeResidents;
+  let shofuCache = [];
+  let meizenCache = [];
+  let unsubShofu = null;
+  let unsubMeizen = null;
+
+  function cleanupAllUnsub(){
+    try {
+      if (typeof unsubShofu === 'function') { unsubShofu(); }
+    } catch(_) {}
+    try {
+      if (typeof unsubMeizen === 'function') { unsubMeizen(); }
+    } catch(_) {}
+    unsubShofu = null;
+    unsubMeizen = null;
+  }
+
+  function attachBothDormListeners(){
+    if (!db || typeof db.collection !== 'function') return;
+
+    // 既存リスナーを全て停止
+    if (typeof unsubscribe === 'function') {
+      try { unsubscribe(); } catch(_) {}
+    }
+    cleanupAllUnsub();
+
+    const shofuRef  = db.collection('residents_shofu').orderBy('roomNumber');
+    const meizenRef = db.collection('residents_meizen').orderBy('roomNumber');
+
+    unsubShofu = shofuRef.onSnapshot((snap) => {
+      shofuCache = [];
+      snap.forEach((doc) => {
+        const d = doc.data() || {};
+        shofuCache.push({
+          id: doc.id,
+          dorm: 'shofu',
+          name: d.name || '',
+          roomNumber: d.roomNumber || '',
+          luggage: typeof d.luggage === 'number' ? d.luggage : (parseInt(d.luggage) || 0),
+          mail: typeof d.mail === 'number' ? d.mail : (parseInt(d.mail) || 0)
+        });
+      });
+      try {
+        allResidents = shofuCache.concat(meizenCache);
+        if (typeof renderTable === 'function') renderTable();
+      } catch(_) {}
+    }, (err) => {
+      console.error('shofu onSnapshot error (all mode)', err);
+    });
+
+    unsubMeizen = meizenRef.onSnapshot((snap) => {
+      meizenCache = [];
+      snap.forEach((doc) => {
+        const d = doc.data() || {};
+        meizenCache.push({
+          id: doc.id,
+          dorm: 'meizen',
+          name: d.name || '',
+          roomNumber: d.roomNumber || '',
+          luggage: typeof d.luggage === 'number' ? d.luggage : (parseInt(d.luggage) || 0),
+          mail: typeof d.mail === 'number' ? d.mail : (parseInt(d.mail) || 0)
+        });
+      });
+      try {
+        allResidents = shofuCache.concat(meizenCache);
+        if (typeof renderTable === 'function') renderTable();
+      } catch(_) {}
+    }, (err) => {
+      console.error('meizen onSnapshot error (all mode)', err);
+    });
+
+    // unsubscribe には両方まとめて止める関数を入れておく
+    unsubscribe = function(){
+      cleanupAllUnsub();
+    };
+  }
+
+  // オリジナルをラップして、currentCollectionName === 'all' のときだけ
+  // 両寮購読ロジックに差し替える
+  subscribeResidents = function(){
+    try {
+      // 両方表示モード
+      if (currentCollectionName === 'all') {
+        attachBothDormListeners();
+        return;
+      }
+    } catch(_) {}
+
+    // それ以外は元の処理にそのまま委譲
+    return originalSubscribeResidents.apply(this, arguments);
+  };
+})();
 
     // ==== 朝の庶務（モーニング）状態 ====
     let isMorningMode = false;
