@@ -1556,6 +1556,11 @@ function updateAnnouncementVisibility(){
     const isAdmin = (sessionStorage.getItem('isAdminLoggedIn') === 'true');
     if (isAdmin){
       document.body.classList.add('admin-logged-in');
+      // インラインでdisplay:noneが残っている場合に備えて、一度クリアしてCSS制御に戻す
+      try {
+        const postBtn = document.getElementById('post-announcement-btn');
+        if (postBtn) postBtn.style.display = '';
+      } catch(_) {}
       // ログイン直後でも編集UIを即時適用
       try { window.applyAnnouncementAdminControls && window.applyAnnouncementAdminControls(); } catch(_) {}
       // 失敗時の再試行（最大10回 / 2秒程度）
@@ -1582,6 +1587,11 @@ function updateAnnouncementVisibility(){
       try { updateAnnouncementVisibility(); } catch(_) {}
     } else {
       document.body.classList.remove('admin-logged-in');
+      // 管理者状態変更時はインラインdisplayをクリアしておく
+      try {
+        const postBtn = document.getElementById('post-announcement-btn');
+        if (postBtn) postBtn.style.display = '';
+      } catch(_) {}
       clearInterval(window.__annAutoEditTimer);
       cleanupAnnouncementEditUI();
       // === ログアウト時は「庶務モードONの閲覧」へ強制 ===
