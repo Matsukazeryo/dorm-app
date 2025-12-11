@@ -586,7 +586,7 @@
 
     <!-- ===== PWA利用ヒント ===== -->
     <div id="pwa-hint" class="pwa-hint">
-      通知をちゃんと受け取るには、このページをブラウザやLINEのメニューからホーム画面に追加して、ホーム画面のアイコンから開いてね。
+      通知を受け取るには、このページをホーム画面に追加してください。
     </div>
     <!-- ===== PWA利用ヒントここまで ===== -->
 
@@ -1537,25 +1537,51 @@ function unifiedConfirm(action){
     /* ==== 初回起動時: 自動で寮生選択モーダルを開く ==== */
     (function autoOpenSelfSelectOnFirstLaunch(){
       window.addEventListener('load', function(){
-        var hasId = null;
-        try {
-          hasId = localStorage.getItem('myResidentId');
-        } catch(_){ hasId = null; }
-        if (hasId) return; // 既に自分が登録されている端末は対象外
+        // すでに自分が設定されている端末は対象外
+        function hasMyId(){
+          try { return !!localStorage.getItem('myResidentId'); } catch(_) { return true; }
+        }
+        if (hasMyId()) return;
 
         var btn = document.getElementById('change-resident-btn');
         if (!btn) return;
 
-        // 初期描画や購読のセットアップが落ち着いてから開く
-        setTimeout(function(){
+        // すでにモーダルが開いていたら何もしない
+        var opened = document.getElementById('self-select-modal');
+        if (opened && opened.classList.contains('active')) return;
+
+        // 寮生リスト(allResidents)がロードされるまで待ってから開く
+        var tries = 0;
+        var maxTries = 40; // 約 40 * 250ms ≒ 10秒までリトライ
+        var timer = setInterval(function(){
+          // 途中で myResidentId が設定されたら中止
+          if (hasMyId()) {
+            clearInterval(timer);
+            return;
+          }
+
+          // 寮生一覧が読み込まれたらモーダルを開く
           try {
-            var nowId = localStorage.getItem('myResidentId');
-            if (nowId) return; // ロード中に登録された場合は何もしない
-          } catch(_){ }
-          var modal = document.getElementById('self-select-modal');
-          if (modal && modal.classList.contains('active')) return; // 既に開いている場合は二重オープンしない
-          try { btn.click(); } catch(_){ }
-        }, 300);
+            if (Array.isArray(allResidents) && allResidents.length > 0) {
+              clearInterval(timer);
+
+              var b = document.getElementById('change-resident-btn');
+              if (!b) return;
+
+              var modal = document.getElementById('self-select-modal');
+              if (modal && modal.classList.contains('active')) return;
+
+              try { b.click(); } catch(_) {}
+              return;
+            }
+          } catch(_) {}
+
+          tries++;
+          if (tries >= maxTries) {
+            // 住民リストが取得できなかった場合はあきらめる
+            clearInterval(timer);
+          }
+        }, 250);
       });
     })();
 
