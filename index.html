@@ -884,7 +884,22 @@
     } catch (e) {
       console.warn('enablePersistence failed:', (e && (e.code || e.message)) || e);
     }
-    const messaging = firebase.messaging();
+    let messaging = null;
+    try {
+      if (firebase.messaging && typeof firebase.messaging.isSupported === 'function') {
+        if (firebase.messaging.isSupported()) {
+          messaging = firebase.messaging();
+        } else {
+          console.warn('Firebase Messaging not supported in this browser.');
+        }
+      } else if (firebase.messaging) {
+        // 古いSDKなど isSupported が無い場合はそのまま試す
+        messaging = firebase.messaging();
+      }
+    } catch (e) {
+      console.warn('Failed to initialize Firebase Messaging:', (e && (e.code || e.message)) || e);
+      messaging = null;
+    }
     const auth = firebase.auth();
 
     const CIRCLE_OPTIONS = {
@@ -930,6 +945,10 @@
           updateNotificationUI();
 
           // Always register (or reuse) the root-scoped SW and wait until it's ready
+          if (!messaging) {
+            console.warn('Firebase Messaging instance is not available; skip getToken');
+            return null;
+          }
           const swUrl = '/firebase-messaging-sw.js?v=20250928';
           const registration = await navigator.serviceWorker.register(swUrl, { scope: '/' });
 
@@ -1071,10 +1090,12 @@
     window.resyncFcmToken = resyncFcmToken;
     
     // Foreground messages: avoid duplicating OS notifications
-    messaging.onMessage(payload => {
-      console.log('Foreground FCM message received:', payload);
-      // (Intentionally do not call new Notification(...) here to avoid duplicates)
-    });
+    if (messaging && typeof messaging.onMessage === 'function') {
+      messaging.onMessage(payload => {
+        console.log('Foreground FCM message received:', payload);
+        // (Intentionally do not call new Notification(...) here to avoid duplicates)
+      });
+    }
     /* ===================================== */
 
 // ===== 統一確認ダイアログ =====
