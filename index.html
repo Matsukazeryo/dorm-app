@@ -1614,6 +1614,53 @@ function unifiedConfirm(action){
   }, true);
 })();
 
+// ==== お知らせ欄の表示制御（庶務モードON/OFFで切り替え） ====
+(function bindAnnouncementVisibility(){
+  if (window.__annVisibilityBound) return;
+  window.__annVisibilityBound = true;
+
+  function refreshAnnouncementVisibility(){
+    const box = document.getElementById('announcement-container');
+    if (!box) return;
+    // 庶務モードOFF（body.sohmu-off が付いている時）だけ表示
+    if (document.body.classList.contains('sohmu-off')) {
+      // 空文字にしておけば、CSSに任せた通常表示になる
+      box.style.display = '';
+    } else {
+      box.style.display = 'none';
+    }
+  }
+
+  // ロード時に一度だけ反映
+  window.addEventListener('load', function(){
+    try { refreshAnnouncementVisibility(); } catch(_) {}
+  });
+
+  // 庶務トグル変更時に反映（既存の処理とは別に、追加で動く）
+  document.addEventListener('change', function(ev){
+    if (!ev.target) return;
+    if (ev.target.id === 'sohmu-toggle') {
+      // 既存のchangeハンドラが先にclassをいじる可能性があるので、少し遅らせてから実行
+      setTimeout(function(){
+        try { refreshAnnouncementVisibility(); } catch(_) {}
+      }, 0);
+    }
+  }, true);
+
+  // body.classList の変化も監視しておく（他の処理からsohmu-offを付け替えた場合も追従）
+  try {
+    const obs = new MutationObserver(function(mutations){
+      for (const m of mutations){
+        if (m.type === 'attributes' && m.attributeName === 'class'){
+          try { refreshAnnouncementVisibility(); } catch(_) {}
+          break;
+        }
+      }
+    });
+    obs.observe(document.body, { attributes:true, attributeFilter:['class'] });
+  } catch(_) {}
+})();
+
 // ==== 寮生一括追加: 行の追加/個別削除（モーダル内） ====
 (function bindBulkAddButtons(){
   if (window.__bulkBind) return; window.__bulkBind = true;
