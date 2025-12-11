@@ -1550,22 +1550,25 @@ function unifiedConfirm(action){
             saved = localStorage.getItem('sohmuMode');
           } catch(_) {}
 
-          // PWA(ホーム画面から起動したとき)の「初回だけ」は庶務モードOFFをデフォルトにする
+          // 「初めてURLを開いたとき」は、どの環境でも庶務モードOFFをデフォルトにする
           if (saved === null) {
-            let standalone = false;
-            try { standalone = isStandaloneDisplayMode(); } catch(_) {}
-            if (standalone) {
-              if (toggle.checked !== false) {
-                toggle.checked = false;
-                try {
-                  toggle.dispatchEvent(new Event('change'));
-                } catch(_) {}
-              }
+            // もし他の初期化処理でONにされていても、ここで必ずOFFにそろえる
+            const desired = false; // OFF
+            if (toggle.checked !== desired) {
+              toggle.checked = desired;
               try {
-                localStorage.setItem('sohmuMode', 'off');
+                toggle.dispatchEvent(new Event('change'));
               } catch(_) {}
-              return;
+            } else {
+              // 既にOFF表示でも、関連処理を確実に走らせるため一度changeを投げておく
+              try {
+                toggle.dispatchEvent(new Event('change'));
+              } catch(_) {}
             }
+            try {
+              localStorage.setItem('sohmuMode', 'off');
+            } catch(_) {}
+            return;
           }
 
           if (saved === 'on' || saved === 'off') {
