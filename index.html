@@ -1657,6 +1657,162 @@ function unifiedConfirm(action){
   }, true);
 })();
 
+// ==== お知らせ購読 & 投稿処理の再構築 ====
+(function initAnnouncementsModule(){
+  if (window.__announcementsInit) return;
+  window.__announcementsInit = true;
+
+  let annUnsub = null;
+
+  function formatAnnTime(date){
+    if (!(date instanceof Date)) return '';
+    const y  = date.getFullYear();
+    const m  = ('0' + (date.getMonth() + 1)).slice(-2);
+    const d  = ('0' + date.getDate()).slice(-2);
+    const hh = ('0' + date.getHours()).slice(-2);
+    const mm = ('0' + date.getMinutes()).slice(-2);
+    return `${y}/${m}/${d} ${hh}:${mm}`;
+  }
+
+  function renderAnnouncements(docs){
+    const container = document.getElementById('announcement-container');
+    const list = document.getElementById('announcement-list');
+    if (!list) return;
+
+    if (!docs || !docs.length){
+      list.innerHTML = '<li>お知らせはありません。</li>';
+      return;
+    }
+
+    const frag = document.createDocumentFragment();
+    docs.forEach(doc => {
+      const data = (doc && doc.data && doc.data()) || {};
+      const li = document.createElement('li');
+      li.className = 'announcement-item';
+      li.setAttribute('data-id', doc.id);
+
+      const head = document.createElement('div');
+      head.className = 'announce-head';
+
+      const titleSpan = document.createElement('span');
+      titleSpan.className = 'announce-title';
+      titleSpan.textContent = data.title || '';
+
+      const timeSpan = document.createElement('span');
+      timeSpan.className = 'announce-time';
+      const ts = data.updatedAt || data.createdAt;
+      if (ts && typeof ts.toDate === 'function'){
+        timeSpan.textContent = formatAnnTime(ts.toDate());
+      } else {
+        timeSpan.textContent = '';
+      }
+
+      head.appendChild(titleSpan);
+      head.appendChild(timeSpan);
+
+      const bodyP = document.createElement('p');
+      bodyP.className = 'announce-body';
+      bodyP.textContent = data.body || '';
+
+      li.appendChild(head);
+      li.appendChild(bodyP);
+
+      frag.appendChild(li);
+    });
+
+    list.innerHTML = '';
+    list.appendChild(frag);
+
+    // 管理者用のインライン編集UIを再適用
+    try {
+      window.applyAnnouncementAdminControls && window.applyAnnouncementAdminControls();
+    } catch(_){}
+
+    // 庶務モードOFFのときにのみ表示したい場合は container の表示をここで制御
+    if (container){
+      // ここではとりあえずデータがあれば display:block にしておく（実際の表示切替は既存ロジックに任せてもOK）
+      if (docs.length > 0){
+        // container.style.display = 'block'; // 必要なら有効化
+      }
+    }
+  }
+
+  function startAnnouncementsListener(){
+    if (!db || typeof db.collection !== 'function') return;
+    try {
+      if (typeof annUnsub === 'function') annUnsub();
+    } catch(_){}
+
+    try {
+      annUnsub = db.collection('announcements')
+        .orderBy('createdAt', 'desc')
+        .limit(50)
+        .onSnapshot((snap) => {
+          try {
+            renderAnnouncements(snap.docs || []);
+          } catch(e){
+            console.error('renderAnnouncements failed', e);
+          }
+        }, (err) => {
+          console.error('announcements onSnapshot error', err);
+        });
+    } catch(e){
+      console.error('startAnnouncementsListener error', e);
+    }
+  }
+
+  function bindPostAnnouncementForm(){
+    const form = document.getElementById('post-announcement-form');
+    if (!form) return;
+
+    form.addEventListener('submit', async function(ev){
+      ev.preventDefault();
+      const titleEl = document.getElementById('post-title');
+      const bodyEl  = document.getElementById('post-body');
+      const title = (titleEl && titleEl.value || '').trim();
+      const body  = (bodyEl  && bodyEl.value  || '').trim();
+
+      if (!title && !body){
+        alert('タイトルか本文を入力してください。');
+        return;
+      }
+      try {
+        await db.collection('announcements').add({
+          title,
+          body,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          pinned: false
+        });
+
+        if (titleEl) titleEl.value = '';
+        if (bodyEl)  bodyEl.value  = '';
+
+        // モーダルを閉じる
+        const modal = document.getElementById('post-announcement-modal');
+        if (modal) modal.classList.remove('active');
+
+        try {
+          if (typeof addLog === 'function'){
+            addLog('お知らせ投稿', title || body.slice(0, 20));
+          }
+        } catch(_){}
+      } catch(e){
+        console.error('post-announcement error', e);
+        alert('お知らせの投稿に失敗しました。権限やネットワークを確認してください。');
+      }
+    }, { passive:false });
+  }
+
+  window.addEventListener('load', function(){
+    try { startAnnouncementsListener(); } catch(e){ console.error(e); }
+    try { bindPostAnnouncementForm(); } catch(e){ console.error(e); }
+  });
+
+  // デバッグ/強制再接続用
+  window.__restartAnnouncementsListener = startAnnouncementsListener;
+})();
+
 // ==== 寮生一括追加: 行の追加/個別削除（モーダル内） ====
 (function bindBulkAddButtons(){
   if (window.__bulkBind) return; window.__bulkBind = true;
