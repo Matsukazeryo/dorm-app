@@ -1022,27 +1022,40 @@
     // ===== 通知UIの更新 & アンブロック案内 =====
     function updateNotificationUI(){
       const btn = document.getElementById('enable-notif-btn');
-      if (!btn) return;
-      let supported = false;
-      try{
-        supported = (typeof firebase !== 'undefined' && firebase.messaging && typeof firebase.messaging.isSupported === 'function')
-          ? firebase.messaging.isSupported()
-          : (('Notification' in window) && ('serviceWorker' in navigator));
-      }catch(_){ supported = ('Notification' in window) && ('serviceWorker' in navigator); }
-
-      if (!supported) { btn.style.display = 'none'; return; }
-      const perm = (typeof Notification !== 'undefined' && Notification.permission) || 'default';
-      if (perm === 'granted') {
+      // 通知ボタンはもう使わないので常に非表示
+      if (btn) {
         btn.style.display = 'none';
-      } else if (perm === 'denied') {
-        btn.style.display = 'inline-block';
-        btn.textContent = '通知ブロック中';
-      } else {
-        btn.style.display = 'inline-block';
-        btn.textContent = '通知をオンにする';
       }
-      // PWAヒントも合わせて更新
+      // 代わりにPWAヒントだけ更新
       try { updatePwaHint(); } catch(_) {}
+    }
+
+    // 自分の寮生を選択したタイミングで、PWA(ウェブアプリ)なら一度だけ通知の許可をお願いする
+    function maybeRequestNotifAfterSelfSelect(){
+      // スタンドアロン(PWA)以外では何もしない（LINEブラウザや普通のブラウザでの自動ポップアップは避ける）
+      try {
+        if (!isStandaloneDisplayMode()) return;
+      } catch(_) {
+        return;
+      }
+      // 通知・Service Worker が使えない環境では何もしない
+      if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
+      // すでに許可済み or 拒否済みならここでは再度聞かない
+      try {
+        if (Notification.permission === 'granted' || Notification.permission === 'denied') return;
+      } catch(_) {}
+      // 一度聞いた端末では再度出さない
+      try {
+        if (localStorage.getItem('notifRequestedOnce') === 'yes') return;
+      } catch(_) {}
+      // 非同期で権限リクエスト（結果は待たなくてOK）
+      try {
+        requestNotificationPermission();
+      } catch(_) {}
+      // 「一度聞いた」フラグを立てる
+      try {
+        localStorage.setItem('notifRequestedOnce', 'yes');
+      } catch(_) {}
     }
 
     function showNotificationUnblockHelp(){
