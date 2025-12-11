@@ -1225,6 +1225,55 @@ function unifiedConfirm(action){
   }, true);
 })();
 
+// ==== 操作履歴モーダルのUIバインド ====
+(function bindLogModalUI(){
+  if (window.__logModalBind) return;
+  window.__logModalBind = true;
+
+  function openLogModal(){
+    const modal = document.getElementById('log-modal');
+    if (!modal) return;
+    modal.classList.add('active');   // .modal-overlay.active { display:flex; } で表示
+  }
+
+  function closeLogModal(){
+    const modal = document.getElementById('log-modal');
+    if (!modal) return;
+    modal.classList.remove('active');
+  }
+
+  document.addEventListener('click', (ev) => {
+    // 「操作履歴」ボタンが押されたときにモーダルを開く
+    const openBtn = ev.target && ev.target.closest && ev.target.closest('#log-view-btn');
+    if (openBtn) {
+      ev.preventDefault();
+      if (!document.body.classList.contains('admin-logged-in')) {
+        // 念のため：管理者ログインしていないときは何もしない
+        alert('管理者ログインすると操作履歴を表示できます。');
+        return;
+      }
+      openLogModal();
+      return;
+    }
+
+    // モーダル内の×ボタン or 「背景クリック」で閉じる
+    const closeBtn = ev.target && ev.target.closest && ev.target.closest('#log-modal .modal-close-btn');
+    if (closeBtn) {
+      ev.preventDefault();
+      closeLogModal();
+      return;
+    }
+
+    const modal = document.getElementById('log-modal');
+    if (modal && ev.target === modal) {
+      // オーバーレイそのものをクリックしたときも閉じる
+      ev.preventDefault();
+      closeLogModal();
+      return;
+    }
+  }, true);
+})();
+
 // ==== お知らせ編集画面（一覧編集） ====
 (function bindAnnouncementEditScreen(){
   if (window.__annEditScreenBound) return;
