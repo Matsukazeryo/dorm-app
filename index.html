@@ -1216,6 +1216,83 @@ function unifiedConfirm(action){
   };
 })();
 
+// ==== 「朝の庶務を取り消し、参考の数に戻しました。」系のアプリ内通知を抑止 + 重複抑止 ==== 
+(function suppressMorningCancelNotices(){
+  if (window.__suppressMorningCancelNotices) return;
+  window.__suppressMorningCancelNotices = true;
+
+  const BLOCK_RE = /朝の庶務を取り消し、参考の数に戻しました/;
+  const last = new Map();
+  const TTL_MS = 1800;
+
+  function shouldBlock(msg){
+    const text = (msg == null) ? '' : String(msg);
+    return BLOCK_RE.test(text);
+  }
+
+  function wrapFn(fnName){
+    try{
+      const orig = window[fnName];
+      if (typeof orig !== 'function') return;
+      if (orig.__morningCancelWrapped) return;
+
+      function wrapped(msg, ...rest){
+        const text = (msg == null) ? '' : String(msg);
+        if (shouldBlock(text)) return;
+
+        const key = fnName + '::' + text;
+        const now = Date.now();
+        const prev = last.get(key) || 0;
+        if (now - prev < TTL_MS) return; // 同じメッセージの連打を抑止
+        last.set(key, now);
+
+        return orig.call(this, msg, ...rest);
+      }
+      wrapped.__morningCancelWrapped = true;
+      window[fnName] = wrapped;
+    } catch(_){ }
+  }
+
+  // どの通知関数を使っていても拾えるように広めにラップ
+  const candidates = [
+    'showToast','showSnackbar','showInAppNotice','showNotice','toast','notify','notifyToast',
+    'pushToast','addToast','enqueueSnackbar','showMessage','showStatus','showBanner','showAppNotification'
+  ];
+
+  // alert でも出てくる場合があるので、この文言だけ握りつぶす
+  try{
+    const _origAlert = window.alert;
+    if (typeof _origAlert === 'function' && !_origAlert.__morningCancelWrapped){
+      window.alert = function(msg){
+        if (shouldBlock(msg)) return;
+        const text = (msg == null) ? '' : String(msg);
+        const key = 'alert::' + text;
+        const now = Date.now();
+        const prev = last.get(key) || 0;
+        if (now - prev < TTL_MS) return;
+        last.set(key, now);
+        return _origAlert.call(window, msg);
+      };
+      window.alert.__morningCancelWrapped = true;
+    }
+  } catch(_){ }
+
+  function tryWrapAll(){
+    candidates.forEach(wrapFn);
+  }
+
+  // いま存在する分をラップ
+  tryWrapAll();
+
+  // 後から定義される分も拾う（最大約4秒）
+  let tries = 0;
+  const timer = setInterval(() => {
+    tryWrapAll();
+    tries++;
+    if (tries >= 20) clearInterval(timer);
+  }, 200);
+})();
+
 // ==== お知らせ投稿モーダルのUIバインド ====
 (function bindAnnouncementUI(){
   if (window.__postAnnBind) return; window.__postAnnBind = true;
@@ -1328,18 +1405,36 @@ function unifiedConfirm(action){
     let s = (raw == null) ? '' : String(raw);
 
     // 文字参照でエスケープされた <span> / </span> / <br> を復元（単エスケープ）
-    s = s.replace(/&lt;span\b([^&]*)&gt;/gi, '<span$1>');
+    s = s.replace(/&lt;span\b([\s\S]*?)&gt;/gi, '<span$1>');
     s = s.replace(/&lt;\/span&gt;/gi, '</span>');
-    s = s.replace(/&lt;br\s*\/??&gt;/gi, '<br>');
+    s = s.replace(/&lt;br\s*\/?>&gt;/gi, '<br>');
 
     // 二重エスケープ（&amp;lt; ... &amp;gt;）にも対応
-    s = s.replace(/&amp;lt;span\b([^&]*)&amp;gt;/gi, '<span$1>');
+    s = s.replace(/&amp;lt;span\b([\s\S]*?)&amp;gt;/gi, '<span$1>');
     s = s.replace(/&amp;lt;\/span&amp;gt;/gi, '</span>');
-    s = s.replace(/&amp;lt;br\s*\/??&amp;gt;/gi, '<br>');
+    s = s.replace(/&amp;lt;br\s*\/?>&amp;gt;/gi, '<br>');
 
     // 属性の引用符が &quot; で入っている場合に備えて復元
     s = s.replace(/&quot;/g, '"');
     s = s.replace(/&#39;/g, "'");
+
+    // 旧データ（inline style）も含めて赤強調は class に寄せる（テーマ変更/再描画でも崩れにくい）
+    s = s.replace(/<span([^>]*)>/gi, (m, attrs) => {
+      const a = attrs || '';
+      const hasRed = /c0392b|rgb\(\s*192\s*,\s*57\s*,\s*43\s*\)/i.test(a);
+      if (!hasRed) return '<span' + a + '>';
+
+      // 既に class があるなら ann-red を足す
+      if (/\bclass\s*=\s*"/i.test(a)) {
+        const replaced = a.replace(/\bclass\s*=\s*"([^"]*)"/i, (mm, cls) => {
+          const next = (String(cls || '') + ' ann-red').trim().replace(/\s+/g, ' ');
+          return `class="${next}"`;
+        });
+        return '<span' + replaced + '>';
+      }
+      // class が無いなら付ける
+      return '<span class="ann-red"' + a + '>';
+    });
 
     // span / br 以外のタグは念のため落とす（XSS対策の最低限）
     s = s.replace(/<(?!\/?span\b|br\b)[^>]+>/gi, '');
