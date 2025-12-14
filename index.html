@@ -1257,363 +1257,425 @@ function unifiedConfirm(action){
   }, true);
 })();
 
-// ==== お知らせの購読 & 描画 ====
-(function subscribeAnnouncements(){
-  if (window.__annSubBound) return;
-  window.__annSubBound = true;
+// ==================== お知らせ（投稿・編集・削除・ピン留め） v2 ====================
+(function announcementsV2(){
+  if (window.__annV2) return;
+  window.__annV2 = true;
 
-  function renderAnnouncementsFromSnapshot(snap){
+  const COL = 'announcements';
+  let annCache = []; // [{id, data}]
+
+  function isAdmin(){
+    return document.body.classList.contains('admin-logged-in');
+  }
+
+  function getMillis(ts){
+    try {
+      if (!ts) return 0;
+      if (typeof ts.toMillis === 'function') return ts.toMillis();
+      if (typeof ts.toDate === 'function') return ts.toDate().getTime();
+    } catch(_){ }
+    return 0;
+  }
+
+  function formatTs(ts){
+    try{
+      if (!ts || !ts.toDate) return '';
+      const dt = ts.toDate();
+      const y  = dt.getFullYear();
+      const m  = ('0' + (dt.getMonth() + 1)).slice(-2);
+      const d  = ('0' + dt.getDate()).slice(-2);
+      const hh = ('0' + dt.getHours()).slice(-2);
+      const mm = ('0' + dt.getMinutes()).slice(-2);
+      return `${y}/${m}/${d} ${hh}:${mm}`;
+    }catch(_){
+      return '';
+    }
+  }
+
+  function ensureVisibility(){
+    const box = document.getElementById('announcement-container');
+    if (!box) return;
+    const isOff = document.body.classList.contains('sohmu-off');
+    const admin = isAdmin();
+    box.style.display = (isOff || admin) ? '' : 'none';
+  }
+
+  // 既存コード互換: 古い処理が呼んでも壊れないようにする
+  window.updateAnnouncementVisibility = ensureVisibility;
+  window.applyAnnouncementAdminControls = function(){
+    // v2では描画時に管理者ボタンを付けるので、再描画だけする
+    try { render(); } catch(_){ }
+  };
+
+  function sortCache(){
+    annCache.sort((a,b) => {
+      const ap = (a.data && a.data.pinned) ? 1 : 0;
+      const bp = (b.data && b.data.pinned) ? 1 : 0;
+      if (ap !== bp) return bp - ap;
+      const at = getMillis((a.data && (a.data.updatedAt || a.data.createdAt)) || null);
+      const bt = getMillis((b.data && (b.data.updatedAt || b.data.createdAt)) || null);
+      return bt - at;
+    });
+  }
+
+  function render(){
     const listEl = document.getElementById('announcement-list');
     if (!listEl) return;
 
-    if (!snap || snap.empty){
+    if (!annCache || annCache.length === 0){
       listEl.innerHTML = '<li>お知らせはありません。</li>';
       return;
     }
 
+    const admin = isAdmin();
     const frag = document.createDocumentFragment();
-    snap.forEach(doc => {
-      const d = doc.data() || {};
+
+    annCache.forEach(({id, data}) => {
+      const d = data || {};
       const pinned = !!d.pinned;
+
       const li = document.createElement('li');
       li.className = 'announce-item';
       if (pinned) li.classList.add('pinned');
-      li.setAttribute('data-id', doc.id);
+      li.setAttribute('data-id', id);
 
-      const title = (d.title || '').trim();
-      const body  = (d.body  || '').trim();
-      const ts = d.updatedAt || d.createdAt || null;
-      let timeStr = '';
-      try {
-        if (ts && ts.toDate) {
-          const dt = ts.toDate();
-          const y  = dt.getFullYear();
-          const m  = ('0' + (dt.getMonth() + 1)).slice(-2);
-          const da = ('0' + dt.getDate()).slice(-2);
-          const hh = ('0' + dt.getHours()).slice(-2);
-          const mm = ('0' + dt.getMinutes()).slice(-2);
-          timeStr = `${y}/${m}/${da} ${hh}:${mm}`;
-        }
-      } catch(_){}
-
-      const headDiv = document.createElement('div');
-      const titleSpan = document.createElement('span');
-      titleSpan.className = 'announce-title';
-      titleSpan.textContent = title || '(タイトルなし)';
+      const head = document.createElement('div');
+      head.className = 'announce-head';
 
       if (pinned){
-        const pinSpan = document.createElement('span');
-        pinSpan.className = 'pin-tag';
-        pinSpan.textContent = '📌';
-        headDiv.appendChild(pinSpan);
+        const pin = document.createElement('span');
+        pin.className = 'pin-tag';
+        pin.textContent = '📌';
+        head.appendChild(pin);
       }
 
-      headDiv.appendChild(titleSpan);
+      const titleSpan = document.createElement('span');
+      titleSpan.className = 'announce-title';
+      titleSpan.textContent = (d.title || '').trim() || '(タイトルなし)';
+      head.appendChild(titleSpan);
 
+      const ts = d.updatedAt || d.createdAt || null;
+      const timeStr = formatTs(ts);
       if (timeStr){
-        const timeSpan = document.createElement('span');
-        timeSpan.className = 'announce-time';
-        timeSpan.textContent = timeStr;
-        headDiv.appendChild(timeSpan);
+        const time = document.createElement('span');
+        time.className = 'announce-time';
+        time.textContent = timeStr;
+        head.appendChild(time);
       }
 
-      const bodyP = document.createElement('p');
-      bodyP.className = 'announce-body';
-      bodyP.innerHTML = body;
+      const body = document.createElement('p');
+      body.className = 'announce-body';
+      // 投稿時の <span> 等を保持したいので innerHTML で描画
+      body.innerHTML = (d.body || '').trim();
 
-      li.appendChild(headDiv);
-      li.appendChild(bodyP);
+      li.appendChild(head);
+      li.appendChild(body);
+
+      if (admin){
+        const actions = document.createElement('div');
+        actions.className = 'announce-actions';
+        actions.innerHTML = `
+          <button type="button" class="announce-pin-btn" data-action="pin">${pinned ? 'ピン解除' : 'ピン留め'}</button>
+          <button type="button" class="announce-edit-btn" data-action="edit">編集</button>
+          <button type="button" class="announce-save-btn" data-action="save" style="display:none;">保存</button>
+          <button type="button" class="announce-cancel-btn" data-action="cancel" style="display:none;">キャンセル</button>
+          <button type="button" class="announce-delete-btn" data-action="delete">削除</button>
+        `;
+        li.appendChild(actions);
+      }
+
       frag.appendChild(li);
     });
 
     listEl.innerHTML = '';
     listEl.appendChild(frag);
-
-    // 管理者ログイン時は、昔の「1件ごとの編集ボタン」を再適用
-    try {
-      window.applyAnnouncementAdminControls && window.applyAnnouncementAdminControls();
-    } catch(_){}
   }
 
-  try {
-    // createdAt が無い場合は updatedAt でソート、それも無ければ全件そのままを拾う
-    db.collection('announcements')
-      .orderBy('createdAt', 'desc')
-      .onSnapshot(renderAnnouncementsFromSnapshot, (e) => {
+  // Firestore購読
+  (function subscribe(){
+    try{
+      db.collection(COL).onSnapshot((snap) => {
+        annCache = [];
+        snap.forEach(doc => annCache.push({ id: doc.id, data: doc.data() || {} }));
+        sortCache();
+        render();
+      }, (e) => {
         console.error('announcements onSnapshot error', e);
       });
-  } catch(e){
-    console.error('subscribeAnnouncements failed (fallback without orderBy)', e);
-    try {
-      db.collection('announcements')
-        .onSnapshot(renderAnnouncementsFromSnapshot, (err) => {
-          console.error('announcements onSnapshot error (no orderBy)', err);
-        });
-    } catch(e2){
-      console.error('subscribeAnnouncements second failure', e2);
+    }catch(e){
+      console.error('announcements subscribe failed', e);
     }
-  }
-})();
+  })();
 
-// ==== お知らせ投稿フォーム送信処理 ====
-(function bindPostAnnouncementSubmit(){
-  if (window.__postAnnSubmitBound) return;
-  window.__postAnnSubmitBound = true;
+  // モーダル開閉（投稿）
+  (function bindPostModal(){
+    if (window.__annV2PostModalBound) return;
+    window.__annV2PostModalBound = true;
 
-  window.addEventListener('load', function(){
-    const form = document.getElementById('post-announcement-form');
-    if (!form) return;
-
-    form.addEventListener('submit', async function(ev){
-      ev.preventDefault();
-      const titleInput = document.getElementById('post-title');
-      const bodyInput  = document.getElementById('post-body');
-      const title = (titleInput && titleInput.value || '').trim();
-      const body  = (bodyInput && bodyInput.value  || '').trim();
-
-      if (!title && !body){
-        alert('タイトルか本文を入力してください。');
+    document.addEventListener('click', (ev) => {
+      const openBtn = ev.target && ev.target.closest && ev.target.closest('#post-announcement-btn');
+      if (openBtn){
+        ev.preventDefault();
+        const modal = document.getElementById('post-announcement-modal');
+        if (modal) modal.classList.add('active');
         return;
       }
 
-      try {
-        await db.collection('announcements').add({
-          title,
-          body,
-          pinned   : false,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-
-        if (titleInput) titleInput.value = '';
-        if (bodyInput)  bodyInput.value  = '';
-
+      const closeBtn = ev.target && ev.target.closest && (ev.target.closest('#post-modal-close-btn') || ev.target.closest('#post-cancel-btn'));
+      if (closeBtn){
+        ev.preventDefault();
         const modal = document.getElementById('post-announcement-modal');
         if (modal) modal.classList.remove('active');
-
-        try {
-          if (typeof addLog === 'function') {
-            addLog('お知らせ投稿', title || body.slice(0, 20));
-          }
-        } catch(_){}
-      } catch(e){
-        console.error('announcement post failed', e);
-        alert('お知らせの投稿に失敗しました。権限やネットワークを確認してください。');
+        return;
       }
-    });
-  });
-})();
 
-// ==== お知らせ編集UI 遅延適用（ログイン直後でも再読み込み不要）====
-(function exposeAnnControls(){
-  if (!window.applyAnnouncementAdminControls){
-    window.applyAnnouncementAdminControls = function(){
-      if (!document.body.classList.contains('admin-logged-in')) return;
-      const list = document.getElementById('announcement-list');
-      if (!list) return;
-      list.querySelectorAll('li').forEach(li => {
-        if (li.querySelector('.announce-actions')) return;
-        // プレースホルダ行はスキップ
-        if ((li.textContent || '').trim() === 'お知らせはありません。') return;
-        const actions = document.createElement('div');
-        actions.className = 'announce-actions';
-        const isPinned = li.classList.contains('pinned');
-        actions.innerHTML =
-          '<button type="button" class="announce-pin-btn">' + (isPinned ? 'ピン解除' : 'ピン留め') + '</button>' +
-          '<button type="button" class="announce-edit-btn">編集</button>' +
-          '<button type="button" class="announce-save-btn" style="display:none;">保存</button>' +
-          '<button type="button" class="announce-cancel-btn" style="display:none;">キャンセル</button>';
-        li.appendChild(actions);
+      const modal = document.getElementById('post-announcement-modal');
+      if (modal && ev.target === modal){
+        modal.classList.remove('active');
+      }
+    }, true);
+  })();
+
+  // 投稿送信
+  (function bindPostSubmit(){
+    if (window.__annV2PostSubmitBound) return;
+    window.__annV2PostSubmitBound = true;
+
+    window.addEventListener('load', () => {
+      const form = document.getElementById('post-announcement-form');
+      if (!form) return;
+
+      form.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const titleInput = document.getElementById('post-title');
+        const bodyInput  = document.getElementById('post-body');
+        const title = (titleInput && titleInput.value || '').trim();
+        const body  = (bodyInput && bodyInput.value  || '').trim();
+
+        if (!title && !body){
+          alert('タイトルか本文を入力してください。');
+          return;
+        }
+
+        try{
+          await db.collection(COL).add({
+            title,
+            body,
+            pinned: false,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+
+          if (titleInput) titleInput.value = '';
+          if (bodyInput)  bodyInput.value  = '';
+
+          const modal = document.getElementById('post-announcement-modal');
+          if (modal) modal.classList.remove('active');
+
+          try { typeof addLog === 'function' && addLog('お知らせ投稿', title || body.slice(0,20)); } catch(_){ }
+        }catch(e){
+          console.error('announcement post failed', e);
+          alert('お知らせの投稿に失敗しました。権限やネットワークを確認してください。');
+        }
       });
-    };
-  }
-  // プログラムで最初のお知らせを編集モードに入れるヘルパー
-  if (!window.__autoEnterFirstAnnEdit){
-    window.__autoEnterFirstAnnEdit = function(){
-      if (!document.body.classList.contains('admin-logged-in')) return false;
-      const list = document.getElementById('announcement-list');
-      if (!list) return false;
-      // 最初の有効なお知らせ（プレースホルダ以外）
-      const li = Array.from(list.querySelectorAll('li')).find(n => ((n.textContent || '').trim() !== 'お知らせはありません。'));
-      if (!li) return false;
-      // アクションが無ければ付与
-      if (!li.querySelector('.announce-actions')){
-        try { window.applyAnnouncementAdminControls && window.applyAnnouncementAdminControls(); } catch(_){}
+    });
+  })();
+
+  // 強調ツール（投稿モーダル）※ 以前の「クリック内IIFE」をやめて安定化
+  (function bindEmphasisTools(){
+    if (window.__annEmphasisBound) return;
+    window.__annEmphasisBound = true;
+
+    window.addEventListener('load', function(){
+      const bodyInput = document.getElementById('post-body');
+      const applyBtn  = document.getElementById('apply-red');
+      const removeBtn = document.getElementById('remove-emphasis');
+      if (!bodyInput || !applyBtn || !removeBtn) return;
+
+      applyBtn.addEventListener('click', function(ev){
+        ev.preventDefault();
+        const ta = bodyInput;
+        if (typeof ta.selectionStart !== 'number' || typeof ta.selectionEnd !== 'number') {
+          alert('赤で強調したい部分を選択してください。');
+          return;
+        }
+        const start = ta.selectionStart;
+        const end   = ta.selectionEnd;
+        if (start === end) {
+          alert('赤で強調したい部分を選択してください。');
+          return;
+        }
+        const val = ta.value || '';
+        const before   = val.slice(0, start);
+        const selected = val.slice(start, end);
+        const after    = val.slice(end);
+        const wrapped = '<span style="color:#c0392b;font-weight:bold;">' + selected + '</span>';
+        ta.value = before + wrapped + after;
+        const pos = (before + wrapped).length;
+        ta.focus();
+        try { ta.setSelectionRange(pos, pos); } catch(_){ }
+      });
+
+      removeBtn.addEventListener('click', function(ev){
+        ev.preventDefault();
+        const v = bodyInput.value || '';
+        const stripped = v
+          .replace(/<span[^>]*style="[^"]*color:\s*#?c0392b[^"]*"[^>]*>(.*?)<\/span>/gi, '$1')
+          .replace(/<span[^>]*>(.*?)<\/span>/gi, '$1');
+        bodyInput.value = stripped;
+      });
+    });
+  })();
+
+  // 管理者操作（ピン/編集/保存/キャンセル/削除）
+  (function bindAdminActions(){
+    if (window.__annV2AdminBound) return;
+    window.__annV2AdminBound = true;
+
+    function endEditing(li, keepContent){
+      const titleEl = li.querySelector('.announce-title');
+      const bodyEl  = li.querySelector('.announce-body');
+      if (titleEl) titleEl.contentEditable = 'false';
+      if (bodyEl)  bodyEl.contentEditable  = 'false';
+      li.classList.remove('editing');
+
+      const actions = li.querySelector('.announce-actions');
+      if (actions){
+        const editBtn   = actions.querySelector('.announce-edit-btn');
+        const saveBtn   = actions.querySelector('.announce-save-btn');
+        const cancelBtn = actions.querySelector('.announce-cancel-btn');
+        if (editBtn) editBtn.style.display = '';
+        if (saveBtn) saveBtn.style.display = 'none';
+        if (cancelBtn) cancelBtn.style.display = 'none';
       }
-      const editBtn = li.querySelector('.announce-actions .announce-edit-btn');
-      if (editBtn){
-        try { editBtn.click(); return true; } catch(_){}
+
+      if (!keepContent){
+        if (titleEl && li.dataset.origTitle != null) titleEl.textContent = li.dataset.origTitle;
+        if (bodyEl  && li.dataset.origBody  != null) bodyEl.innerHTML    = li.dataset.origBody;
       }
-      return false;
-    };
-  }
-  // クリック委任（未バインドなら一度だけ）
-  if (!window.__annEditDelegated){
-    document.addEventListener('click', (ev) => {
-      const li = ev.target && ev.target.closest && ev.target.closest('#announcement-list li');
+
+      delete li.dataset.origTitle;
+      delete li.dataset.origBody;
+    }
+
+    document.addEventListener('click', async (ev) => {
+      const li = ev.target && ev.target.closest && ev.target.closest('#announcement-list li.announce-item');
       if (!li) return;
-      if (!document.body.classList.contains('admin-logged-in')) return;
+      if (!isAdmin()) return; // 管理者以外は操作不可
 
-      if (ev.target.closest('.announce-pin-btn')){
-        ev.preventDefault();
-        const annId = li.getAttribute('data-id') || li.id || null;
-        if (!annId) return;
-        const currentlyPinned = li.classList.contains('pinned');
-        const newPinned = !currentlyPinned;
-        db.collection('announcements').doc(annId).set({
-          pinned: newPinned,
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true }).then(() => {
-          li.classList.toggle('pinned', newPinned);
-          const btn = li.querySelector('.announce-actions .announce-pin-btn');
-          if (btn) btn.textContent = newPinned ? 'ピン解除' : 'ピン留め';
-          try { addLog && addLog('お知らせピン変更', `[${annId}] ${newPinned ? 'ピン留め' : 'ピン解除'}`); } catch(_){}
-        }).catch(e => {
-          console.error('Announcement pin toggle failed', e);
-          alert('ピン留めの変更に失敗しました。権限/ネットワークを確認してください。');
-        });
-        return;
-      }
+      const id = li.getAttribute('data-id');
+      if (!id) return;
 
-      if (ev.target.closest('.announce-edit-btn')){
-        ev.preventDefault();
-        const titleEl = li.querySelector('.announce-title') || li.querySelector('strong');
-        const bodyEl  = li.querySelector('.announce-body')  || li.querySelector('p');
-        if (!titleEl || !bodyEl) return;
-        li.dataset.origTitle = titleEl.textContent || '';
-        li.dataset.origBody  = bodyEl.textContent || '';
-        titleEl.contentEditable = 'true';
-        bodyEl.contentEditable  = 'true';
-        li.classList.add('editing');
-        const a = li.querySelector('.announce-actions');
-        a.querySelector('.announce-edit-btn').style.display   = 'none';
-        a.querySelector('.announce-save-btn').style.display   = '';
-        a.querySelector('.announce-cancel-btn').style.display = '';
-        return;
-      }
-      if (ev.target.closest('.announce-save-btn')){
-        ev.preventDefault();
-        const titleEl = li.querySelector('.announce-title') || li.querySelector('strong');
-        const bodyEl  = li.querySelector('.announce-body')  || li.querySelector('p');
-        const newTitle = (titleEl && titleEl.textContent || '').trim();
-        const newBody  = bodyEl ? (bodyEl.innerHTML || '').trim() : '';
-        if (titleEl) titleEl.contentEditable = 'false';
-        if (bodyEl)  bodyEl.contentEditable  = 'false';
-        li.classList.remove('editing');
-        const a = li.querySelector('.announce-actions');
-        a.querySelector('.announce-edit-btn').style.display   = '';
-        a.querySelector('.announce-save-btn').style.display   = 'none';
-        a.querySelector('.announce-cancel-btn').style.display = 'none';
-        const annId = li.getAttribute('data-id') || li.id || null;
-        if (annId) {
-          db.collection('announcements').doc(annId).set({
+      const actionEl = ev.target.closest('[data-action]');
+      if (!actionEl) return;
+      const action = actionEl.getAttribute('data-action');
+
+      try{
+        if (action === 'pin'){
+          ev.preventDefault();
+          const newPinned = !li.classList.contains('pinned');
+          await db.collection(COL).doc(id).set({
+            pinned: newPinned,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge:true });
+          try { typeof addLog === 'function' && addLog('お知らせピン変更', `[${id}] ${newPinned ? 'ピン留め' : 'ピン解除'}`); } catch(_){ }
+          return;
+        }
+
+        if (action === 'edit'){
+          ev.preventDefault();
+          // 他に編集中があれば先にキャンセル
+          document.querySelectorAll('#announcement-list li.editing').forEach(other => {
+            if (other !== li) endEditing(other, false);
+          });
+
+          const titleEl = li.querySelector('.announce-title');
+          const bodyEl  = li.querySelector('.announce-body');
+          if (!titleEl || !bodyEl) return;
+
+          li.dataset.origTitle = titleEl.textContent || '';
+          li.dataset.origBody  = bodyEl.innerHTML || '';
+
+          titleEl.contentEditable = 'true';
+          bodyEl.contentEditable  = 'true';
+          li.classList.add('editing');
+
+          const actions = li.querySelector('.announce-actions');
+          if (actions){
+            const editBtn   = actions.querySelector('.announce-edit-btn');
+            const saveBtn   = actions.querySelector('.announce-save-btn');
+            const cancelBtn = actions.querySelector('.announce-cancel-btn');
+            if (editBtn) editBtn.style.display = 'none';
+            if (saveBtn) saveBtn.style.display = '';
+            if (cancelBtn) cancelBtn.style.display = '';
+          }
+
+          try { titleEl.focus(); } catch(_){ }
+          return;
+        }
+
+        if (action === 'save'){
+          ev.preventDefault();
+          const titleEl = li.querySelector('.announce-title');
+          const bodyEl  = li.querySelector('.announce-body');
+          if (!titleEl || !bodyEl) return;
+
+          const newTitle = (titleEl.textContent || '').trim();
+          const newBody  = (bodyEl.innerHTML || '').trim();
+
+          await db.collection(COL).doc(id).set({
             title: newTitle,
             body : newBody,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-          }, { merge: true }).then(()=>{
-            try { addLog('お知らせ編集', `[${annId}] ${newTitle}`); } catch(_){}
-          }).catch(e=>{
-            console.error('Announcement update failed', e);
-            alert('お知らせの保存に失敗しました。権限/ネットワークを確認してください。');
-          });
+          }, { merge:true });
+
+          endEditing(li, true);
+          try { typeof addLog === 'function' && addLog('お知らせ編集', `[${id}] ${newTitle}`); } catch(_){ }
+          return;
         }
-        return;
-      }
-// ==== お知らせ投稿モーダル: 文字強調ツール ====
-(function bindAnnouncementEmphasisTools(){
-  if (window.__annEmphasisBound) return;
-  window.__annEmphasisBound = true;
 
-  window.addEventListener('load', function(){
-    const bodyInput = document.getElementById('post-body');
-    const applyBtn  = document.getElementById('apply-red');
-    const removeBtn = document.getElementById('remove-emphasis');
-    if (!bodyInput || !applyBtn || !removeBtn) return;
+        if (action === 'cancel'){
+          ev.preventDefault();
+          endEditing(li, false);
+          return;
+        }
 
-    applyBtn.addEventListener('click', function(ev){
-      ev.preventDefault();
-      const ta = bodyInput;
-      if (typeof ta.selectionStart !== 'number' || typeof ta.selectionEnd !== 'number') {
-        alert('赤で強調したい部分を選択してください。');
-        return;
-      }
-      const start = ta.selectionStart;
-      const end   = ta.selectionEnd;
-      if (start === end) {
-        alert('赤で強調したい部分を選択してください。');
-        return;
-      }
-      const val = ta.value || '';
-      const before   = val.slice(0, start);
-      const selected = val.slice(start, end);
-      const after    = val.slice(end);
-      const wrapped = '<span style="color:#c0392b;font-weight:bold;">' + selected + '</span>';
-      ta.value = before + wrapped + after;
-      const pos = (before + wrapped).length;
-      ta.focus();
-      try {
-        ta.setSelectionRange(pos, pos);
-      } catch(_){}
-    });
-
-    removeBtn.addEventListener('click', function(ev){
-      ev.preventDefault();
-      const ta = bodyInput;
-      const v = ta.value || '';
-      // 自分が付けたspanによる赤強調をざっくり削除し、中身のテキストだけ残す
-      const stripped = v
-        .replace(/<span[^>]*style="[^"]*color:\s*#?c0392b[^"]*"[^>]*>(.*?)<\/span>/gi, '$1')
-        .replace(/<span[^>]*>(.*?)<\/span>/gi, '$1');
-      ta.value = stripped;
-    });
-  });
-})();
-
-      if (ev.target.closest('.announce-cancel-btn')){
-        ev.preventDefault();
-        const titleEl = li.querySelector('.announce-title') || li.querySelector('strong');
-        const bodyEl  = li.querySelector('.announce-body')  || li.querySelector('p');
-        if (titleEl) titleEl.textContent = li.dataset.origTitle || titleEl.textContent;
-        if (bodyEl)  bodyEl.textContent  = li.dataset.origBody  || bodyEl.textContent;
-        if (titleEl) titleEl.contentEditable = 'false';
-        if (bodyEl)  bodyEl.contentEditable  = 'false';
-        li.classList.remove('editing');
-        const a = li.querySelector('.announce-actions');
-        a.querySelector('.announce-edit-btn').style.display   = '';
-        a.querySelector('.announce-save-btn').style.display   = 'none';
-        a.querySelector('.announce-cancel-btn').style.display = 'none';
-        return;
+        if (action === 'delete'){
+          ev.preventDefault();
+          if (!window.confirm('このお知らせを削除しますか？')) return;
+          await db.collection(COL).doc(id).delete();
+          try { typeof addLog === 'function' && addLog('お知らせ削除', `[${id}]`); } catch(_){ }
+          return;
+        }
+      }catch(e){
+        console.error('announcement action failed', action, e);
+        alert('操作に失敗しました。権限/ネットワークを確認してください。');
       }
     }, true);
-    window.__annEditDelegated = true;
-  }
-  // リストの内容が読み込まれた/差し替えられた時にも自動適用
-  (function observeList(){
-    const list = document.getElementById('announcement-list');
-    if (!list || list.__annObs) return;
-    const obs = new MutationObserver(() => {
-      try { window.applyAnnouncementAdminControls && window.applyAnnouncementAdminControls(); } catch(_){ }
-    });
-    obs.observe(list, { childList: true });
-    list.__annObs = obs;
   })();
+
+  // 管理者ログイン/ログアウトや庶務トグルで見た目を追従
+  (function observeState(){
+    if (window.__annV2Obs) return;
+    window.__annV2Obs = true;
+
+    try{
+      const obs = new MutationObserver(() => {
+        ensureVisibility();
+        render(); // admin表示のボタン付け替え
+      });
+      obs.observe(document.body, { attributes:true, attributeFilter:['class'] });
+    }catch(_){ }
+
+    window.addEventListener('load', () => {
+      ensureVisibility();
+      render();
+    });
+  })();
+
 })();
 
-// お知らせ欄の表示切り替え（庶務OFF または 管理者ログイン中なら表示）
-function updateAnnouncementVisibility(){
-  const box = document.getElementById('announcement-container');
-  if (!box) return;
-  const isOff   = document.body.classList.contains('sohmu-off');
-  const isAdmin = document.body.classList.contains('admin-logged-in');
-  if (isOff || isAdmin){
-    // デフォルトCSSに任せる（.announcement は block）
-    box.style.display = '';
-  } else {
-    box.style.display = 'none';
-  }
-}
-
-// ==== 管理者状態の強制同期 & ログアウト時クリーンアップ ====
 (function adminStateGuard(){
   function cleanupAnnouncementEditUI(){
     const list = document.getElementById('announcement-list');
