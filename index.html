@@ -924,8 +924,74 @@ let currentDeviceToken = null;   // このデバイスの FCM トークンを保
     // =============================================================
     // 朝の庶務中は「個別の数変更通知」を抑止し、終了時だけ通知する
     // =============================================================
-    window.__morningModeSuppressPush = false;
-    window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
+window.__morningModeSuppressPush = false;
+window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
+
+    // 朝の庶務中の「個数変更」はサーバへ即時反映せず、最後の値だけをステージングする
+    window.__morningStagedWrites = new Map(); // key: `${collection}/${docId}` -> {luggage, mail, ...}
+    window.__morningCommitInProgress = false; // commit/restore中はステージングをバイパス
+
+    function __mergeObject(a,b){
+      const out = Object.assign({}, a || {});
+      if (b && typeof b === 'object') Object.keys(b).forEach(k => { out[k] = b[k]; });
+      return out;
+    }
+
+    function __toUpdateObject(args){
+      // update(obj) or update(field, value, field2, value2...)
+      try{
+        if (!args || args.length === 0) return null;
+        const first = args[0];
+        if (first && typeof first === 'object' && !Array.isArray(first)) return first;
+        if (typeof first === 'string'){
+          const obj = {};
+          for (let i = 0; i + 1 < args.length; i += 2){
+            const k = args[i];
+            const v = args[i+1];
+            if (typeof k === 'string') obj[k] = v;
+          }
+          return obj;
+        }
+      }catch(_){ }
+      return null;
+    }
+
+    function __stageResidentWrite(colName, docId, patchObj){
+      try{
+        if (!colName || !docId || !patchObj) return;
+        const key = String(colName) + '/' + String(docId);
+        const cur = window.__morningStagedWrites.get(key) || {};
+        const next = __mergeObject(cur, patchObj);
+        window.__morningStagedWrites.set(key, next);
+      }catch(_){ }
+    }
+
+    async function commitMorningStagedWrites(){
+      try{
+        if (!window.__morningStagedWrites || window.__morningStagedWrites.size === 0) return;
+        if (!window.db || !window.db.batch) return;
+
+        window.__morningCommitInProgress = true;
+        const batch = db.batch();
+        for (const [key, patch] of window.__morningStagedWrites.entries()){
+          try{
+            const idx = key.indexOf('/');
+            if (idx <= 0) continue;
+            const col = key.slice(0, idx);
+            const id  = key.slice(idx + 1);
+            if (!col || !id) continue;
+            const ref = db.collection(col).doc(id);
+            batch.set(ref, patch, { merge:true });
+          }catch(_){ }
+        }
+        await batch.commit();
+      }catch(e){
+        console.warn('[morning] commitMorningStagedWrites failed', e);
+      } finally {
+        try { window.__morningStagedWrites && window.__morningStagedWrites.clear && window.__morningStagedWrites.clear(); } catch(_){ }
+        window.__morningCommitInProgress = false;
+      }
+    }
 
     function __isMorningMode(){
       try{ return document.body.classList.contains('morning-mode'); }catch(_){ return false; }
@@ -1120,8 +1186,107 @@ let currentDeviceToken = null;   // このデバイスの FCM トークンを保
       };
     })();
 
+    // =============================================================
+    // 朝の庶務中: residents系コレクションへの set/update をステージングしてサーバ更新を止める
+    //  - 連打で通知が大量に出るのを防ぐ（終了時に1回だけ反映）
+    // =============================================================
+    (function stageResidentWritesDuringMorning(){
+      if (window.__stageResidentWritesDuringMorning) return;
+      window.__stageResidentWritesDuringMorning = true;
+      if (!window.db || typeof db.collection !== 'function') return;
+
+      const _origCollection = db.collection.bind(db);
+
+      // NOTE: すでに別の場所で db.collection をラップしている可能性があるので二重ラップに耐える
+      db.collection = function(name){
+        const colRef = _origCollection(name);
+        let colName = '';
+        try{ colName = String(name || ''); }catch(_){ colName = ''; }
+
+        // residents系のみ対象（必要ならここを増やす）
+        const isResidents = /resident/i.test(colName);
+        if (!isResidents) return colRef;
+
+        const _doc = colRef.doc && colRef.doc.bind(colRef);
+        if (typeof _doc !== 'function') return colRef;
+
+        colRef.doc = function(){
+          const docRef = _doc.apply(this, arguments);
+          try{
+            const docId = docRef && docRef.id;
+
+            const _update = docRef.update && docRef.update.bind(docRef);
+            if (typeof _update === 'function'){
+              docRef.update = function(){
+                try{
+                  if ((window.__morningModeSuppressPush || __isMorningMode()) && !window.__morningCommitInProgress){
+                    const obj = __toUpdateObject(arguments);
+                    if (obj) __stageResidentWrite(colName, docId, obj);
+                    console.log('[morning] staged update', colName, docId, obj);
+                    return Promise.resolve(null);
+                  }
+                }catch(_){ }
+                return _update.apply(this, arguments);
+              };
+            }
+
+            const _set = docRef.set && docRef.set.bind(docRef);
+            if (typeof _set === 'function'){
+              docRef.set = function(data, options){
+                try{
+                  if ((window.__morningModeSuppressPush || __isMorningMode()) && !window.__morningCommitInProgress){
+                    const obj = (data && typeof data === 'object') ? data : null;
+                    if (obj) __stageResidentWrite(colName, docId, obj);
+                    console.log('[morning] staged set', colName, docId, obj);
+                    return Promise.resolve(null);
+                  }
+                }catch(_){ }
+                return _set.apply(this, arguments);
+              };
+            }
+          }catch(_){ }
+          return docRef;
+        };
+
+        return colRef;
+      };
+    })();
+
+    // =============================================================
+    // 朝の庶務中にUIがサーバの古い値へ戻るのを防ぐ：ステージング値を snapshot.data() に重ねる
+    // =============================================================
+    (function patchSnapshotDataOverlay(){
+      if (window.__patchSnapshotDataOverlay) return;
+      window.__patchSnapshotDataOverlay = true;
+      try{
+        const DS = firebase && firebase.firestore && firebase.firestore.DocumentSnapshot;
+        if (!DS || !DS.prototype || typeof DS.prototype.data !== 'function') return;
+        const _origData = DS.prototype.data;
+        DS.prototype.data = function(){
+          const obj = _origData.apply(this, arguments);
+          try{
+            if (!obj) return obj;
+            if (!(window.__morningModeSuppressPush || __isMorningMode())) return obj;
+            const colId = (this.ref && this.ref.parent && this.ref.parent.id) ? String(this.ref.parent.id) : '';
+            if (!/resident/i.test(colId)) return obj;
+            const key = colId + '/' + String(this.id);
+            const staged = window.__morningStagedWrites && window.__morningStagedWrites.get && window.__morningStagedWrites.get(key);
+            if (staged && typeof staged === 'object'){
+              // よく使うフィールド名（luggage/mail）を優先して上書き
+              if (typeof staged.luggage !== 'undefined') obj.luggage = staged.luggage;
+              if (typeof staged.mail   !== 'undefined') obj.mail   = staged.mail;
+              // もし別名を使っている場合も拾う
+              if (typeof staged.luggageCount !== 'undefined') obj.luggage = staged.luggageCount;
+              if (typeof staged.mailCount   !== 'undefined') obj.mail   = staged.mailCount;
+            }
+          }catch(_){ }
+          return obj;
+        };
+      }catch(_){ }
+    })();
+
     // Firestore に「通知キュー」(push/notif) を積む方式でも漏れないようにガード
-    (function guardFirestoreNotifQueues(){
+(function guardFirestoreNotifQueues(){
       if (window.__guardFirestoreNotifQueues) return;
       window.__guardFirestoreNotifQueues = true;
       if (!window.db || typeof db.collection !== 'function') return;
@@ -1252,8 +1417,12 @@ let currentDeviceToken = null;   // このデバイスの FCM トークンを保
         }
         const cancel = ev.target && ev.target.closest && ev.target.closest('#morning-cancel-btn');
         if (cancel){
-          // Cancel should never send notifications
+          // Cancel should never send notifications, and should discard staged changes
           window.__morningFinishRequested = false;
+          try { window.__morningStagedWrites && window.__morningStagedWrites.clear && window.__morningStagedWrites.clear(); } catch(_){ }
+          // cancel/restore の内部更新は素通しさせる（短時間だけバイパス）
+          window.__morningCommitInProgress = true;
+          setTimeout(() => { try{ window.__morningCommitInProgress = false; }catch(_){} }, 6000);
           return;
         }
       }, true);
@@ -1276,7 +1445,10 @@ let currentDeviceToken = null;   // このデバイスの FCM トークンを保
           // Only when “finish” was requested
           if (window.__morningFinishRequested){
             window.__morningFinishRequested = false;
-            Promise.resolve().then(() => sendMorningFinishedNotification()).catch(()=>{});
+            Promise.resolve()
+              .then(() => commitMorningStagedWrites())
+              .then(() => sendMorningFinishedNotification())
+              .catch(()=>{});
           }
         }
         prevMorning = nowMorning;
