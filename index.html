@@ -976,7 +976,24 @@ let currentDeviceToken = null;   // このデバイスの FCM トークンを保
         'notifyResidents',
         'notifyCountChange',
         'triggerPushNotification',
-        'enqueuePush'
+        'enqueuePush',
+        // variations we have seen in this project / likely names
+        'sendFCM',
+        'sendFcm',
+        'sendFcmNotification',
+        'sendFcmToToken',
+        'sendNotificationToToken',
+        'sendPushToToken',
+        'sendPushToResident',
+        'sendToResident',
+        'sendToToken',
+        'postPush',
+        'postNotification',
+        'callPushFunction',
+        'requestPush',
+        'queuePush',
+        'enqueueNotification',
+        'enqueuePushRequest'
       ].forEach(wrapIfExists);
 
       // 後から関数が定義されるケースもあるので少しだけ再試行
@@ -985,10 +1002,118 @@ let currentDeviceToken = null;   // このデバイスの FCM トークンを保
         tries++;
         [
           'sendPushNotification','sendPush','sendNotification','sendNotificationToAll','sendNotificationToDorm',
-          'notifyResidents','notifyCountChange','triggerPushNotification','enqueuePush'
+          'notifyResidents','notifyCountChange','triggerPushNotification','enqueuePush',
+          'sendFCM','sendFcm','sendFcmNotification','sendFcmToToken','sendNotificationToToken','sendPushToToken',
+          'sendPushToResident','sendToResident','sendToToken','postPush','postNotification','callPushFunction',
+          'requestPush','queuePush','enqueueNotification','enqueuePushRequest'
         ].forEach(wrapIfExists);
         if (tries >= 20) clearInterval(t);
       }, 200);
+    })();
+
+    // 「朝の庶務」ボタンを押した瞬間から抑止をON（確認中/処理中に通知が漏れないように）
+    (function bindMorningRunSuppressOnTap(){
+      if (window.__bindMorningRunSuppressOnTap) return;
+      window.__bindMorningRunSuppressOnTap = true;
+      document.addEventListener('click', (ev) => {
+        const run = ev.target && ev.target.closest && ev.target.closest('#morning-run-btn');
+        if (!run) return;
+        // start suppress immediately
+        window.__morningModeSuppressPush = true;
+        try{
+          window.__morningModeTargetDorm = (typeof currentCollectionName === 'string' && currentCollectionName.indexOf('_') >= 0)
+            ? currentCollectionName.split('_')[1]
+            : (currentCollectionName === 'all' ? 'all' : (currentCollectionName || 'all'));
+        }catch(_){ window.__morningModeTargetDorm = window.__morningModeTargetDorm || 'all'; }
+
+        // If user cancels confirm and morning-mode never starts, auto release after a short delay
+        setTimeout(() => {
+          try{
+            if (!__isMorningMode()) window.__morningModeSuppressPush = false;
+          }catch(_){ window.__morningModeSuppressPush = false; }
+        }, 4500);
+      }, true);
+    })();
+
+    // 朝の庶務中に push/notify 系の endpoint を叩く実装でも漏れないように fetch をガード
+    (function guardFetchForPushDuringMorning(){
+      if (window.__guardFetchForPushDuringMorning) return;
+      window.__guardFetchForPushDuringMorning = true;
+      const _origFetch = window.fetch;
+      if (typeof _origFetch !== 'function') return;
+      window.fetch = function(input, init){
+        try{
+          const url = (typeof input === 'string') ? input : (input && input.url) ? input.url : '';
+          const hit = /push|notif|notify|fcm|message|send/i.test(String(url || ''));
+          if ((window.__morningModeSuppressPush || __isMorningMode()) && hit){
+            console.log('[morning] suppressed fetch:', url);
+            // return a "successful" empty response so the UI won't error
+            return Promise.resolve(new Response('', { status: 204 }));
+          }
+        }catch(_){ }
+        return _origFetch.apply(this, arguments);
+      };
+    })();
+
+    // Firestore に「通知キュー」(push/notif) を積む方式でも漏れないようにガード
+    (function guardFirestoreNotifQueues(){
+      if (window.__guardFirestoreNotifQueues) return;
+      window.__guardFirestoreNotifQueues = true;
+      if (!window.db || typeof db.collection !== 'function') return;
+
+      const _origCollection = db.collection.bind(db);
+      db.collection = function(name){
+        const colRef = _origCollection(name);
+        try{
+          const colName = String(name || '');
+          const isQueue = /notif|notification|push|message/i.test(colName);
+          if (!isQueue) return colRef;
+
+          // wrap add
+          const _add = colRef.add && colRef.add.bind(colRef);
+          if (typeof _add === 'function'){
+            colRef.add = function(){
+              if (window.__morningModeSuppressPush || __isMorningMode()){
+                console.log('[morning] suppressed firestore add to', colName);
+                return Promise.resolve(null);
+              }
+              return _add.apply(this, arguments);
+            };
+          }
+
+          // wrap doc().set/update
+          const _doc = colRef.doc && colRef.doc.bind(colRef);
+          if (typeof _doc === 'function'){
+            colRef.doc = function(){
+              const docRef = _doc.apply(this, arguments);
+              try{
+                const _set = docRef.set && docRef.set.bind(docRef);
+                if (typeof _set === 'function'){
+                  docRef.set = function(){
+                    if (window.__morningModeSuppressPush || __isMorningMode()){
+                      console.log('[morning] suppressed firestore set to', colName);
+                      return Promise.resolve(null);
+                    }
+                    return _set.apply(this, arguments);
+                  };
+                }
+                const _update = docRef.update && docRef.update.bind(docRef);
+                if (typeof _update === 'function'){
+                  docRef.update = function(){
+                    if (window.__morningModeSuppressPush || __isMorningMode()){
+                      console.log('[morning] suppressed firestore update to', colName);
+                      return Promise.resolve(null);
+                    }
+                    return _update.apply(this, arguments);
+                  };
+                }
+              }catch(_){ }
+              return docRef;
+            };
+          }
+        }catch(_){ }
+        return colRef;
+      };
     })();
 
     // 朝の庶務「終了」時にだけ送る通知（既存の送信関数があればそれを使う）
