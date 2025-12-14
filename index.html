@@ -1044,7 +1044,7 @@ let currentDeviceToken = null;   // このデバイスの FCM トークンを保
       window.fetch = function(input, init){
         try{
           const url = (typeof input === 'string') ? input : (input && input.url) ? input.url : '';
-          const hit = /push|notif|notify|fcm|message|send/i.test(String(url || ''));
+          const hit = /push|notif|notify|notification|fcm|message|send|dispatch|queue|job|task|callable|function/i.test(String(url || ''));
           if ((window.__morningModeSuppressPush || __isMorningMode()) && hit){
             console.log('[morning] suppressed fetch:', url);
             // return a "successful" empty response so the UI won't error
@@ -1052,6 +1052,71 @@ let currentDeviceToken = null;   // このデバイスの FCM トークンを保
           }
         }catch(_){ }
         return _origFetch.apply(this, arguments);
+      };
+    })();
+
+    // --- debug breadcrumb bucket (helps identify where notifications are triggered) ---
+    window.__morningBlocked = window.__morningBlocked || [];
+    function __morningLogBlock(kind, detail){
+      try{
+        const item = { t: Date.now(), kind, detail: String(detail || '') };
+        window.__morningBlocked.push(item);
+        if (window.__morningBlocked.length > 50) window.__morningBlocked.shift();
+      }catch(_){ }
+    }
+
+    // XHR を使って push/notify 系 endpoint を叩く実装でも漏れないようにガード
+    (function guardXHRForPushDuringMorning(){
+      if (window.__guardXHRForPushDuringMorning) return;
+      window.__guardXHRForPushDuringMorning = true;
+      if (!window.XMLHttpRequest) return;
+
+      const _open = XMLHttpRequest.prototype.open;
+      const _send = XMLHttpRequest.prototype.send;
+
+      XMLHttpRequest.prototype.open = function(method, url){
+        try{ this.__morning_url = url; }catch(_){ }
+        return _open.apply(this, arguments);
+      };
+
+      XMLHttpRequest.prototype.send = function(body){
+        try{
+          const url = this.__morning_url || '';
+          const hit = /push|notif|notify|notification|fcm|message|send|dispatch|queue|job|task|callable|function/i.test(String(url || ''));
+          if ((window.__morningModeSuppressPush || __isMorningMode()) && hit){
+            console.log('[morning] suppressed XHR:', url);
+            __morningLogBlock('xhr', url);
+            try{ this.abort(); }catch(_){ }
+            // Pretend success so callers won't spam retries
+            try{
+              if (typeof this.onload === 'function'){
+                setTimeout(() => { try{ this.onload({ type:'load' }); }catch(_){ } }, 0);
+              }
+            }catch(_){ }
+            return;
+          }
+        }catch(_){ }
+        return _send.apply(this, arguments);
+      };
+    })();
+
+    // sendBeacon で通知系 endpoint を叩く実装でも漏れないようにガード
+    (function guardSendBeaconForMorning(){
+      if (window.__guardSendBeaconForMorning) return;
+      window.__guardSendBeaconForMorning = true;
+      if (!navigator || typeof navigator.sendBeacon !== 'function') return;
+
+      const _beacon = navigator.sendBeacon.bind(navigator);
+      navigator.sendBeacon = function(url, data){
+        try{
+          const hit = /push|notif|notify|notification|fcm|message|send|dispatch|queue|job|task|callable|function/i.test(String(url || ''));
+          if ((window.__morningModeSuppressPush || __isMorningMode()) && hit){
+            console.log('[morning] suppressed beacon:', url);
+            __morningLogBlock('beacon', url);
+            return true; // pretend it succeeded
+          }
+        }catch(_){ }
+        return _beacon(url, data);
       };
     })();
 
@@ -1066,7 +1131,7 @@ let currentDeviceToken = null;   // このデバイスの FCM トークンを保
         const colRef = _origCollection(name);
         try{
           const colName = String(name || '');
-          const isQueue = /notif|notification|push|message/i.test(colName);
+          const isQueue = /notif|notification|push|message|queue|job|task|outbox|dispatch/i.test(colName);
           if (!isQueue) return colRef;
 
           // wrap add
