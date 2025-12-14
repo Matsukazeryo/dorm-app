@@ -1460,8 +1460,42 @@ function unifiedConfirm(action){
         return String(str == null ? '' : str);
       }
     }
-    s = decodeHtmlEntities(s);
-    s = decodeHtmlEntities(s);
+    // 複数回エスケープされるケースがあるので、最大5回まで安定するまでデコード
+    (function multiDecode(){
+      try{
+        let prev = null;
+        let cur = s;
+        for (let i = 0; i < 5 && cur !== prev; i++){
+          prev = cur;
+          cur = decodeHtmlEntities(cur);
+        }
+        s = cur;
+      }catch(_){ }
+    })();
+
+    // BBCode風の [color=...][/color] をHTMLの赤強調に正規化（編集時にiOS等で化ける対策）
+    (function normalizeBbcodeColor(){
+      try{
+        let prev = null;
+        let cur = s;
+        // ネスト/連続にもある程度対応するため数回回す
+        for (let i = 0; i < 10 && cur !== prev; i++){
+          prev = cur;
+          cur = cur.replace(/\[color\s*=\s*([^\]]+)\]([\s\S]*?)\[\/color\]/gi, (m, c, inner) => {
+            const cv = String(c || '').trim().replace(/^["']|["']$/g,'').toLowerCase();
+            const redish = (
+              cv === 'red' ||
+              cv === '#ff0000' || cv === 'ff0000' ||
+              cv === '#c0392b' || cv === 'c0392b' ||
+              /rgb\(\s*255\s*,\s*0\s*,\s*0\s*\)/i.test(cv)
+            );
+            // 赤以外のcolorタグは「タグだけ外す」
+            return redish ? `<span class="ann-red">${inner}</span>` : String(inner);
+          });
+        }
+        s = cur;
+      }catch(_){ }
+    })();
 
     // DOMに流し込んで、許可タグだけ残す（span/br）
     const root = document.createElement('div');
@@ -1660,6 +1694,58 @@ function unifiedConfirm(action){
     listEl.innerHTML = '';
     listEl.appendChild(frag);
   }
+
+  // どこかの経路で本文が [color=...]...[/color] に化けても、表示側で強制的に復元する
+  function rehydrateBbcodeInDom(){
+    try{
+      const listEl = document.getElementById('announcement-list');
+      if (!listEl) return;
+      const bodies = listEl.querySelectorAll('.announce-body');
+      bodies.forEach(bodyEl => {
+        // 編集中は触らない
+        try{
+          const li = bodyEl.closest('li');
+          if (li && li.classList.contains('editing')) return;
+        }catch(_){ }
+        try{
+          if (bodyEl.isContentEditable) return;
+        }catch(_){ }
+
+        const html = String(bodyEl.innerHTML || '');
+        if (!/\[color\s*=\s*[^\]]+\]/i.test(html)) return;
+
+        const fixed = normalizeAnnouncementBody(html);
+        if (fixed !== html){
+          bodyEl.innerHTML = fixed;
+        }
+      });
+    }catch(_){ }
+  }
+
+  (function watchBbcodeCorruption(){
+    if (window.__annV2BbcodeWatch) return;
+    window.__annV2BbcodeWatch = true;
+
+    let scheduled = false;
+    function schedule(){
+      if (scheduled) return;
+      scheduled = true;
+      setTimeout(() => {
+        scheduled = false;
+        rehydrateBbcodeInDom();
+      }, 0);
+    }
+
+    window.addEventListener('load', schedule);
+
+    // お知らせDOMの変更を監視して、[color=] が出たら即復元
+    try{
+      const listEl = document.getElementById('announcement-list');
+      if (!listEl) return;
+      const obs = new MutationObserver(() => schedule());
+      obs.observe(listEl, { childList:true, subtree:true, characterData:true });
+    }catch(_){ }
+  })();
 
   // Firestore購読
   (function subscribe(){
@@ -1933,6 +2019,7 @@ function unifiedConfirm(action){
       const obs = new MutationObserver(() => {
         ensureVisibility();
         render(); // admin表示のボタン付け替え
+        try { rehydrateBbcodeInDom(); } catch(_) {}
       });
       obs.observe(document.body, { attributes:true, attributeFilter:['class'] });
     }catch(_){ }
@@ -1940,6 +2027,7 @@ function unifiedConfirm(action){
     window.addEventListener('load', () => {
       ensureVisibility();
       render();
+      try { rehydrateBbcodeInDom(); } catch(_) {}
     });
   })();
 
