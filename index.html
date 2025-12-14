@@ -1409,6 +1409,58 @@ function unifiedConfirm(action){
   }, true);
 })();
 
+// ==== 寮生一括追加モーダル（×ボタン/背景クリック/ESC で閉じる + 開く）====
+(function bindBulkAddModalUI(){
+  if (window.__bulkAddModalBind) return;
+  window.__bulkAddModalBind = true;
+
+  function openBulkModal(){
+    const modal = document.getElementById('add-bulk-modal');
+    if (!modal) return;
+    modal.classList.add('active');
+  }
+  function closeBulkModal(){
+    const modal = document.getElementById('add-bulk-modal');
+    if (!modal) return;
+    modal.classList.remove('active');
+  }
+
+  document.addEventListener('click', (ev) => {
+    // 「寮生を一括追加」ボタンで開く
+    const openBtn = ev.target && ev.target.closest && ev.target.closest('#add-bulk-btn');
+    if (openBtn){
+      ev.preventDefault();
+      openBulkModal();
+      return;
+    }
+
+    // ×ボタンで閉じる
+    const closeBtn = ev.target && ev.target.closest && ev.target.closest('#add-bulk-modal-close-btn');
+    if (closeBtn){
+      ev.preventDefault();
+      closeBulkModal();
+      return;
+    }
+
+    // オーバーレイ背景クリックで閉じる
+    const modal = document.getElementById('add-bulk-modal');
+    if (modal && ev.target === modal){
+      ev.preventDefault();
+      closeBulkModal();
+      return;
+    }
+  }, true);
+
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Escape') return;
+    const modal = document.getElementById('add-bulk-modal');
+    if (modal && modal.classList.contains('active')){
+      ev.preventDefault();
+      closeBulkModal();
+    }
+  }, true);
+})();
+
 // ==================== お知らせ（投稿・編集・削除・ピン留め） v2 ====================
 (function announcementsV2(){
   if (window.__annV2) return;
