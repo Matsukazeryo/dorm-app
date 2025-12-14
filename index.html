@@ -918,7 +918,182 @@
     };
 
 
-    let currentDeviceToken = null;   // このデバイスの FCM トークンを保持
+
+let currentDeviceToken = null;   // このデバイスの FCM トークンを保持
+
+    // =============================================================
+    // 朝の庶務中は「個別の数変更通知」を抑止し、終了時だけ通知する
+    // =============================================================
+    window.__morningModeSuppressPush = false;
+    window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
+
+    function __isMorningMode(){
+      try{ return document.body.classList.contains('morning-mode'); }catch(_){ return false; }
+    }
+
+    // 既存の通知送信関数を“朝の庶務中だけ”黙らせる（関数名が違っても拾えるように複数候補をラップ）
+    (function wrapPushFnsForMorningMode(){
+      if (window.__pushFnsWrappedForMorningMode) return;
+      window.__pushFnsWrappedForMorningMode = true;
+
+      function wrapIfExists(fnName){
+        try{
+          const orig = window[fnName];
+          if (typeof orig !== 'function') return;
+          if (orig.__morningWrapped) return;
+
+          const wrapped = async function(...args){
+            // 最後の引数に { force:true } が付いていたら抑止をバイパス
+            let force = false;
+            try{
+              const last = args[args.length - 1];
+              if (last && typeof last === 'object' && last.force === true){
+                force = true;
+                args = args.slice(0, -1);
+              }
+            }catch(_){ }
+
+            // 朝の庶務中は基本的に通知を送らない
+            if ((window.__morningModeSuppressPush || __isMorningMode()) && !force){
+              console.log('[morning] suppressed push:', fnName);
+              return null;
+            }
+            return orig.apply(this, args);
+          };
+
+          wrapped.__morningWrapped = true;
+          window[fnName] = wrapped;
+        }catch(_){ }
+      }
+
+      // ありがちな関数名を広めにラップ（存在するものだけ置き換える）
+      [
+        'sendPushNotification',
+        'sendPush',
+        'sendNotification',
+        'sendNotificationToAll',
+        'sendNotificationToDorm',
+        'notifyResidents',
+        'notifyCountChange',
+        'triggerPushNotification',
+        'enqueuePush'
+      ].forEach(wrapIfExists);
+
+      // 後から関数が定義されるケースもあるので少しだけ再試行
+      let tries = 0;
+      const t = setInterval(() => {
+        tries++;
+        [
+          'sendPushNotification','sendPush','sendNotification','sendNotificationToAll','sendNotificationToDorm',
+          'notifyResidents','notifyCountChange','triggerPushNotification','enqueuePush'
+        ].forEach(wrapIfExists);
+        if (tries >= 20) clearInterval(t);
+      }, 200);
+    })();
+
+    // 朝の庶務「終了」時にだけ送る通知（既存の送信関数があればそれを使う）
+    async function sendMorningFinishedNotification(){
+      const dormLabel = (window.__morningModeTargetDorm === 'shofu') ? '松風寮'
+                      : (window.__morningModeTargetDorm === 'meizen') ? '明善寮'
+                      : '両方';
+      const msg = `朝の庶務が終了しました（${dormLabel}の数を反映）`;
+
+      // 既存実装に合わせて、見つかった送信関数を1つだけ使う
+      const candidates = [
+        'sendPushNotification',
+        'sendNotificationToAll',
+        'sendNotification',
+        'sendPush'
+      ];
+      for (const name of candidates){
+        try{
+          if (typeof window[name] === 'function'){
+            // ラッパーをバイパスするために最後に {force:true} を付ける
+            await window[name](msg, { force:true });
+            console.log('[morning] finish push via', name);
+            return;
+          }
+        }catch(e){
+          console.warn('[morning] finish push failed via', name, e);
+        }
+      }
+      console.log('[morning] no push function found; skipped finish notification');
+    }
+
+    // =============================================================
+    // Morning-mode: suppress during mode, and send exactly ONE push only when user finishes
+    //  - no onclick override
+    //  - no extra confirm dialog
+    // =============================================================
+    window.__morningFinishRequested = false;
+
+    (function bindMorningFinishNotification(){
+      if (window.__bindMorningFinishNotification) return;
+      window.__bindMorningFinishNotification = true;
+
+      function isMorning(){
+        try{
+          if (typeof __isMorningMode === 'function') return __isMorningMode();
+          return document.body.classList.contains('morning-mode');
+        }catch(_){ return false; }
+      }
+
+      function setTargetDorm(){
+        try{
+          window.__morningModeTargetDorm = (typeof currentCollectionName === 'string' && currentCollectionName.indexOf('_') >= 0)
+            ? currentCollectionName.split('_')[1]
+            : (currentCollectionName === 'all' ? 'all' : (currentCollectionName || 'all'));
+        }catch(_){
+          window.__morningModeTargetDorm = window.__morningModeTargetDorm || 'all';
+        }
+      }
+
+      // Capture clicks to know whether the exit was “finish” or “cancel”
+      document.addEventListener('click', (ev) => {
+        const fin = ev.target && ev.target.closest && ev.target.closest('#morning-finish-btn');
+        if (fin){
+          window.__morningFinishRequested = true;
+          setTargetDorm();
+          // If user cancels the confirm and morning-mode stays, auto-reset
+          setTimeout(() => {
+            try { if (isMorning()) window.__morningFinishRequested = false; } catch(_){ window.__morningFinishRequested = false; }
+          }, 4000);
+          return;
+        }
+        const cancel = ev.target && ev.target.closest && ev.target.closest('#morning-cancel-btn');
+        if (cancel){
+          // Cancel should never send notifications
+          window.__morningFinishRequested = false;
+          return;
+        }
+      }, true);
+
+      // Watch body.class change: when morning-mode ends, decide whether to notify
+      let prevMorning = isMorning();
+      try { if (prevMorning) window.__morningModeSuppressPush = true; } catch(_){ }
+
+      const obs = new MutationObserver(() => {
+        const nowMorning = isMorning();
+
+        // Always suppress while in morning mode
+        if (nowMorning) window.__morningModeSuppressPush = true;
+
+        // Leaving morning mode
+        if (prevMorning && !nowMorning){
+          // Release suppression
+          window.__morningModeSuppressPush = false;
+
+          // Only when “finish” was requested
+          if (window.__morningFinishRequested){
+            window.__morningFinishRequested = false;
+            Promise.resolve().then(() => sendMorningFinishedNotification()).catch(()=>{});
+          }
+        }
+        prevMorning = nowMorning;
+      });
+
+      try{ obs.observe(document.body, { attributes:true, attributeFilter:['class'] }); }catch(_){ }
+    })();
 
     /* ==== FCM Push Notification Setup ==== */
     let __notifInFlight = null;
