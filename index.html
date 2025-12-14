@@ -1293,6 +1293,31 @@ function unifiedConfirm(action){
     }
   }
 
+  // 本文の「赤強調(<span ...>)」が &lt;span&gt; のようにエスケープされて保存されている場合でも
+  // 画面側では確実に赤強調として復元して表示する
+  function normalizeAnnouncementBody(raw){
+    let s = (raw == null) ? '' : String(raw);
+
+    // 文字参照でエスケープされた <span> / </span> / <br> を復元（単エスケープ）
+    s = s.replace(/&lt;span\b([^&]*)&gt;/gi, '<span$1>');
+    s = s.replace(/&lt;\/span&gt;/gi, '</span>');
+    s = s.replace(/&lt;br\s*\/??&gt;/gi, '<br>');
+
+    // 二重エスケープ（&amp;lt; ... &amp;gt;）にも対応
+    s = s.replace(/&amp;lt;span\b([^&]*)&amp;gt;/gi, '<span$1>');
+    s = s.replace(/&amp;lt;\/span&amp;gt;/gi, '</span>');
+    s = s.replace(/&amp;lt;br\s*\/??&amp;gt;/gi, '<br>');
+
+    // 属性の引用符が &quot; で入っている場合に備えて復元
+    s = s.replace(/&quot;/g, '"');
+    s = s.replace(/&#39;/g, "'");
+
+    // span / br 以外のタグは念のため落とす（XSS対策の最低限）
+    s = s.replace(/<(?!\/?span\b|br\b)[^>]+>/gi, '');
+
+    return s.trim();
+  }
+
   function ensureVisibility(){
     const box = document.getElementById('announcement-container');
     if (!box) return;
@@ -1367,7 +1392,7 @@ function unifiedConfirm(action){
       const body = document.createElement('p');
       body.className = 'announce-body';
       // 投稿時の <span> 等を保持したいので innerHTML で描画
-      body.innerHTML = (d.body || '').trim();
+      body.innerHTML = normalizeAnnouncementBody(d.body);
 
       li.appendChild(head);
       li.appendChild(body);
