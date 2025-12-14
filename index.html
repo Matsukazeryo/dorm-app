@@ -325,6 +325,8 @@
         }
         /* ===== 庶務モードOFF専用レイアウトここまで ===== */
         /* ===== お知らせ欄 ===== */
+        /* 赤強調（安定化：inline style に依存しない） */
+        .ann-red{ color:#c0392b; font-weight:bold; }
         /* === 新レイアウト: お知らせカード === */
         .announce-item { padding:8px 10px; background: var(--announce-item-bg); border-radius:6px; }
         .announce-item.pinned { background: var(--announce-pinned-bg); }
@@ -1562,7 +1564,7 @@ function unifiedConfirm(action){
         const before   = val.slice(0, start);
         const selected = val.slice(start, end);
         const after    = val.slice(end);
-        const wrapped = '<span style="color:#c0392b;font-weight:bold;">' + selected + '</span>';
+        const wrapped = '<span class="ann-red">' + selected + '</span>';
         ta.value = before + wrapped + after;
         const pos = (before + wrapped).length;
         ta.focus();
