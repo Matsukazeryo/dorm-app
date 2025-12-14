@@ -956,10 +956,20 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       return null;
     }
 
-    function __stageResidentWrite(colName, docId, patchObj){
+    function __stageResidentWrite(colOrPath, docIdOrPatch, maybePatch){
       try{
-        if (!colName || !docId || !patchObj) return;
-        const key = String(colName) + '/' + String(docId);
+        // 2引数: (docPath, patchObj)
+        // 3引数: (collectionName, docId, patchObj)
+        let key = '';
+        let patchObj = null;
+        if (arguments.length === 2){
+          key = String(colOrPath || '');
+          patchObj = docIdOrPatch;
+        } else {
+          key = String(colOrPath || '') + '/' + String(docIdOrPatch || '');
+          patchObj = maybePatch;
+        }
+        if (!key || !patchObj) return;
         const cur = window.__morningStagedWrites.get(key) || {};
         const next = __mergeObject(cur, patchObj);
         window.__morningStagedWrites.set(key, next);
@@ -975,12 +985,9 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
         const batch = db.batch();
         for (const [key, patch] of window.__morningStagedWrites.entries()){
           try{
-            const idx = key.indexOf('/');
-            if (idx <= 0) continue;
-            const col = key.slice(0, idx);
-            const id  = key.slice(idx + 1);
-            if (!col || !id) continue;
-            const ref = db.collection(col).doc(id);
+            const path = String(key || '');
+            if (!path) continue;
+            const ref = db.doc(path);
             batch.set(ref, patch, { merge:true });
           }catch(_){ }
         }
@@ -996,6 +1003,68 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
     function __isMorningMode(){
       try{ return document.body.classList.contains('morning-mode'); }catch(_){ return false; }
     }
+
+    // =============================================================
+    // 最終防衛ライン：DocumentReference.set/update をフックして
+    // 朝の庶務中(resident doc)の書き込みを必ずステージングへ回す
+    // （db.collection の上書き順に左右されない）
+    // =============================================================
+    (function stageResidentWritesOnDocRefPrototype(){
+      if (window.__stageResidentWritesOnDocRefPrototype) return;
+      window.__stageResidentWritesOnDocRefPrototype = true;
+
+      try{
+        const DR = firebase && firebase.firestore && firebase.firestore.DocumentReference;
+        if (!DR || !DR.prototype) return;
+
+        function getPath(ref){
+          try{ if (ref && typeof ref.path === 'string') return ref.path; }catch(_){ }
+          try{ if (ref && ref._delegate && typeof ref._delegate.path === 'string') return ref._delegate.path; }catch(_){ }
+          try{ if (ref && ref._key && ref._key.path && typeof ref._key.path.canonicalString === 'function') return ref._key.path.canonicalString(); }catch(_){ }
+          try{ if (ref && ref._documentKey && ref._documentKey.path && typeof ref._documentKey.path.canonicalString === 'function') return ref._documentKey.path.canonicalString(); }catch(_){ }
+          return '';
+        }
+
+        function isResidentPath(path){
+          // コレクション名が residents_shofu / shofu_residents / residents 等でも拾う
+          return /resident/i.test(String(path || ''));
+        }
+
+        const _origUpdate = DR.prototype.update;
+        if (typeof _origUpdate === 'function' && !_origUpdate.__morningWrapped){
+          DR.prototype.update = function(){
+            try{
+              const path = getPath(this);
+              if ((window.__morningModeSuppressPush || __isMorningMode()) && !window.__morningCommitInProgress && isResidentPath(path)){
+                const obj = __toUpdateObject(arguments);
+                if (obj) __stageResidentWrite(path, obj);
+                console.log('[morning] staged DocRef.update', path, obj);
+                return Promise.resolve(null);
+              }
+            }catch(_){ }
+            return _origUpdate.apply(this, arguments);
+          };
+          DR.prototype.update.__morningWrapped = true;
+        }
+
+        const _origSet = DR.prototype.set;
+        if (typeof _origSet === 'function' && !_origSet.__morningWrapped){
+          DR.prototype.set = function(data, options){
+            try{
+              const path = getPath(this);
+              if ((window.__morningModeSuppressPush || __isMorningMode()) && !window.__morningCommitInProgress && isResidentPath(path)){
+                const obj = (data && typeof data === 'object') ? data : null;
+                if (obj) __stageResidentWrite(path, obj);
+                console.log('[morning] staged DocRef.set', path, obj);
+                return Promise.resolve(null);
+              }
+            }catch(_){ }
+            return _origSet.apply(this, arguments);
+          };
+          DR.prototype.set.__morningWrapped = true;
+        }
+      }catch(_){ }
+    })();
 
     // 既存の通知送信関数を“朝の庶務中だけ”黙らせる（関数名が違っても拾えるように複数候補をラップ）
     (function wrapPushFnsForMorningMode(){
@@ -1269,7 +1338,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
             if (!(window.__morningModeSuppressPush || __isMorningMode())) return obj;
             const colId = (this.ref && this.ref.parent && this.ref.parent.id) ? String(this.ref.parent.id) : '';
             if (!/resident/i.test(colId)) return obj;
-            const key = colId + '/' + String(this.id);
+            const key = (this.ref && this.ref.path) ? String(this.ref.path) : (colId + '/' + String(this.id));
             const staged = window.__morningStagedWrites && window.__morningStagedWrites.get && window.__morningStagedWrites.get(key);
             if (staged && typeof staged === 'object'){
               // よく使うフィールド名（luggage/mail）を優先して上書き
@@ -1420,9 +1489,6 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
           // Cancel should never send notifications, and should discard staged changes
           window.__morningFinishRequested = false;
           try { window.__morningStagedWrites && window.__morningStagedWrites.clear && window.__morningStagedWrites.clear(); } catch(_){ }
-          // cancel/restore の内部更新は素通しさせる（短時間だけバイパス）
-          window.__morningCommitInProgress = true;
-          setTimeout(() => { try{ window.__morningCommitInProgress = false; }catch(_){} }, 6000);
           return;
         }
       }, true);
