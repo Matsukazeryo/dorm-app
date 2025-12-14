@@ -326,7 +326,8 @@
         /* ===== 庶務モードOFF専用レイアウトここまで ===== */
         /* ===== お知らせ欄 ===== */
         /* 赤強調（安定化：inline style に依存しない） */
-        .ann-red{ color:#c0392b; font-weight:bold; }
+        .ann-red{ color:#c0392b !important; font-weight:700 !important; }
+        .announce-body .ann-red{ color:#c0392b !important; font-weight:700 !important; }
         /* === 新レイアウト: お知らせカード === */
         .announce-item { padding:8px 10px; background: var(--announce-item-bg); border-radius:6px; }
         .announce-item.pinned { background: var(--announce-pinned-bg); }
@@ -1400,46 +1401,91 @@ function unifiedConfirm(action){
   }
 
   // 本文の「赤強調(<span ...>)」が &lt;span&gt; のようにエスケープされて保存されている場合でも
-  // 画面側では確実に赤強調として復元して表示する
+  // 画面側では確実に赤強調として復元して表示する（DOMベースで安定化）
   function normalizeAnnouncementBody(raw){
     let s = (raw == null) ? '' : String(raw);
 
-    // 文字参照でエスケープされた <span> / </span> / <br> を復元（単エスケープ）
-    s = s.replace(/&lt;span\b([\s\S]*?)&gt;/gi, '<span$1>');
-    s = s.replace(/&lt;\/span&gt;/gi, '</span>');
-    s = s.replace(/&lt;br\s*\/?>&gt;/gi, '<br>');
-
-    // 二重エスケープ（&amp;lt; ... &amp;gt;）にも対応
-    s = s.replace(/&amp;lt;span\b([\s\S]*?)&amp;gt;/gi, '<span$1>');
-    s = s.replace(/&amp;lt;\/span&amp;gt;/gi, '</span>');
-    s = s.replace(/&amp;lt;br\s*\/?>&amp;gt;/gi, '<br>');
-
-    // 属性の引用符が &quot; で入っている場合に備えて復元
-    s = s.replace(/&quot;/g, '"');
-    s = s.replace(/&#39;/g, "'");
-
-    // 旧データ（inline style）も含めて赤強調は class に寄せる（テーマ変更/再描画でも崩れにくい）
-    s = s.replace(/<span([^>]*)>/gi, (m, attrs) => {
-      const a = attrs || '';
-      const hasRed = /c0392b|rgb\(\s*192\s*,\s*57\s*,\s*43\s*\)/i.test(a);
-      if (!hasRed) return '<span' + a + '>';
-
-      // 既に class があるなら ann-red を足す
-      if (/\bclass\s*=\s*"/i.test(a)) {
-        const replaced = a.replace(/\bclass\s*=\s*"([^"]*)"/i, (mm, cls) => {
-          const next = (String(cls || '') + ' ann-red').trim().replace(/\s+/g, ' ');
-          return `class="${next}"`;
-        });
-        return '<span' + replaced + '>';
+    // HTMLエンティティを最大2回デコード（単/二重エスケープ対策）
+    function decodeHtmlEntities(str){
+      try{
+        const ta = document.createElement('textarea');
+        ta.innerHTML = String(str == null ? '' : str);
+        return ta.value;
+      }catch(_){
+        return String(str == null ? '' : str);
       }
-      // class が無いなら付ける
-      return '<span class="ann-red"' + a + '>';
-    });
+    }
+    s = decodeHtmlEntities(s);
+    s = decodeHtmlEntities(s);
 
-    // span / br 以外のタグは念のため落とす（XSS対策の最低限）
-    s = s.replace(/<(?!\/?span\b|br\b)[^>]+>/gi, '');
+    // DOMに流し込んで、許可タグだけ残す（span/br）
+    const root = document.createElement('div');
+    root.innerHTML = s;
 
-    return s.trim();
+    function isRedSpan(el){
+      try{
+        const cls = (el.getAttribute('class') || '');
+        if (/\bann-red\b/i.test(cls)) return true;
+        const style = (el.getAttribute('style') || '');
+        // 旧style形式も拾う
+        if (/c0392b/i.test(style)) return true;
+        if (/rgb\(\s*192\s*,\s*57\s*,\s*43\s*\)/i.test(style)) return true;
+        if (/color\s*:\s*red\b/i.test(style)) return true;
+      }catch(_){ }
+      return false;
+    }
+
+    function unwrap(el){
+      const frag = document.createDocumentFragment();
+      while (el.firstChild) frag.appendChild(el.firstChild);
+      el.replaceWith(frag);
+    }
+
+    function sanitize(node){
+      const kids = Array.from(node.childNodes);
+      for (const ch of kids){
+        // テキストはOK
+        if (ch.nodeType === 3) continue;
+
+        // 要素以外は削除
+        if (ch.nodeType !== 1) { try{ ch.remove(); }catch(_){ } continue; }
+
+        const tag = (ch.tagName || '').toLowerCase();
+
+        if (tag === 'br') {
+          continue;
+        }
+
+        if (tag === 'span'){
+          const red = isRedSpan(ch);
+
+          // まず子をサニタイズ
+          sanitize(ch);
+
+          if (red){
+            // 属性は class=ann-red のみに寄せる
+            try{
+              ch.removeAttribute('style');
+              ch.removeAttribute('id');
+              ch.setAttribute('class','ann-red');
+            }catch(_){ }
+          } else {
+            // 赤じゃないspanは unwrap（余計なstyle/class由来のブレを消す）
+            try{ ch.removeAttribute('style'); }catch(_){ }
+            try{ ch.removeAttribute('class'); }catch(_){ }
+            unwrap(ch);
+          }
+          continue;
+        }
+
+        // span/br以外は中身だけ残してタグを剥く
+        sanitize(ch);
+        unwrap(ch);
+      }
+    }
+
+    sanitize(root);
+    return (root.innerHTML || '').trim();
   }
 
   function ensureVisibility(){
@@ -1610,7 +1656,7 @@ function unifiedConfirm(action){
         try{
           await db.collection(COL).add({
             title,
-            body,
+            body: normalizeAnnouncementBody(body),
             pinned: false,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -1771,7 +1817,7 @@ function unifiedConfirm(action){
           if (!titleEl || !bodyEl) return;
 
           const newTitle = (titleEl.textContent || '').trim();
-          const newBody  = (bodyEl.innerHTML || '').trim();
+          const newBody  = normalizeAnnouncementBody(bodyEl.innerHTML);
 
           await db.collection(COL).doc(id).set({
             title: newTitle,
