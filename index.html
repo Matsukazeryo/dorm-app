@@ -1147,6 +1147,13 @@ const UNIFIED_CONFIRM_TEXT = {
   }
 };
 function unifiedConfirm(action){
+  // 直前に別コードで確認済みの場合、次の同一actionの確認は自動OK（2重ダイアログ防止）
+  try{
+    if (window.__uconfAutoOkNext && window.__uconfAutoOkNext[action] > 0){
+      window.__uconfAutoOkNext[action]--;
+      return Promise.resolve(true);
+    }
+  }catch(_){ }
   const modal = document.getElementById('unified-confirm-modal');
   const titleEl = document.getElementById('uconf-title');
   const bodyEl  = document.getElementById('uconf-body');
@@ -1215,6 +1222,44 @@ function unifiedConfirm(action){
     } catch(_){ }
     return _origConfirm.call(window, msg);
   };
+})();
+
+// ==== 朝の庶務: 「取り消し」実行が先に走る不具合を強制的に修正 ==== 
+// 1回目のクリックでは確認だけ出して処理は止める → OKのときだけ、元のハンドラを2回目クリックで実行させる
+(function fixMorningCancelOrder(){
+  if (window.__fixMorningCancelOrder) return;
+  window.__fixMorningCancelOrder = true;
+
+  window.__uconfAutoOkNext = window.__uconfAutoOkNext || {};
+  let allowPassThrough = false;
+
+  document.addEventListener('click', async (ev) => {
+    const btn = ev.target && ev.target.closest && ev.target.closest('#morning-cancel-btn');
+    if (!btn) return;
+
+    // 2回目の擬似クリックは素通し（元の処理を動かす）
+    if (allowPassThrough){
+      allowPassThrough = false;
+      return;
+    }
+
+    // 1回目は処理を止めて「確認」だけ
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    ev.stopPropagation();
+
+    const ok = await unifiedConfirm('cancel');
+    if (!ok) return;
+
+    // 2回目クリック時に、元コードが confirm/unifiedConfirm を呼んでも二重表示しない
+    try{
+      window.__uconfAutoOkNext.cancel = (window.__uconfAutoOkNext.cancel || 0) + 1;
+      window.__skipNextOsConfirmCount = (window.__skipNextOsConfirmCount || 0) + 1;
+    }catch(_){ }
+
+    allowPassThrough = true;
+    try { btn.click(); } catch(_){ }
+  }, true);
 })();
 
 // ==== 「朝の庶務を取り消し、参考の数に戻しました。」系のアプリ内通知を抑止 + 重複抑止 ==== 
@@ -1402,7 +1447,7 @@ function unifiedConfirm(action){
 
   // 本文の「赤強調(<span ...>)」が &lt;span&gt; のようにエスケープされて保存されている場合でも
   // 画面側では確実に赤強調として復元して表示する（DOMベースで安定化）
-  function normalizeAnnouncementBody(raw){
+    function normalizeAnnouncementBody(raw){
     let s = (raw == null) ? '' : String(raw);
 
     // HTMLエンティティを最大2回デコード（単/二重エスケープ対策）
@@ -1422,17 +1467,48 @@ function unifiedConfirm(action){
     const root = document.createElement('div');
     root.innerHTML = s;
 
-    function isRedSpan(el){
+    function isRedish(el){
       try{
         const cls = (el.getAttribute('class') || '');
         if (/\bann-red\b/i.test(cls)) return true;
+
         const style = (el.getAttribute('style') || '');
-        // 旧style形式も拾う
-        if (/c0392b/i.test(style)) return true;
-        if (/rgb\(\s*192\s*,\s*57\s*,\s*43\s*\)/i.test(style)) return true;
-        if (/color\s*:\s*red\b/i.test(style)) return true;
+        const colorAttr = (el.getAttribute('color') || '');
+
+        const hay = (String(style) + ' ' + String(colorAttr)).toLowerCase();
+        if (hay.includes('c0392b') || hay.includes('#c0392b')) return true;
+        if (/rgb\(\s*192\s*,\s*57\s*,\s*43\s*\)/i.test(hay)) return true;
+        if (/color\s*:\s*red\b/i.test(hay)) return true;
+        if (String(colorAttr).toLowerCase() === 'red') return true;
+
+        // <font color="..."> などを赤強調として扱う
+        const tag = (el.tagName || '').toLowerCase();
+        if (tag === 'font'){
+          const c = String(colorAttr || '').toLowerCase();
+          if (c.includes('c0392b') || c.includes('#c0392b') || c === 'red') return true;
+        }
       }catch(_){ }
       return false;
+    }
+
+    function forceAnnRedSpan(el){
+      try{
+        if ((el.tagName || '').toLowerCase() === 'span'){
+          el.removeAttribute('style');
+          el.removeAttribute('id');
+          el.removeAttribute('color');
+          el.setAttribute('class','ann-red');
+          return el;
+        }
+      }catch(_){ }
+
+      const sp = document.createElement('span');
+      sp.setAttribute('class','ann-red');
+      try{
+        while (el.firstChild) sp.appendChild(el.firstChild);
+      }catch(_){ }
+      try{ el.replaceWith(sp); }catch(_){ }
+      return sp;
     }
 
     function unwrap(el){
@@ -1456,30 +1532,28 @@ function unifiedConfirm(action){
           continue;
         }
 
+        const redish = isRedish(ch);
+
+        // まず子をサニタイズ
+        sanitize(ch);
+
+        if (redish){
+          // iOSのcontentEditable等で <font>/<b>/<div> に化けても赤強調が落ちないように正規化
+          forceAnnRedSpan(ch);
+          continue;
+        }
+
         if (tag === 'span'){
-          const red = isRedSpan(ch);
-
-          // まず子をサニタイズ
-          sanitize(ch);
-
-          if (red){
-            // 属性は class=ann-red のみに寄せる
-            try{
-              ch.removeAttribute('style');
-              ch.removeAttribute('id');
-              ch.setAttribute('class','ann-red');
-            }catch(_){ }
-          } else {
-            // 赤じゃないspanは unwrap（余計なstyle/class由来のブレを消す）
-            try{ ch.removeAttribute('style'); }catch(_){ }
-            try{ ch.removeAttribute('class'); }catch(_){ }
-            unwrap(ch);
-          }
+          // 赤じゃないspanは unwrap（余計なstyle/class由来のブレを消す）
+          try{ ch.removeAttribute('style'); }catch(_){ }
+          try{ ch.removeAttribute('class'); }catch(_){ }
+          try{ ch.removeAttribute('id'); }catch(_){ }
+          try{ ch.removeAttribute('color'); }catch(_){ }
+          unwrap(ch);
           continue;
         }
 
         // span/br以外は中身だけ残してタグを剥く
-        sanitize(ch);
         unwrap(ch);
       }
     }
