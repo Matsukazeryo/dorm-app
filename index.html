@@ -1171,7 +1171,17 @@ function unifiedConfirm(action){
       modal.removeEventListener('click', onBackdrop);
       document.removeEventListener('keydown', onKey);
     }
-    function onOk(e){ e && e.preventDefault(); cleanup(); resolve(true); }
+    function onOk(e){
+      e && e.preventDefault();
+      // 「朝の庶務 取り消し」の直後に別コードが confirm() を呼ぶとOSの確認が出るので、1回だけ黙らせる
+      try{
+        if (action === 'cancel') {
+          window.__skipNextOsConfirmCount = (window.__skipNextOsConfirmCount || 0) + 1;
+        }
+      } catch(_){ }
+      cleanup();
+      resolve(true);
+    }
     function onCancel(e){ e && e.preventDefault(); cleanup(); resolve(false); }
     function onBackdrop(e){ if (e.target === modal) onCancel(e); }
     function onKey(e){ if (e.key === 'Escape') onCancel(e); }
@@ -1186,6 +1196,23 @@ function unifiedConfirm(action){
     modal.classList.add('active');
   });
 }
+
+// ==== OS confirm() を1回だけ抑止（朝の庶務「取り消し」用）====
+(function patchWindowConfirmOnce(){
+  if (window.__confirmPatchedForMorningCancel) return;
+  window.__confirmPatchedForMorningCancel = true;
+  const _origConfirm = window.confirm;
+  window.confirm = function(msg){
+    try{
+      const n = Number(window.__skipNextOsConfirmCount || 0);
+      if (n > 0){
+        window.__skipNextOsConfirmCount = n - 1;
+        return true; // OSダイアログは出さずに「OK」扱い
+      }
+    } catch(_){ }
+    return _origConfirm.call(window, msg);
+  };
+})();
 
 // ==== お知らせ投稿モーダルのUIバインド ====
 (function bindAnnouncementUI(){
