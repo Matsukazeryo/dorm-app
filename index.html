@@ -1524,6 +1524,40 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
     })();
 
     /* ==== FCM Push Notification Setup ==== */
+    // ===== FCM token 用：現在の寮を安全に判定（undefinedでも落ちない） =====
+    function getCurrentDormForToken(){
+      try{
+        if (typeof currentCollectionName !== 'string' || !currentCollectionName) return null;
+        if (currentCollectionName === 'all') return null;
+        const parts = currentCollectionName.split('_');
+        const tail = parts[parts.length - 1];
+        return (tail === 'shofu' || tail === 'meizen') ? tail : null;
+      } catch(_){
+        return null;
+      }
+    }
+
+    // ===== FCM token 保存のリトライ（新端末で residentId / dorm が遅れても拾う） =====
+    function scheduleFcmResyncRetries(){
+      if (window.__fcmResyncTimer) return;
+      let tries = 0;
+      window.__fcmResyncTimer = setInterval(() => {
+        tries++;
+        // 既に成功していたら止める
+        if (!window.__fcmSaveError) {
+          clearInterval(window.__fcmResyncTimer);
+          window.__fcmResyncTimer = null;
+          return;
+        }
+        // 失敗している間だけ再送
+        try { resyncFcmToken(); } catch(_) {}
+        if (tries >= 12) { // 約1分で打ち切り
+          clearInterval(window.__fcmResyncTimer);
+          window.__fcmResyncTimer = null;
+        }
+      }, 5000);
+    }
+
     let __notifInFlight = null;
     async function requestNotificationPermission(){
       // make idempotent & safe in unsupported environments
@@ -1587,7 +1621,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
                       .doc(token)
                       .set({
                         residentId: localStorage.getItem('myResidentId') || null,
-                        dorm     : (currentCollectionName === 'all' ? null : currentCollectionName.split('_')[1]),
+                        dorm     : getCurrentDormForToken(),
                         lastSeen : firebase.firestore.FieldValue.serverTimestamp(),
                         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                         platform,
@@ -1600,6 +1634,9 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
               console.warn('Token NOT saved to Firestore (will retry):', (e && (e.code || e.message)) || e);
             }
           }
+          // 新端末だと residentId / currentCollectionName が後から決まることがあるので保険で再同期
+          try { setTimeout(() => { try { resyncFcmToken(); } catch(_) {} }, 2000); } catch(_) {}
+          if (window.__fcmSaveError) { try { scheduleFcmResyncRetries(); } catch(_) {} }
           return token || null;
         } catch (err) {
           console.error('FCM initialization failed', err);
@@ -1709,7 +1746,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
                 .doc(token)
                 .set({
                   residentId: localStorage.getItem('myResidentId') || null,
-                  dorm     : (currentCollectionName === 'all' ? null : currentCollectionName.split('_')[1]),
+                  dorm     : getCurrentDormForToken(),
                   lastSeen : firebase.firestore.FieldValue.serverTimestamp(),
                   createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                   platform,
@@ -1723,6 +1760,15 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       }
     }
     window.resyncFcmToken = resyncFcmToken;
+    // アプリ復帰時にトークン保存を自動再試行（許可済みなのに通知来ない問題の保険）
+    document.addEventListener('visibilitychange', () => {
+      try {
+        if (document.visibilityState === 'visible') {
+          resyncFcmToken();
+          if (window.__fcmSaveError) scheduleFcmResyncRetries();
+        }
+      } catch(_) {}
+    });
     
     // Foreground messages: avoid duplicating OS notifications
     if (messaging && typeof messaging.onMessage === 'function') {
