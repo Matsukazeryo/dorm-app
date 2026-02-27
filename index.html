@@ -934,7 +934,8 @@
 
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        e.stopPropagation();
+        // Prevent any other submit listeners (including legacy ones) from running.
+        e.stopImmediatePropagation();
 
         try {
           const dorm = (document.getElementById('form-dorm')?.value || 'shofu').trim();
@@ -1022,7 +1023,7 @@
           console.error('add resident failed:', err);
           alert('追加に失敗しました。管理者ログイン状態・通信状態・権限を確認してください。');
         }
-      }, false);
+      }, true);
     })();
 
     // ===== Bulk add: ensure a working handler =====
