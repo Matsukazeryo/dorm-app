@@ -972,7 +972,10 @@
           await db.collection(colName).add({
             dorm: dormKey,
             name,
+            // Room field name differs across versions; write both to keep UI consistent.
             room,
+            roomNumber: room,
+            roomNo: room,
             furigana,
             circle,
             luggage: Number.isFinite(luggage) && luggage >= 0 ? luggage : 0,
@@ -1018,6 +1021,111 @@
         } catch (err) {
           console.error('add resident failed:', err);
           alert('追加に失敗しました。管理者ログイン状態・通信状態・権限を確認してください。');
+        }
+      }, false);
+    })();
+
+    // ===== Bulk add: ensure a working handler =====
+    (function bindAddBulkSubmit(){
+      const form = document.getElementById('add-bulk-form');
+      if (!form) return;
+      if (form.__addBulkBound) return;
+      form.__addBulkBound = true;
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        try {
+          const dorm = (document.getElementById('bulk-form-dorm')?.value || 'shofu').trim();
+          const dormKey = (dorm === 'meizen') ? 'meizen' : 'shofu';
+          const colName = `residents_${dormKey}`;
+
+          const container = document.getElementById('bulk-form-entries');
+          const entries = container ? Array.from(container.querySelectorAll('.bulk-add-entry')) : [];
+
+          // Fallback: if entries aren't wrapped with .bulk-add-entry, collect by input groups
+          const groups = entries.length ? entries : (container ? Array.from(container.children) : []);
+
+          const toAdd = [];
+          for (const g of groups) {
+            if (!g || !g.querySelector) continue;
+
+            // Prefer explicit data-field hooks if they exist
+            const nameEl = g.querySelector('[data-field="name"], .bulk-name, input[name="name"], input[id^="bulk-name"], input[placeholder*="名前"], input[type="text"]');
+            const roomEl = g.querySelector('[data-field="room"], .bulk-room, input[name="room"], input[id^="bulk-room"], input[placeholder*="部屋"], input[type="text"]:nth-of-type(2)');
+            const furiEl = g.querySelector('[data-field="furigana"], .bulk-furigana, input[name="furigana"], input[id^="bulk-furigana"], input[placeholder*="ふり"], input[type="text"]:nth-of-type(3)');
+            const circleEl = g.querySelector('[data-field="circle"], .bulk-circle, select[name="circle"], select[id^="bulk-circle"], select');
+
+            const name = (nameEl && nameEl.value ? String(nameEl.value) : '').trim();
+            const room = (roomEl && roomEl.value ? String(roomEl.value) : '').trim();
+            const furigana = (furiEl && furiEl.value ? String(furiEl.value) : '').trim();
+            const circle = (circleEl && circleEl.value ? String(circleEl.value) : '').trim();
+
+            if (!name) continue;
+
+            toAdd.push({ name, room, furigana, circle });
+          }
+
+          if (toAdd.length === 0) {
+            alert('追加する寮生が見つかりません（名前が空の行は無視されます）');
+            return;
+          }
+
+          // Batch write
+          const batch = db.batch();
+          const now = firebase.firestore.FieldValue.serverTimestamp();
+          for (const r of toAdd) {
+            const ref = db.collection(colName).doc();
+            batch.set(ref, {
+              dorm: dormKey,
+              name: r.name,
+              room: r.room,
+              roomNumber: r.room,
+              roomNo: r.room,
+              furigana: r.furigana,
+              circle: r.circle,
+              luggage: 0,
+              mail: 0,
+              createdAt: now,
+              updatedAt: now
+            }, { merge: true });
+          }
+          await batch.commit();
+
+          // Close modal
+          const modal = document.getElementById('add-bulk-modal');
+          if (modal) modal.classList.remove('active');
+          if (modal) modal.style.display = 'none';
+
+          // Clear container
+          try { if (container) container.innerHTML = ''; } catch (_) {}
+
+          // Refresh UI
+          const refreshCandidates = [
+            'loadResidents',
+            'renderResidents',
+            'fetchResidents',
+            'refreshResidents',
+            'updateResidentTable',
+            'loadAndRenderResidents'
+          ];
+          for (const fn of refreshCandidates) {
+            try {
+              if (typeof window[fn] === 'function') {
+                await window[fn]();
+                break;
+              }
+            } catch (refreshErr) {
+              console.warn('refresh failed:', fn, refreshErr);
+            }
+          }
+
+          alert(`一括追加しました（${toAdd.length}件）`);
+
+        } catch (err) {
+          console.error('bulk add failed:', err);
+          alert('一括追加に失敗しました。管理者ログイン状態・通信状態・権限を確認してください。');
         }
       }, false);
     })();
