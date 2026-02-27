@@ -661,7 +661,7 @@
             <h2>新しい寮生を追加</h2>
             <button id="add-modal-close-btn" class="modal-close-btn">&times;</button>
         </div>
-        <form id="add-resident-form" onsubmit="return false;">
+        <form id="add-resident-form">
             <div class="form-group">
                 <label for="form-dorm">寮</label>
                 <select id="form-dorm" required><option value="shofu">松風寮</option><option value="meizen">明善寮</option></select>
@@ -923,6 +923,104 @@
         }
       } catch (_) {}
     }, true);
+
+    // ===== Add resident: ensure a working handler (prevents "no reaction" cases) =====
+    (function bindAddResidentSubmit(){
+      const form = document.getElementById('add-resident-form');
+      if (!form) return;
+      // If existing code already bound a handler, it can set this flag to avoid double writes.
+      if (form.__addResidentBound) return;
+      form.__addResidentBound = true;
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        try {
+          const dorm = (document.getElementById('form-dorm')?.value || 'shofu').trim();
+          const name = (document.getElementById('form-name')?.value || '').trim();
+          const room = (document.getElementById('form-room')?.value || '').trim();
+          const furigana = (document.getElementById('form-furigana')?.value || '').trim();
+          const circle = (document.getElementById('form-circle')?.value || '').trim();
+          const luggage = Number(document.getElementById('form-luggage')?.value ?? 0);
+          const mail = Number(document.getElementById('form-mail')?.value ?? 0);
+
+          if (!name) {
+            alert('名前を入力してください');
+            return;
+          }
+
+          const dormKey = (dorm === 'meizen') ? 'meizen' : 'shofu';
+          const colName = `residents_${dormKey}`;
+
+          // Simple dedupe: same name + same room in same dorm
+          try {
+            const q = await db.collection(colName)
+              .where('name', '==', name)
+              .where('room', '==', room)
+              .limit(1)
+              .get();
+            if (!q.empty) {
+              alert('同じ名前・部屋番号の寮生が既に存在します');
+              return;
+            }
+          } catch (dedupeErr) {
+            console.warn('dedupe check failed (continue):', dedupeErr);
+          }
+
+          // Write
+          await db.collection(colName).add({
+            dorm: dormKey,
+            name,
+            room,
+            furigana,
+            circle,
+            luggage: Number.isFinite(luggage) && luggage >= 0 ? luggage : 0,
+            mail: Number.isFinite(mail) && mail >= 0 ? mail : 0,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+
+          // Close modal
+          const modal = document.getElementById('add-resident-modal');
+          if (modal) modal.classList.remove('active');
+          if (modal) modal.style.display = 'none';
+
+          // Clear inputs (keep dorm)
+          try {
+            document.getElementById('form-name').value = '';
+            document.getElementById('form-room').value = '';
+            document.getElementById('form-furigana').value = '';
+            document.getElementById('form-luggage').value = 0;
+            document.getElementById('form-mail').value = 0;
+          } catch (_) {}
+
+          // Refresh UI: try common functions if present
+          const refreshCandidates = [
+            'loadResidents',
+            'renderResidents',
+            'fetchResidents',
+            'refreshResidents',
+            'updateResidentTable',
+            'loadAndRenderResidents'
+          ];
+          for (const fn of refreshCandidates) {
+            try {
+              if (typeof window[fn] === 'function') {
+                await window[fn]();
+                break;
+              }
+            } catch (refreshErr) {
+              console.warn('refresh failed:', fn, refreshErr);
+            }
+          }
+
+        } catch (err) {
+          console.error('add resident failed:', err);
+          alert('追加に失敗しました。管理者ログイン状態・通信状態・権限を確認してください。');
+        }
+      }, false);
+    })();
 
     const CIRCLE_OPTIONS = {
       shofu : ['養','L','と','タ','酒','美','よ','台','キ'],
