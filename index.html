@@ -661,7 +661,7 @@
             <h2>新しい寮生を追加</h2>
             <button id="add-modal-close-btn" class="modal-close-btn">&times;</button>
         </div>
-        <form id="add-resident-form">
+        <form id="add-resident-form" onsubmit="return false;">
             <div class="form-group">
                 <label for="form-dorm">寮</label>
                 <select id="form-dorm" required><option value="shofu">松風寮</option><option value="meizen">明善寮</option></select>
@@ -911,6 +911,18 @@
       messaging = null;
     }
     const auth = firebase.auth();
+
+    // ===== Safety: prevent form submits from reloading the page =====
+    // (If a submit handler forgets preventDefault, the page will refresh and Firestore write won't run.)
+    document.addEventListener('submit', (e) => {
+      try {
+        const form = e.target;
+        if (!form) return;
+        if (form.id === 'add-resident-form' || form.id === 'add-bulk-form' || form.id === 'edit-resident-form') {
+          e.preventDefault();
+        }
+      } catch (_) {}
+    }, true);
 
     const CIRCLE_OPTIONS = {
       shofu : ['養','L','と','タ','酒','美','よ','台','キ'],
