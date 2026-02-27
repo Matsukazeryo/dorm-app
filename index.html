@@ -1052,10 +1052,32 @@
           for (const g of groups) {
             if (!g || !g.querySelector) continue;
 
-            // Prefer explicit data-field hooks if they exist
-            const nameEl = g.querySelector('[data-field="name"], .bulk-name, input[name="name"], input[id^="bulk-name"], input[placeholder*="名前"], input[type="text"]');
-            const roomEl = g.querySelector('[data-field="room"], .bulk-room, input[name="room"], input[id^="bulk-room"], input[placeholder*="部屋"], input[type="text"]:nth-of-type(2)');
-            const furiEl = g.querySelector('[data-field="furigana"], .bulk-furigana, input[name="furigana"], input[id^="bulk-furigana"], input[placeholder*="ふり"], input[type="text"]:nth-of-type(3)');
+            // Robust field detection: prioritize id/name/placeholder, then fall back to order
+            const textInputs = Array.from(g.querySelectorAll('input[type="text"]'));
+            const byHint = (re) => {
+              return textInputs.find(el => {
+                const id = (el.id || '').toLowerCase();
+                const nm = (el.name || '').toLowerCase();
+                const ph = (el.placeholder || '').toLowerCase();
+                return re.test(id) || re.test(nm) || re.test(ph);
+              }) || null;
+            };
+
+            // Try explicit hooks first
+            let nameEl = g.querySelector('[data-field="name"], .bulk-name, input[name="name"], input[id*="name"], input[id^="bulk-name"], input[placeholder*="名前"]');
+            let roomEl = g.querySelector('[data-field="room"], .bulk-room, input[name="room"], input[id*="room"], input[id^="bulk-room"], input[placeholder*="部屋"]');
+            let furiEl = g.querySelector('[data-field="furigana"], .bulk-furigana, input[name="furigana"], input[id*="furi"], input[id^="bulk-furigana"], input[placeholder*="ふり"]');
+
+            // If still not found, search by hints
+            if (!nameEl) nameEl = byHint(/name|namae|\u540d\u524d/);
+            if (!roomEl) roomEl = byHint(/room|heya|\u90e8\u5c4b|\u53f7/);
+            if (!furiEl) furiEl = byHint(/furi|furigana|\u3075\u308a/);
+
+            // Final fallback: use order (name, room, furigana)
+            if (!nameEl && textInputs[0]) nameEl = textInputs[0];
+            if (!roomEl && textInputs[1]) roomEl = textInputs[1];
+            if (!furiEl && textInputs[2]) furiEl = textInputs[2];
+
             const circleEl = g.querySelector('[data-field="circle"], .bulk-circle, select[name="circle"], select[id^="bulk-circle"], select');
 
             const name = (nameEl && nameEl.value ? String(nameEl.value) : '').trim();
