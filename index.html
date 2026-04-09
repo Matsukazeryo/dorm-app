@@ -314,14 +314,153 @@
           margin-bottom: 10px;
         }
         .off-counts {
-          font-size: 1.5em;
+          display: flex;
+          justify-content: center;
+          gap: 14px;
+          flex-wrap: wrap;
+          margin-top: 18px;
           color: var(--text-color);
+        }
+        .off-count-card {
+          min-width: 150px;
+          padding: 16px 18px;
+          border-radius: 16px;
+          background: var(--controls-bg);
+          border: 1px solid var(--border-color);
+        }
+        .off-count-label {
+          display: block;
+          font-size: 0.95rem;
+          color: #7f8c8d;
+          margin-bottom: 6px;
         }
         /* Emphasize off-mode counts */
         .off-count-number {
           font-size: 2.5em;
           font-weight: bold;
-          margin: 0 8px;
+          margin: 0;
+        }
+        .off-mode-actions {
+          margin-top: 20px;
+        }
+        .off-receive-btn {
+          min-width: 180px;
+          padding: 12px 18px;
+          border: none;
+          border-radius: 999px;
+          background: linear-gradient(135deg, #3498db, #2ecc71);
+          color: #fff;
+          font-size: 1rem;
+          font-weight: 700;
+          cursor: pointer;
+          box-shadow: 0 10px 20px rgba(52, 152, 219, 0.18);
+        }
+        .off-receive-btn:disabled {
+          background: #bdc3c7;
+          box-shadow: none;
+          cursor: not-allowed;
+        }
+        .receive-modal-content {
+          max-width: 560px;
+        }
+        .receive-summary {
+          margin: 0 0 14px 0;
+          font-size: 0.95rem;
+          color: #7f8c8d;
+        }
+        body.dark-theme .off-count-label,
+        body.dark-theme .receive-summary {
+          color: #bdc3c7;
+        }
+        .receive-primary-actions,
+        .receive-secondary-actions {
+          display: grid;
+          gap: 10px;
+        }
+        .receive-secondary-actions {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          margin-top: 12px;
+        }
+        .receive-action-btn {
+          width: 100%;
+          padding: 12px 14px;
+          border: none;
+          border-radius: 12px;
+          cursor: pointer;
+          font-size: 0.98rem;
+          font-weight: 700;
+        }
+        .receive-action-btn.primary {
+          background: #27ae60;
+          color: #fff;
+        }
+        .receive-action-btn.secondary {
+          background: var(--controls-bg);
+          color: var(--text-color);
+          border: 1px solid var(--border-color);
+        }
+        .receive-action-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        .receive-custom-panel {
+          margin-top: 14px;
+          padding: 14px;
+          border-radius: 12px;
+          background: var(--controls-bg);
+          border: 1px solid var(--border-color);
+        }
+        .receive-custom-title {
+          font-weight: 700;
+          margin-bottom: 10px;
+        }
+        .receive-stepper-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 10px;
+        }
+        .receive-stepper-row:last-child {
+          margin-bottom: 0;
+        }
+        .receive-stepper-label {
+          font-weight: 600;
+        }
+        .receive-stepper-sub {
+          display: block;
+          font-size: 0.8rem;
+          color: #7f8c8d;
+          margin-top: 2px;
+        }
+        body.dark-theme .receive-stepper-sub {
+          color: #bdc3c7;
+        }
+        .receive-stepper-controls {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .receive-stepper-btn {
+          width: 34px;
+          height: 34px;
+          border-radius: 50%;
+          border: 1px solid var(--mode-selector-border);
+          background: var(--mode-label-bg);
+          color: var(--text-color);
+          font-size: 1.1rem;
+          font-weight: 700;
+          cursor: pointer;
+        }
+        .receive-stepper-btn:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
+        }
+        .receive-stepper-value {
+          min-width: 22px;
+          text-align: center;
+          font-size: 1.1rem;
+          font-weight: 700;
         }
         /* ===== 庶務モードOFF専用レイアウトここまで ===== */
         /* ===== お知らせ欄 ===== */
@@ -448,38 +587,27 @@
          font-size:0.68em;
          line-height:1.1;
         }
-        /* Off-mode ±ボタンの見た目をカスタマイズ */
-        .off-mode-container .off-counts button {
-          background-color: var(--header-border);
-          color: #fff;
-          border: none;
-          border-radius: 50%;
-          width: 36px;
-          height: 36px;
-          font-size: 1.2em;
-          font-weight: bold;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          margin: 0 8px;
-          cursor: pointer;
-        }
         /* モバイル向け微調整 */
         @media (max-width: 600px) {
-          .off-mode-container .off-counts button {
-            width: 28px;
-            height: 28px;
-            font-size: 1.0em;
-            margin: 0 4px;
+          .off-counts {
+            gap: 10px;
           }
-          .off-mode-container .off-counts > div{
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            white-space: nowrap; /* 折り返し防止 */
+          .off-count-card {
+            min-width: 126px;
+            padding: 14px 12px;
           }
           .off-mode-container .off-count-number{
             font-size: 2.2em; /* 2.5em → 少しだけ縮小 */
+          }
+          .off-receive-btn {
+            width: 100%;
+          }
+          .receive-secondary-actions {
+            grid-template-columns: 1fr;
+          }
+          .receive-stepper-row {
+            align-items: flex-start;
+            flex-direction: column;
           }
         }
         /* === 庶務モードOFF: 上部のコントロールを非表示にする === */
@@ -643,6 +771,61 @@
   </div>
 </div>
 <!-- ==== 自分選択モーダル ここまで ==== -->
+
+<!-- ==== 寮生受け取りモーダル ==== -->
+<div id="receive-modal" class="modal-overlay">
+  <div class="modal-content receive-modal-content">
+    <div class="modal-header">
+      <h2>受け取り</h2>
+      <button id="receive-modal-close-btn" class="modal-close-btn">&times;</button>
+    </div>
+    <div id="receive-resident-name" style="font-size:1.15rem; font-weight:700; margin-bottom:6px;"></div>
+    <p id="receive-summary" class="receive-summary"></p>
+    <div class="receive-primary-actions">
+      <button id="receive-all-btn" type="button" class="receive-action-btn primary">全て受け取る</button>
+      <button id="receive-partial-toggle-btn" type="button" class="receive-action-btn secondary">一部だけ受け取る</button>
+    </div>
+    <div id="receive-partial-actions" style="display:none;">
+      <div class="receive-secondary-actions">
+        <button id="receive-luggage-btn" type="button" class="receive-action-btn secondary">荷物のみ</button>
+        <button id="receive-mail-btn" type="button" class="receive-action-btn secondary">郵便のみ</button>
+        <button id="receive-custom-toggle-btn" type="button" class="receive-action-btn secondary">数を指定</button>
+      </div>
+      <div id="receive-custom-panel" class="receive-custom-panel" style="display:none;">
+        <div class="receive-custom-title">受け取る数を選んでください</div>
+        <div class="receive-stepper-row">
+          <div>
+            <span class="receive-stepper-label">荷物</span>
+            <span class="receive-stepper-sub">最大 <span id="receive-luggage-max">0</span> 件</span>
+          </div>
+          <div class="receive-stepper-controls">
+            <button id="receive-luggage-minus" type="button" class="receive-stepper-btn">-</button>
+            <span id="receive-luggage-value" class="receive-stepper-value">0</span>
+            <button id="receive-luggage-plus" type="button" class="receive-stepper-btn">+</button>
+          </div>
+        </div>
+        <div class="receive-stepper-row">
+          <div>
+            <span class="receive-stepper-label">郵便</span>
+            <span class="receive-stepper-sub">最大 <span id="receive-mail-max">0</span> 件</span>
+          </div>
+          <div class="receive-stepper-controls">
+            <button id="receive-mail-minus" type="button" class="receive-stepper-btn">-</button>
+            <span id="receive-mail-value" class="receive-stepper-value">0</span>
+            <button id="receive-mail-plus" type="button" class="receive-stepper-btn">+</button>
+          </div>
+        </div>
+        <div class="form-actions" style="margin-top:14px;">
+          <button id="receive-custom-confirm-btn" type="button" class="header-btn" style="background:#27ae60;">この内容で受け取る</button>
+        </div>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button id="receive-cancel-btn" type="button" class="header-btn" style="background:#7f8c8d;">閉じる</button>
+    </div>
+  </div>
+</div>
+<!-- ==== 寮生受け取りモーダル ここまで ==== -->
 
 <!-- ==== 操作履歴モーダル ==== -->
 <div id="log-modal" class="modal-overlay">
@@ -4689,6 +4872,27 @@ function applySohmuUI(){
           middleControls: document.querySelector('.middle-controls'),
           opsContainer: document.querySelector('.ops-container'),
           changeResidentBtn: document.getElementById('change-resident-btn'),
+          receiveModal: document.getElementById('receive-modal'),
+          receiveResidentName: document.getElementById('receive-resident-name'),
+          receiveSummary: document.getElementById('receive-summary'),
+          receiveModalCloseBtn: document.getElementById('receive-modal-close-btn'),
+          receiveAllBtn: document.getElementById('receive-all-btn'),
+          receivePartialToggleBtn: document.getElementById('receive-partial-toggle-btn'),
+          receivePartialActions: document.getElementById('receive-partial-actions'),
+          receiveLuggageBtn: document.getElementById('receive-luggage-btn'),
+          receiveMailBtn: document.getElementById('receive-mail-btn'),
+          receiveCustomToggleBtn: document.getElementById('receive-custom-toggle-btn'),
+          receiveCustomPanel: document.getElementById('receive-custom-panel'),
+          receiveLuggageMax: document.getElementById('receive-luggage-max'),
+          receiveMailMax: document.getElementById('receive-mail-max'),
+          receiveLuggageMinus: document.getElementById('receive-luggage-minus'),
+          receiveLuggageValue: document.getElementById('receive-luggage-value'),
+          receiveLuggagePlus: document.getElementById('receive-luggage-plus'),
+          receiveMailMinus: document.getElementById('receive-mail-minus'),
+          receiveMailValue: document.getElementById('receive-mail-value'),
+          receiveMailPlus: document.getElementById('receive-mail-plus'),
+          receiveCustomConfirmBtn: document.getElementById('receive-custom-confirm-btn'),
+          receiveCancelBtn: document.getElementById('receive-cancel-btn'),
           addResidentModal: document.getElementById('add-resident-modal'),
           addModalCloseBtn: document.getElementById('add-modal-close-btn'),
           addResidentForm: document.getElementById('add-resident-form'),
@@ -4741,6 +4945,199 @@ function applySohmuUI(){
           morningFinishBtn    : document.getElementById('morning-finish-btn'),
         };
 
+const receiveModalState = {
+  residentId: null,
+  residentName: '',
+  luggageAvailable: 0,
+  mailAvailable: 0,
+  customLuggage: 0,
+  customMail: 0,
+  showPartial: false,
+  showCustom: false
+};
+
+function getResidentById(residentId) {
+  return Array.isArray(allResidents) ? (allResidents.find(r => r.id === residentId) || null) : null;
+}
+
+function resolveResidentCollectionName(residentId) {
+  if (currentCollectionName !== 'all') return currentCollectionName;
+  const resident = getResidentById(residentId);
+  const dormKey = (resident && resident.dorm) || 'shofu';
+  return `residents_${dormKey}`;
+}
+
+function formatReceiveSummary(luggage, mail) {
+  return `現在: 荷物 ${luggage} 件 / 郵便 ${mail} 件`;
+}
+
+function formatReceiveLogDetails(luggage, mail) {
+  const parts = [];
+  if (luggage > 0) parts.push(`荷物${luggage}件`);
+  if (mail > 0) parts.push(`郵便${mail}件`);
+  return parts.length ? `${parts.join('・')}を受け取り` : '受け取り';
+}
+
+function syncReceiveModalUI() {
+  if (!elements.receiveModal) return;
+
+  const totalAvailable = receiveModalState.luggageAvailable + receiveModalState.mailAvailable;
+  const customTotal = receiveModalState.customLuggage + receiveModalState.customMail;
+
+  if (elements.receiveResidentName) {
+    elements.receiveResidentName.textContent = receiveModalState.residentName || '';
+  }
+  if (elements.receiveSummary) {
+    elements.receiveSummary.textContent = formatReceiveSummary(
+      receiveModalState.luggageAvailable,
+      receiveModalState.mailAvailable
+    );
+  }
+
+  if (elements.receiveAllBtn) elements.receiveAllBtn.disabled = totalAvailable === 0;
+  if (elements.receivePartialToggleBtn) {
+    elements.receivePartialToggleBtn.disabled = totalAvailable === 0;
+    elements.receivePartialToggleBtn.textContent = receiveModalState.showPartial ? '一部だけ受け取る ▼' : '一部だけ受け取る';
+  }
+  if (elements.receivePartialActions) {
+    elements.receivePartialActions.style.display = receiveModalState.showPartial ? 'block' : 'none';
+  }
+
+  if (elements.receiveLuggageBtn) elements.receiveLuggageBtn.disabled = receiveModalState.luggageAvailable === 0;
+  if (elements.receiveMailBtn) elements.receiveMailBtn.disabled = receiveModalState.mailAvailable === 0;
+  if (elements.receiveCustomToggleBtn) {
+    elements.receiveCustomToggleBtn.disabled = totalAvailable === 0;
+    elements.receiveCustomToggleBtn.textContent = receiveModalState.showCustom ? '数を指定 ▲' : '数を指定';
+  }
+  if (elements.receiveCustomPanel) {
+    elements.receiveCustomPanel.style.display = receiveModalState.showCustom ? 'block' : 'none';
+  }
+
+  if (elements.receiveLuggageMax) elements.receiveLuggageMax.textContent = receiveModalState.luggageAvailable;
+  if (elements.receiveMailMax) elements.receiveMailMax.textContent = receiveModalState.mailAvailable;
+  if (elements.receiveLuggageValue) elements.receiveLuggageValue.textContent = receiveModalState.customLuggage;
+  if (elements.receiveMailValue) elements.receiveMailValue.textContent = receiveModalState.customMail;
+
+  if (elements.receiveLuggageMinus) elements.receiveLuggageMinus.disabled = receiveModalState.customLuggage <= 0;
+  if (elements.receiveLuggagePlus) elements.receiveLuggagePlus.disabled = receiveModalState.customLuggage >= receiveModalState.luggageAvailable;
+  if (elements.receiveMailMinus) elements.receiveMailMinus.disabled = receiveModalState.customMail <= 0;
+  if (elements.receiveMailPlus) elements.receiveMailPlus.disabled = receiveModalState.customMail >= receiveModalState.mailAvailable;
+  if (elements.receiveCustomConfirmBtn) elements.receiveCustomConfirmBtn.disabled = customTotal === 0;
+}
+
+function closeReceiveModal() {
+  if (!elements.receiveModal) return;
+  elements.receiveModal.classList.remove('active');
+}
+
+function openReceiveModal(residentId) {
+  const resident = getResidentById(residentId);
+  if (!resident) {
+    alert('寮生情報の読み込みが終わってからもう一度お試しください。');
+    return;
+  }
+
+  const luggageAvailable = Math.max(0, parseInt(resident.luggage, 10) || 0);
+  const mailAvailable = Math.max(0, parseInt(resident.mail, 10) || 0);
+  if ((luggageAvailable + mailAvailable) === 0) {
+    alert('受け取る荷物・郵便はありません。');
+    return;
+  }
+
+  receiveModalState.residentId = resident.id;
+  receiveModalState.residentName = resident.name || '';
+  receiveModalState.luggageAvailable = luggageAvailable;
+  receiveModalState.mailAvailable = mailAvailable;
+  receiveModalState.customLuggage = 0;
+  receiveModalState.customMail = 0;
+  receiveModalState.showPartial = false;
+  receiveModalState.showCustom = false;
+  syncReceiveModalUI();
+  elements.receiveModal.classList.add('active');
+}
+
+function adjustReceiveCustomCount(type, delta) {
+  const key = type === 'mail' ? 'customMail' : 'customLuggage';
+  const max = type === 'mail' ? receiveModalState.mailAvailable : receiveModalState.luggageAvailable;
+  const current = receiveModalState[key];
+  receiveModalState[key] = Math.max(0, Math.min(max, current + delta));
+  syncReceiveModalUI();
+}
+
+async function receiveResidentItems(residentId, requestedLuggage, requestedMail) {
+  const luggageToReceive = Math.max(0, parseInt(requestedLuggage, 10) || 0);
+  const mailToReceive = Math.max(0, parseInt(requestedMail, 10) || 0);
+  if ((luggageToReceive + mailToReceive) === 0) {
+    alert('受け取る数を選択してください。');
+    return;
+  }
+
+  const resident = getResidentById(residentId);
+  if (!resident) {
+    throw new Error('resident not found');
+  }
+
+  const targetCollection = resolveResidentCollectionName(residentId);
+  const dormKey = (targetCollection.split('_')[1] || '').trim();
+  const originalLuggage = Math.max(0, parseInt(resident.luggage, 10) || 0);
+  const originalMail = Math.max(0, parseInt(resident.mail, 10) || 0);
+
+  resident.luggage = Math.max(0, originalLuggage - luggageToReceive);
+  resident.mail = Math.max(0, originalMail - mailToReceive);
+  try { if (typeof window.renderTable === 'function') window.renderTable(); } catch (_) {}
+
+  try {
+    const docRef = db.collection(targetCollection).doc(residentId);
+    const result = await db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(docRef);
+      if (!snap.exists) throw new Error('resident document missing');
+
+      const data = snap.data() || {};
+      const currentLuggage = Math.max(0, parseInt(data.luggage, 10) || 0);
+      const currentMail = Math.max(0, parseInt(data.mail, 10) || 0);
+      const appliedLuggage = Math.min(currentLuggage, luggageToReceive);
+      const appliedMail = Math.min(currentMail, mailToReceive);
+      const nextLuggage = currentLuggage - appliedLuggage;
+      const nextMail = currentMail - appliedMail;
+      const payload = {};
+
+      if (nextLuggage !== currentLuggage) payload.luggage = nextLuggage;
+      if (nextMail !== currentMail) payload.mail = nextMail;
+      if (Object.keys(payload).length) transaction.update(docRef, payload);
+
+      return { appliedLuggage, appliedMail, nextLuggage, nextMail };
+    });
+
+    resident.luggage = result.nextLuggage;
+    resident.mail = result.nextMail;
+    try { if (typeof window.renderTable === 'function') window.renderTable(); } catch (_) {}
+
+    if (result.appliedLuggage || result.appliedMail) {
+      addLog('受け取り', `[${dormKey}] ${resident.name} ${formatReceiveLogDetails(result.appliedLuggage, result.appliedMail)}`);
+    } else {
+      alert('受け取れる荷物・郵便がありませんでした。');
+    }
+  } catch (error) {
+    resident.luggage = originalLuggage;
+    resident.mail = originalMail;
+    try { if (typeof window.renderTable === 'function') window.renderTable(); } catch (_) {}
+    throw error;
+  }
+}
+
+async function confirmReceiveAction(luggageCount, mailCount) {
+  const residentId = receiveModalState.residentId;
+  if (!residentId) return;
+
+  closeReceiveModal();
+  try {
+    await receiveResidentItems(residentId, luggageCount, mailCount);
+  } catch (error) {
+    console.error('receive action failed', error);
+    alert('受け取り処理に失敗しました。通信状態や権限をご確認ください。');
+  }
+}
+
 // Initialize dynamic admin password from Firestore
 initAdminPassword();
 // ===== 朝の庶務バナー: 操作ボタンのイベントバインド =====
@@ -4758,6 +5155,69 @@ if (__finishBtn) {
     try { finishMorning(); } catch(_) {}
   });
 }
+if (elements.receiveModalCloseBtn) {
+  elements.receiveModalCloseBtn.addEventListener('click', closeReceiveModal);
+}
+if (elements.receiveCancelBtn) {
+  elements.receiveCancelBtn.addEventListener('click', closeReceiveModal);
+}
+if (elements.receiveModal) {
+  elements.receiveModal.addEventListener('click', (ev) => {
+    if (ev.target === elements.receiveModal) closeReceiveModal();
+  });
+}
+if (elements.receiveAllBtn) {
+  elements.receiveAllBtn.addEventListener('click', () => {
+    confirmReceiveAction(receiveModalState.luggageAvailable, receiveModalState.mailAvailable);
+  });
+}
+if (elements.receivePartialToggleBtn) {
+  elements.receivePartialToggleBtn.addEventListener('click', () => {
+    receiveModalState.showPartial = !receiveModalState.showPartial;
+    if (!receiveModalState.showPartial) receiveModalState.showCustom = false;
+    syncReceiveModalUI();
+  });
+}
+if (elements.receiveLuggageBtn) {
+  elements.receiveLuggageBtn.addEventListener('click', () => {
+    confirmReceiveAction(receiveModalState.luggageAvailable, 0);
+  });
+}
+if (elements.receiveMailBtn) {
+  elements.receiveMailBtn.addEventListener('click', () => {
+    confirmReceiveAction(0, receiveModalState.mailAvailable);
+  });
+}
+if (elements.receiveCustomToggleBtn) {
+  elements.receiveCustomToggleBtn.addEventListener('click', () => {
+    receiveModalState.showPartial = true;
+    receiveModalState.showCustom = !receiveModalState.showCustom;
+    syncReceiveModalUI();
+  });
+}
+if (elements.receiveLuggageMinus) {
+  elements.receiveLuggageMinus.addEventListener('click', () => adjustReceiveCustomCount('luggage', -1));
+}
+if (elements.receiveLuggagePlus) {
+  elements.receiveLuggagePlus.addEventListener('click', () => adjustReceiveCustomCount('luggage', 1));
+}
+if (elements.receiveMailMinus) {
+  elements.receiveMailMinus.addEventListener('click', () => adjustReceiveCustomCount('mail', -1));
+}
+if (elements.receiveMailPlus) {
+  elements.receiveMailPlus.addEventListener('click', () => adjustReceiveCustomCount('mail', 1));
+}
+if (elements.receiveCustomConfirmBtn) {
+  elements.receiveCustomConfirmBtn.addEventListener('click', () => {
+    confirmReceiveAction(receiveModalState.customLuggage, receiveModalState.customMail);
+  });
+}
+document.addEventListener('click', (ev) => {
+  const receiveBtn = ev.target && ev.target.closest && ev.target.closest('.off-receive-btn');
+  if (!receiveBtn) return;
+  ev.preventDefault();
+  openReceiveModal(receiveBtn.dataset.residentId);
+}, true);
 if (elements.morningRunBtn) {
   elements.morningRunBtn.addEventListener('click', async (ev) => {
     ev.preventDefault();
@@ -5454,23 +5914,25 @@ if(elements.changePasswordForm){
                     if (!elements.sohmuToggle.checked) {
                         // 庶務モード OFF のときのレイアウト
                         const dormMarker = resident.dorm === 'shofu' ? '松' : (resident.dorm === 'meizen' ? '明' : '');
+                        const luggageCount = Math.max(0, parseInt(resident.luggage, 10) || 0);
+                        const mailCount = Math.max(0, parseInt(resident.mail, 10) || 0);
+                        const hasReceivableItems = (luggageCount + mailCount) > 0;
                         row.innerHTML = `
                           <td colspan="5" style="border:none; padding:20px; text-align:center;">
                             <div class="off-mode-container">
                               <div class="off-name"><span class="dorm-marker">${dormMarker}</span>${resident.name}</div>
                               <div class="off-counts">
-                                <div>
-                                  荷物:
-                                  <button onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1)">-</button>
-                                  <span class="off-count-number">${resident.luggage}</span>
-                                  <button onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1)">+</button>
+                                <div class="off-count-card">
+                                  <span class="off-count-label">荷物</span>
+                                  <span class="off-count-number">${luggageCount}</span>
                                 </div>
-                                <div style="margin-top:10px;">
-                                  郵便:
-                                  <button onclick="updateCount('${resident.id}', '${resident.name}', 'mail', -1)">-</button>
-                                  <span class="off-count-number">${resident.mail}</span>
-                                  <button onclick="updateCount('${resident.id}', '${resident.name}', 'mail', 1)">+</button>
+                                <div class="off-count-card">
+                                  <span class="off-count-label">郵便</span>
+                                  <span class="off-count-number">${mailCount}</span>
                                 </div>
+                              </div>
+                              <div class="off-mode-actions">
+                                <button type="button" class="off-receive-btn" data-resident-id="${resident.id}" ${hasReceivableItems ? '' : 'disabled'}>受け取る</button>
                               </div>
                             </div>
                           </td>
@@ -6226,5 +6688,3 @@ if(elements.changePasswordForm){
 
 </body>
 </html>
-
-
