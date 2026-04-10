@@ -251,6 +251,41 @@
         .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
         .form-group input, .form-group select, .form-group textarea { width: 95%; padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; background-color: var(--mode-label-bg); color: var(--text-color); font-family: inherit; }
         .form-group textarea { resize: vertical; min-height: 100px; }
+        .announcement-preview {
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          background: var(--controls-bg);
+          padding: 12px;
+        }
+        .announcement-preview-label {
+          font-size: 0.8rem;
+          font-weight: 700;
+          color: #7f8c8d;
+          margin-bottom: 6px;
+        }
+        body.dark-theme .announcement-preview-label {
+          color: #bdc3c7;
+        }
+        .announcement-preview-title {
+          font-size: 1rem;
+          font-weight: 700;
+          margin-bottom: 12px;
+          line-height: 1.4;
+          white-space: pre-wrap;
+          word-break: break-word;
+        }
+        .announcement-preview-body {
+          min-height: 96px;
+          line-height: 1.5;
+          white-space: pre-wrap;
+          word-break: break-word;
+        }
+        .announcement-preview-placeholder {
+          color: #7f8c8d;
+        }
+        body.dark-theme .announcement-preview-placeholder {
+          color: #bdc3c7;
+        }
         .form-actions {
           display: flex;
           justify-content: space-between;
@@ -952,6 +987,15 @@
         <button type="button" id="apply-red" class="header-btn" style="background:#c0392b;">選択部分を赤で強調</button>
         <button type="button" id="remove-emphasis" class="header-btn" style="background:#7f8c8d; margin-left:8px;">強調解除</button>
         <small id="inline-color-target" style="margin-left:8px; opacity:.8;">対象: 本文</small>
+      </div>
+      <div class="form-group">
+        <label>プレビュー</label>
+        <div id="post-preview" class="announcement-preview">
+          <div class="announcement-preview-label">タイトル</div>
+          <div id="preview-title" class="announcement-preview-title"><span class="announcement-preview-placeholder">タイトルなし</span></div>
+          <div class="announcement-preview-label">本文</div>
+          <div id="preview-body" class="announcement-preview-body"><span class="announcement-preview-placeholder">本文プレビュー</span></div>
+        </div>
       </div>
       <div class="form-actions">
         <button type="button" id="post-cancel-btn" class="header-btn" style="background-color:#e74c3c;">キャンセル</button>
@@ -2549,6 +2593,11 @@ function unifiedConfirm(action){
 
   const COL = 'announcements';
   let annCache = []; // [{id, data}]
+  const composerState = {
+    editingId: null,
+    saving: false
+  };
+  const pendingAnnouncementIds = new Set();
 
   function isAdmin(){
     return document.body.classList.contains('admin-logged-in');
@@ -2729,6 +2778,98 @@ function unifiedConfirm(action){
     return (root.innerHTML || '').trim();
   }
 
+  function getAnnouncementSortTs(data){
+    return (data && (data.updatedAt || data.createdAt || data.timestamp)) || null;
+  }
+
+  function renderComposerMarkup(raw){
+    const html = renderColoredText(raw || '').replace(/\r\n?/g, '\n').replace(/\n/g, '<br>');
+    return normalizeAnnouncementBody(html);
+  }
+
+  function htmlToComposerMarkup(raw){
+    const normalized = normalizeAnnouncementBody(raw || '');
+    const root = document.createElement('div');
+    root.innerHTML = normalized;
+
+    function walk(node){
+      if (!node) return '';
+      if (node.nodeType === 3) return node.nodeValue || '';
+      if (node.nodeType !== 1) return '';
+
+      const tag = (node.tagName || '').toLowerCase();
+      if (tag === 'br') return '\n';
+
+      const inner = Array.from(node.childNodes || []).map(walk).join('');
+      if (tag === 'span' && /\bann-red\b/i.test(node.className || '')) {
+        return `[color=#ff0000]${inner}[/color]`;
+      }
+      return inner;
+    }
+
+    return Array.from(root.childNodes || []).map(walk).join('').replace(/\u00a0/g, ' ');
+  }
+
+  function findAnnouncement(id){
+    return annCache.find(item => item && item.id === id) || null;
+  }
+
+  function refreshComposerPreview(){
+    const titleInput = document.getElementById('post-title');
+    const bodyInput = document.getElementById('post-body');
+    const previewTitle = document.getElementById('preview-title');
+    const previewBody = document.getElementById('preview-body');
+    if (!titleInput || !bodyInput || !previewTitle || !previewBody) return;
+
+    const titleHtml = renderComposerMarkup(titleInput.value || '').replace(/<br\s*\/?>/gi, '');
+    const bodyHtml = renderComposerMarkup(bodyInput.value || '');
+
+    previewTitle.innerHTML = titleHtml || '<span class="announcement-preview-placeholder">タイトルなし</span>';
+    previewBody.innerHTML = bodyHtml || '<span class="announcement-preview-placeholder">本文プレビュー</span>';
+  }
+
+  function setComposerTarget(targetEl){
+    const label = document.getElementById('inline-color-target');
+    if (!label) return;
+    label.textContent = targetEl && targetEl.id === 'post-title' ? '対象: タイトル' : '対象: 本文';
+  }
+
+  function openComposerModal(options){
+    const modal = document.getElementById('post-announcement-modal');
+    const titleInput = document.getElementById('post-title');
+    const bodyInput = document.getElementById('post-body');
+    const modalTitle = document.querySelector('#post-announcement-modal h2');
+    const submitBtn = document.querySelector('#post-announcement-form button[type="submit"]');
+    if (!modal || !titleInput || !bodyInput || !modalTitle || !submitBtn) return;
+
+    const data = options || {};
+    composerState.editingId = data.id || null;
+    composerState.saving = false;
+
+    modalTitle.textContent = composerState.editingId ? 'お知らせを編集' : 'お知らせを投稿';
+    submitBtn.textContent = composerState.editingId ? '更新' : '投稿';
+    titleInput.value = htmlToComposerMarkup(data.title || '');
+    bodyInput.value = htmlToComposerMarkup(data.body || '');
+    modal.classList.add('active');
+    setComposerTarget(bodyInput);
+    refreshComposerPreview();
+
+    try { bodyInput.focus(); } catch(_) {}
+  }
+
+  function closeComposerModal(){
+    const modal = document.getElementById('post-announcement-modal');
+    const titleInput = document.getElementById('post-title');
+    const bodyInput = document.getElementById('post-body');
+    if (modal) modal.classList.remove('active');
+    composerState.editingId = null;
+    composerState.saving = false;
+    if (titleInput) titleInput.value = '';
+    if (bodyInput) bodyInput.value = '';
+    refreshComposerPreview();
+    setComposerTarget(bodyInput);
+  }
+
   function ensureVisibility(){
     const box = document.getElementById('announcement-container');
     if (!box) return;
@@ -2749,8 +2890,8 @@ function unifiedConfirm(action){
       const ap = (a.data && a.data.pinned) ? 1 : 0;
       const bp = (b.data && b.data.pinned) ? 1 : 0;
       if (ap !== bp) return bp - ap;
-      const at = getMillis((a.data && (a.data.updatedAt || a.data.createdAt)) || null);
-      const bt = getMillis((b.data && (b.data.updatedAt || b.data.createdAt)) || null);
+      const at = getMillis(getAnnouncementSortTs(a.data || {}));
+      const bt = getMillis(getAnnouncementSortTs(b.data || {}));
       return bt - at;
     });
   }
@@ -2788,10 +2929,10 @@ function unifiedConfirm(action){
 
       const titleSpan = document.createElement('span');
       titleSpan.className = 'announce-title';
-      titleSpan.textContent = (d.title || '').trim() || '(タイトルなし)';
+      titleSpan.innerHTML = normalizeAnnouncementBody(d.title || '').replace(/<br\s*\/?>/gi, '') || '(タイトルなし)';
       head.appendChild(titleSpan);
 
-      const ts = d.updatedAt || d.createdAt || null;
+      const ts = getAnnouncementSortTs(d);
       const timeStr = formatTs(ts);
       if (timeStr){
         const time = document.createElement('span');
@@ -2803,7 +2944,7 @@ function unifiedConfirm(action){
       const body = document.createElement('p');
       body.className = 'announce-body';
       // 投稿時の <span> 等を保持したいので innerHTML で描画
-      body.innerHTML = normalizeAnnouncementBody(d.body);
+      body.innerHTML = normalizeAnnouncementBody(d.body || d.text || '');
 
       li.appendChild(head);
       li.appendChild(body);
@@ -2814,8 +2955,6 @@ function unifiedConfirm(action){
         actions.innerHTML = `
           <button type="button" class="announce-pin-btn" data-action="pin">${pinned ? 'ピン解除' : 'ピン留め'}</button>
           <button type="button" class="announce-edit-btn" data-action="edit">編集</button>
-          <button type="button" class="announce-save-btn" data-action="save" style="display:none;">保存</button>
-          <button type="button" class="announce-cancel-btn" data-action="cancel" style="display:none;">キャンセル</button>
           <button type="button" class="announce-delete-btn" data-action="delete">削除</button>
         `;
         li.appendChild(actions);
@@ -2905,22 +3044,23 @@ function unifiedConfirm(action){
       const openBtn = ev.target && ev.target.closest && ev.target.closest('#post-announcement-btn');
       if (openBtn){
         ev.preventDefault();
-        const modal = document.getElementById('post-announcement-modal');
-        if (modal) modal.classList.add('active');
+        ev.stopImmediatePropagation();
+        openComposerModal();
         return;
       }
 
       const closeBtn = ev.target && ev.target.closest && (ev.target.closest('#post-modal-close-btn') || ev.target.closest('#post-cancel-btn'));
       if (closeBtn){
         ev.preventDefault();
-        const modal = document.getElementById('post-announcement-modal');
-        if (modal) modal.classList.remove('active');
+        ev.stopImmediatePropagation();
+        closeComposerModal();
         return;
       }
 
       const modal = document.getElementById('post-announcement-modal');
       if (modal && ev.target === modal){
-        modal.classList.remove('active');
+        ev.stopImmediatePropagation();
+        closeComposerModal();
       }
     }, true);
   })();
@@ -2930,121 +3070,73 @@ function unifiedConfirm(action){
     if (window.__annV2PostSubmitBound) return;
     window.__annV2PostSubmitBound = true;
 
-    window.addEventListener('load', () => {
-      const form = document.getElementById('post-announcement-form');
-      if (!form) return;
+    const form = document.getElementById('post-announcement-form');
+    if (!form) return;
 
-      form.addEventListener('submit', async (ev) => {
-        ev.preventDefault();
-        const titleInput = document.getElementById('post-title');
-        const bodyInput  = document.getElementById('post-body');
-        const title = (titleInput && titleInput.value || '').trim();
-        const body  = (bodyInput && bodyInput.value  || '').trim();
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      if (composerState.saving) return;
 
-        if (!title && !body){
-          alert('タイトルか本文を入力してください。');
-          return;
+      const titleInput = document.getElementById('post-title');
+      const bodyInput  = document.getElementById('post-body');
+      const submitBtn = document.querySelector('#post-announcement-form button[type="submit"]');
+      const titleRaw = (titleInput && titleInput.value || '').trim();
+      const bodyRaw  = (bodyInput && bodyInput.value  || '').trim();
+
+      if (!titleRaw && !bodyRaw){
+        alert('タイトルか本文を入力してください。');
+        return;
+      }
+
+      composerState.saving = true;
+      if (submitBtn) submitBtn.disabled = true;
+
+      try{
+        const payload = {
+          title: renderComposerMarkup(titleRaw),
+          body: renderComposerMarkup(bodyRaw),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        if (composerState.editingId){
+          await db.collection(COL).doc(composerState.editingId).set(payload, { merge:true });
+        } else {
+          payload.pinned = false;
+          payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+          payload.timestamp = firebase.firestore.FieldValue.serverTimestamp();
+          await db.collection(COL).add(payload);
         }
 
-        try{
-          await db.collection(COL).add({
-            title,
-            body: normalizeAnnouncementBody(body),
-            pinned: false,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-          });
-
-          if (titleInput) titleInput.value = '';
-          if (bodyInput)  bodyInput.value  = '';
-
-          const modal = document.getElementById('post-announcement-modal');
-          if (modal) modal.classList.remove('active');
-
-          try { typeof addLog === 'function' && addLog('お知らせ投稿', title || body.slice(0,20)); } catch(_){ }
-        }catch(e){
-          console.error('announcement post failed', e);
-          alert('お知らせの投稿に失敗しました。権限やネットワークを確認してください。');
-        }
-      });
-    });
+        closeComposerModal();
+      }catch(e){
+        console.error('announcement save failed', e);
+        alert('お知らせの保存に失敗しました。権限やネットワークを確認してください。');
+      } finally {
+        composerState.saving = false;
+        if (submitBtn) submitBtn.disabled = false;
+      }
+    }, true);
   })();
 
-  // 強調ツール（投稿モーダル）※ 以前の「クリック内IIFE」をやめて安定化
+  // 投稿モーダルのプレビューだけは v2 側で管理する
   (function bindEmphasisTools(){
     if (window.__annEmphasisBound) return;
     window.__annEmphasisBound = true;
-
-    window.addEventListener('load', function(){
-      const bodyInput = document.getElementById('post-body');
-      const applyBtn  = document.getElementById('apply-red');
-      const removeBtn = document.getElementById('remove-emphasis');
-      if (!bodyInput || !applyBtn || !removeBtn) return;
-
-      applyBtn.addEventListener('click', function(ev){
-        ev.preventDefault();
-        const ta = bodyInput;
-        if (typeof ta.selectionStart !== 'number' || typeof ta.selectionEnd !== 'number') {
-          alert('赤で強調したい部分を選択してください。');
-          return;
-        }
-        const start = ta.selectionStart;
-        const end   = ta.selectionEnd;
-        if (start === end) {
-          alert('赤で強調したい部分を選択してください。');
-          return;
-        }
-        const val = ta.value || '';
-        const before   = val.slice(0, start);
-        const selected = val.slice(start, end);
-        const after    = val.slice(end);
-        const wrapped = '<span class="ann-red">' + selected + '</span>';
-        ta.value = before + wrapped + after;
-        const pos = (before + wrapped).length;
-        ta.focus();
-        try { ta.setSelectionRange(pos, pos); } catch(_){ }
-      });
-
-      removeBtn.addEventListener('click', function(ev){
-        ev.preventDefault();
-        const v = bodyInput.value || '';
-        const stripped = v
-          .replace(/<span[^>]*style="[^"]*color:\s*#?c0392b[^"]*"[^>]*>(.*?)<\/span>/gi, '$1')
-          .replace(/<span[^>]*>(.*?)<\/span>/gi, '$1');
-        bodyInput.value = stripped;
-      });
-    });
+    window.addEventListener('load', refreshComposerPreview);
   })();
 
-  // 管理者操作（ピン/編集/保存/キャンセル/削除）
+  // 管理者操作（ピン/編集/削除）
   (function bindAdminActions(){
     if (window.__annV2AdminBound) return;
     window.__annV2AdminBound = true;
 
-    function endEditing(li, keepContent){
-      const titleEl = li.querySelector('.announce-title');
-      const bodyEl  = li.querySelector('.announce-body');
-      if (titleEl) titleEl.contentEditable = 'false';
-      if (bodyEl)  bodyEl.contentEditable  = 'false';
-      li.classList.remove('editing');
-
-      const actions = li.querySelector('.announce-actions');
-      if (actions){
-        const editBtn   = actions.querySelector('.announce-edit-btn');
-        const saveBtn   = actions.querySelector('.announce-save-btn');
-        const cancelBtn = actions.querySelector('.announce-cancel-btn');
-        if (editBtn) editBtn.style.display = '';
-        if (saveBtn) saveBtn.style.display = 'none';
-        if (cancelBtn) cancelBtn.style.display = 'none';
-      }
-
-      if (!keepContent){
-        if (titleEl && li.dataset.origTitle != null) titleEl.textContent = li.dataset.origTitle;
-        if (bodyEl  && li.dataset.origBody  != null) bodyEl.innerHTML    = li.dataset.origBody;
-      }
-
-      delete li.dataset.origTitle;
-      delete li.dataset.origBody;
+    function setBusy(li, on){
+      if (!li) return;
+      li.dataset.busy = on ? '1' : '0';
+      li.querySelectorAll('.announce-actions button').forEach(btn => {
+        btn.disabled = !!on;
+      });
     }
 
     document.addEventListener('click', async (ev) => {
@@ -3058,87 +3150,51 @@ function unifiedConfirm(action){
       const actionEl = ev.target.closest('[data-action]');
       if (!actionEl) return;
       const action = actionEl.getAttribute('data-action');
+      if (pendingAnnouncementIds.has(id)) return;
 
       try{
         if (action === 'pin'){
           ev.preventDefault();
-          const newPinned = !li.classList.contains('pinned');
+          ev.stopImmediatePropagation();
+          const found = findAnnouncement(id);
+          const newPinned = !(found && found.data && found.data.pinned);
+          pendingAnnouncementIds.add(id);
+          setBusy(li, true);
           await db.collection(COL).doc(id).set({
             pinned: newPinned,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
           }, { merge:true });
-          try { typeof addLog === 'function' && addLog('お知らせピン変更', `[${id}] ${newPinned ? 'ピン留め' : 'ピン解除'}`); } catch(_){ }
           return;
         }
 
         if (action === 'edit'){
           ev.preventDefault();
-          // 他に編集中があれば先にキャンセル
-          document.querySelectorAll('#announcement-list li.editing').forEach(other => {
-            if (other !== li) endEditing(other, false);
+          ev.stopImmediatePropagation();
+          const found = findAnnouncement(id);
+          if (!found) return;
+          openComposerModal({
+            id,
+            title: found.data && found.data.title,
+            body: found.data && (found.data.body || found.data.text)
           });
-
-          const titleEl = li.querySelector('.announce-title');
-          const bodyEl  = li.querySelector('.announce-body');
-          if (!titleEl || !bodyEl) return;
-
-          li.dataset.origTitle = titleEl.textContent || '';
-          li.dataset.origBody  = bodyEl.innerHTML || '';
-
-          titleEl.contentEditable = 'true';
-          bodyEl.contentEditable  = 'true';
-          li.classList.add('editing');
-
-          const actions = li.querySelector('.announce-actions');
-          if (actions){
-            const editBtn   = actions.querySelector('.announce-edit-btn');
-            const saveBtn   = actions.querySelector('.announce-save-btn');
-            const cancelBtn = actions.querySelector('.announce-cancel-btn');
-            if (editBtn) editBtn.style.display = 'none';
-            if (saveBtn) saveBtn.style.display = '';
-            if (cancelBtn) cancelBtn.style.display = '';
-          }
-
-          try { titleEl.focus(); } catch(_){ }
-          return;
-        }
-
-        if (action === 'save'){
-          ev.preventDefault();
-          const titleEl = li.querySelector('.announce-title');
-          const bodyEl  = li.querySelector('.announce-body');
-          if (!titleEl || !bodyEl) return;
-
-          const newTitle = (titleEl.textContent || '').trim();
-          const newBody  = normalizeAnnouncementBody(bodyEl.innerHTML);
-
-          await db.collection(COL).doc(id).set({
-            title: newTitle,
-            body : newBody,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-          }, { merge:true });
-
-          endEditing(li, true);
-          try { typeof addLog === 'function' && addLog('お知らせ編集', `[${id}] ${newTitle}`); } catch(_){ }
-          return;
-        }
-
-        if (action === 'cancel'){
-          ev.preventDefault();
-          endEditing(li, false);
           return;
         }
 
         if (action === 'delete'){
           ev.preventDefault();
+          ev.stopImmediatePropagation();
           if (!window.confirm('このお知らせを削除しますか？')) return;
+          pendingAnnouncementIds.add(id);
+          setBusy(li, true);
           await db.collection(COL).doc(id).delete();
-          try { typeof addLog === 'function' && addLog('お知らせ削除', `[${id}]`); } catch(_){ }
           return;
         }
       }catch(e){
         console.error('announcement action failed', action, e);
         alert('操作に失敗しました。権限/ネットワークを確認してください。');
+      } finally {
+        pendingAnnouncementIds.delete(id);
+        setBusy(li, false);
       }
     }, true);
   })();
@@ -3160,9 +3216,32 @@ function unifiedConfirm(action){
     window.addEventListener('load', () => {
       ensureVisibility();
       render();
+      refreshComposerPreview();
       try { rehydrateBbcodeInDom(); } catch(_) {}
     });
   })();
+
+  window.__announcementV2Api = {
+    openCreateModal: function(){ openComposerModal(); },
+    openEditModal: function(id){
+      const found = findAnnouncement(id);
+      if (!found) return;
+      openComposerModal({
+        id,
+        title: found.data && found.data.title,
+        body: found.data && (found.data.body || found.data.text)
+      });
+    },
+    closeModal: closeComposerModal,
+    refresh: function(){
+      sortCache();
+      render();
+      try { rehydrateBbcodeInDom(); } catch(_) {}
+    },
+    ensureVisibility: ensureVisibility,
+    refreshComposerPreview: refreshComposerPreview,
+    setComposerTarget: setComposerTarget
+  };
 
 })();
 
@@ -5513,13 +5592,31 @@ if(elements.changePasswordForm){
         if (elements.postTitleInput) {
           elements.postTitleInput.addEventListener('focus', function(){
             currentColorTarget = elements.postTitleInput;
-            if (elements.inlineColorTarget) elements.inlineColorTarget.textContent = '対象: タイトル';
+            if (window.__announcementV2Api && typeof window.__announcementV2Api.setComposerTarget === 'function') {
+              window.__announcementV2Api.setComposerTarget(elements.postTitleInput);
+            } else if (elements.inlineColorTarget) {
+              elements.inlineColorTarget.textContent = '対象: タイトル';
+            }
+          });
+          elements.postTitleInput.addEventListener('input', function(){
+            if (window.__announcementV2Api && typeof window.__announcementV2Api.refreshComposerPreview === 'function') {
+              window.__announcementV2Api.refreshComposerPreview();
+            }
           });
         }
         if (elements.postBodyInput) {
           elements.postBodyInput.addEventListener('focus', function(){
             currentColorTarget = elements.postBodyInput;
-            if (elements.inlineColorTarget) elements.inlineColorTarget.textContent = '対象: 本文';
+            if (window.__announcementV2Api && typeof window.__announcementV2Api.setComposerTarget === 'function') {
+              window.__announcementV2Api.setComposerTarget(elements.postBodyInput);
+            } else if (elements.inlineColorTarget) {
+              elements.inlineColorTarget.textContent = '対象: 本文';
+            }
+          });
+          elements.postBodyInput.addEventListener('input', function(){
+            if (window.__announcementV2Api && typeof window.__announcementV2Api.refreshComposerPreview === 'function') {
+              window.__announcementV2Api.refreshComposerPreview();
+            }
           });
         }
         function applyColorToSelection(targetEl){
@@ -5535,6 +5632,9 @@ if(elements.changePasswordForm){
             var caret = start + insert.length - '[/color]'.length;
             targetEl.focus();
             try { targetEl.setSelectionRange(caret, caret); } catch(_) {}
+            if (window.__announcementV2Api && typeof window.__announcementV2Api.refreshComposerPreview === 'function') {
+              window.__announcementV2Api.refreshComposerPreview();
+            }
             return;
           }
           var selected = v.slice(start, end);
@@ -5542,17 +5642,23 @@ if(elements.changePasswordForm){
           targetEl.value = v.slice(0, start) + wrapped + v.slice(end);
           targetEl.focus();
           try { targetEl.setSelectionRange(start, start + wrapped.length); } catch(_) {}
+          if (window.__announcementV2Api && typeof window.__announcementV2Api.refreshComposerPreview === 'function') {
+            window.__announcementV2Api.refreshComposerPreview();
+          }
         }
         function removeColorTagsInSelection(targetEl){
           if (!targetEl) return;
           var start = targetEl.selectionStart;
           var end   = targetEl.selectionEnd;
           var v = targetEl.value || '';
-          var re = /\[color=\s*#?[0-9a-fA-F]{3,6}\]([\s\S]*?)\[\/color\]/g;
+          var re = /\[(?:color=\s*#?[0-9a-fA-F]{3,6}|red|em|赤)\]([\s\S]*?)\[\/(?:color|red|em|赤)\]/g;
           if (typeof start !== 'number' || typeof end !== 'number' || start === end){
             // 選択なし → 全文から除去
             targetEl.value = v.replace(re, '$1');
             targetEl.focus();
+            if (window.__announcementV2Api && typeof window.__announcementV2Api.refreshComposerPreview === 'function') {
+              window.__announcementV2Api.refreshComposerPreview();
+            }
             return;
           }
           var selected = v.slice(start, end);
@@ -5560,6 +5666,9 @@ if(elements.changePasswordForm){
           targetEl.value = v.slice(0, start) + cleaned + v.slice(end);
           targetEl.focus();
           try { targetEl.setSelectionRange(start, start + cleaned.length); } catch(_) {}
+          if (window.__announcementV2Api && typeof window.__announcementV2Api.refreshComposerPreview === 'function') {
+            window.__announcementV2Api.refreshComposerPreview();
+          }
         }
         if (elements.applyRedBtn) {
           elements.applyRedBtn.addEventListener('click', function(){ applyColorToSelection(currentColorTarget); });
@@ -5640,104 +5749,16 @@ if(elements.changePasswordForm){
           if (overlay) overlay.style.display = 'none';
         }
         // ======= End Inserted Self-Select Modal Functions =======
-        let editingDocRef = null;  // null = 新規投稿モード
-
-        /* ===== Announcement (複数投稿版) ===== */
-        const announcementsRef = db.collection('announcements').orderBy('timestamp', 'desc');
-
-        // Firestore listener: build announcement list
-        announcementsRef.onSnapshot(snap => {
-            if (snap.empty) {
-                elements.announcementList.innerHTML = '<li>お知らせはありません。</li>';
-                return;
-            }
-            elements.announcementList.innerHTML = '';
-            const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
-            // ---- sort: pinned first, then newest ----
-            const docs = snap.docs.sort(function(a,b){
-              const aPin = a.data().pinned ? 1 : 0;
-              const bPin = b.data().pinned ? 1 : 0;
-              if (aPin !== bPin) return bPin - aPin; // pinned=true が先
-              var aTs = (a.data().timestamp && typeof a.data().timestamp.toMillis === 'function') ? a.data().timestamp.toMillis() : 0;
-              var bTs = (b.data().timestamp && typeof b.data().timestamp.toMillis === 'function') ? b.data().timestamp.toMillis() : 0;
-              return bTs - aTs;
-            });
-
-            docs.forEach(function(doc){
-              const data = doc.data();
-              const li   = document.createElement('li');
-              var titleHtml = renderColoredText(data.title || '(無題)');
-              var bodyHtml  = renderColoredText(data.body || data.text || '');
-              let timeText = '';
-              if (data.timestamp && data.timestamp.toDate) {
-                try {
-                  timeText = data.timestamp.toDate().toLocaleString('ja-JP');
-                } catch (e) {
-                  timeText = String(data.timestamp.toDate());
-                }
-              }
-              li.className = 'announce-item' + (data.pinned ? ' pinned' : '');
-              li.innerHTML =
-                '<div class="announce-head">' +
-                  (data.pinned ? '<span class="pin-tag">📌</span>' : '') +
-                  '<span class="announce-title">' + titleHtml + '</span>' +
-                  '<span class="announce-time">' + timeText + '</span>' +
-                '</div>' +
-                '<div class="announce-body">' + bodyHtml + '</div>';
-              if (isAdmin) {
-                  // 削除ボタン
-                  const delBtn = document.createElement('button');
-                  delBtn.textContent = '削除';
-                  delBtn.onclick = async function() {
-                    if (!confirm('本当に削除しますか？')) return;
-                    try {
-                      await doc.ref.delete();
-                    } catch (e) {
-                      alert('削除に失敗しました（権限不足の可能性）: ' + (e.code || e.message));
-                      console.error(e);
-                    }
-                  };
-
-                  // ピン/解除ボタン
-                  const pinBtn = document.createElement('button');
-                  pinBtn.textContent = data.pinned ? 'ピン解除' : 'ピン留め';
-                  pinBtn.onclick = async function() {
-                    try {
-                      await doc.ref.update({ pinned: !data.pinned });
-                    } catch (e) {
-                      alert('更新に失敗しました（権限不足の可能性）: ' + (e.code || e.message));
-                      console.error(e);
-                    }
-                  };
-
-                  // 編集ボタン
-                  const editBtn = document.createElement('button');
-                  editBtn.textContent = '編集';
-                  editBtn.onclick = function() {
-                      editingDocRef = doc.ref;
-                      elements.postTitleInput.value = data.title || '';
-                      elements.postBodyInput.value  = data.body  || data.text || '';
-                      elements.postModalTitle.textContent = 'お知らせを編集';
-                      elements.postSubmitBtn.textContent  = '更新';
-                      elements.postAnnouncementModal.classList.add('active');
-                      elements.postTitleInput.focus();
-                  };
-
-                  var actions = document.createElement('div');
-                  actions.className = 'announce-actions';
-                  actions.appendChild(delBtn);
-                  actions.appendChild(pinBtn);
-                  actions.appendChild(editBtn);
-                  li.appendChild(actions);
-              }
-              elements.announcementList.appendChild(li);
-            });
-        });
+        let editingDocRef = null;  // 旧実装互換用（現在は未使用）
+        const announcementsRef = null; // v2描画に統一
 
         // Show/hide announcement depending on 庶務モード
         function updateAnnouncementVisibility(){
+            if (window.__announcementV2Api && typeof window.__announcementV2Api.ensureVisibility === 'function') {
+                window.__announcementV2Api.ensureVisibility();
+                return;
+            }
             const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
-            // 管理者は編集のため常に表示、それ以外は庶務モード OFF のときだけ
             elements.announcementContainer.style.display =
               (!elements.sohmuToggle.checked || isAdmin) ? 'block' : 'none';
         }
@@ -6013,100 +6034,9 @@ if(elements.changePasswordForm){
 
         // ===== お知らせリストを現在の管理者状態で再描画 =====
         function rebuildAnnouncementList(){
-            announcementsRef.get().then(function(snap){
-                if(!snap) return;
-                const docs = snap.docs;
-                if (docs.length === 0){
-                    elements.announcementList.innerHTML = '<li>お知らせはありません。</li>';
-                    return;
-                }
-                elements.announcementList.innerHTML = '';
-                const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
-
-                // ピン留め優先 → 新しい順
-                const sorted = docs.slice().sort(function(a,b){
-                    const aPin = a.data().pinned ? 1 : 0;
-                    const bPin = b.data().pinned ? 1 : 0;
-                    if (aPin !== bPin) return bPin - aPin;
-                    var aTs = (a.data().timestamp && typeof a.data().timestamp.toMillis === 'function') ? a.data().timestamp.toMillis() : 0;
-                    var bTs = (b.data().timestamp && typeof b.data().timestamp.toMillis === 'function') ? b.data().timestamp.toMillis() : 0;
-                    return bTs - aTs;
-                });
-
-                sorted.forEach(function(doc){
-                    const data = doc.data();
-                    const li = document.createElement('li');
-                    var titleHtml = renderColoredText(data.title || '(無題)');
-                    var bodyHtml  = renderColoredText(data.body || data.text || '');
-
-                    let timeText = '';
-                    if (data.timestamp && data.timestamp.toDate) {
-                        try {
-                            timeText = data.timestamp.toDate().toLocaleString('ja-JP');
-                        } catch (e) {
-                            timeText = String(data.timestamp.toDate());
-                        }
-                    }
-
-                    li.className = 'announce-item' + (data.pinned ? ' pinned' : '');
-                    li.innerHTML =
-                        '<div class="announce-head">' +
-                          (data.pinned ? '<span class="pin-tag">📌</span>' : '') +
-                          '<span class="announce-title">' + titleHtml + '</span>' +
-                          '<span class="announce-time">' + timeText + '</span>' +
-                        '</div>' +
-                        '<div class="announce-body">' + bodyHtml + '</div>';
-
-                    if(isAdmin){
-                        // 削除ボタン
-                        const delBtn = document.createElement('button');
-                        delBtn.textContent = '削除';
-                        delBtn.onclick = async function() {
-                          if (!confirm('本当に削除しますか？')) return;
-                          try {
-                            await doc.ref.delete();
-                          } catch (e) {
-                            alert('削除に失敗しました（権限不足の可能性）: ' + (e.code || e.message));
-                            console.error(e);
-                          }
-                        };
-
-                        // ピン留め / 解除ボタン
-                        const pinBtn = document.createElement('button');
-                        pinBtn.textContent = data.pinned ? 'ピン解除' : 'ピン留め';
-                        pinBtn.onclick = async function() {
-                          try {
-                            await doc.ref.update({ pinned: !data.pinned });
-                          } catch (e) {
-                            alert('更新に失敗しました（権限不足の可能性）: ' + (e.code || e.message));
-                            console.error(e);
-                          }
-                        };
-
-                        // 編集ボタン
-                        const editBtn = document.createElement('button');
-                        editBtn.textContent = '編集';
-                        editBtn.onclick = function() {
-                            editingDocRef = doc.ref;
-                            elements.postTitleInput.value = data.title || '';
-                            elements.postBodyInput.value  = data.body  || data.text || '';
-                            elements.postModalTitle.textContent = 'お知らせを編集';
-                            elements.postSubmitBtn.textContent  = '更新';
-                            elements.postAnnouncementModal.classList.add('active');
-                            elements.postTitleInput.focus();
-                        };
-
-                        var actions = document.createElement('div');
-                        actions.className = 'announce-actions';
-                        actions.appendChild(delBtn);
-                        actions.appendChild(pinBtn);
-                        actions.appendChild(editBtn);
-                        li.appendChild(actions);
-                    }
-
-                    elements.announcementList.appendChild(li);
-                });
-            }).catch(function(err){console.error('rebuildAnnouncementList',err);});
+            if (window.__announcementV2Api && typeof window.__announcementV2Api.refresh === 'function') {
+                window.__announcementV2Api.refresh();
+            }
         }
 
         function showLogModal(){
@@ -6480,6 +6410,10 @@ if(elements.changePasswordForm){
 
         /* ===== お知らせ欄 投稿モーダル ===== */
         elements.postAnnouncementBtn.addEventListener('click', () => {
+            if (window.__announcementV2Api && typeof window.__announcementV2Api.openCreateModal === 'function') {
+                window.__announcementV2Api.openCreateModal();
+                return;
+            }
             editingDocRef = null;
             elements.postModalTitle.textContent = 'お知らせを投稿';
             elements.postSubmitBtn.textContent  = '投稿';
@@ -6509,6 +6443,7 @@ if(elements.changePasswordForm){
 
         // フォーム送信
         elements.postAnnouncementForm.addEventListener('submit', async e=>{
+            if (window.__announcementV2Api) return;
             e.preventDefault();
             const title = elements.postTitleInput.value.trim();
             const body  = elements.postBodyInput.value.trim();
