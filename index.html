@@ -664,7 +664,7 @@
         <h1>荷物管理アプリ</h1>
         <div class="header-buttons">
             <button id="login-logout-btn" class="header-btn">管理者ログイン</button>
-            <button id="log-view-btn" class="header-btn" style="background:#8e44ad;">操作履歴</button>
+            <button id="log-view-btn" class="header-btn" style="background:#8e44ad;">履歴</button>
             <button id="change-password-btn" class="header-btn" style="background:#16a085;">パスワード変更</button>
             <button id="enable-notif-btn" class="header-btn" style="background:#2ecc71; display:none;">通知をオンにする</button>
             <button id="morning-run-btn" class="header-btn" style="background:#f39c12;">朝の庶務</button>
@@ -831,7 +831,7 @@
 <div id="log-modal" class="modal-overlay">
   <div class="modal-content">
     <div class="modal-header">
-      <h2>操作履歴</h2>
+      <h2>受け取り・個数変更の履歴</h2>
       <button id="modal-close-btn" class="modal-close-btn">&times;</button>
     </div>
     <ul id="log-list"></ul>
@@ -2439,25 +2439,33 @@ function unifiedConfirm(action){
   window.__logModalBind = true;
 
   function openLogModal(){
+    if (typeof window.showHistoryModal === 'function') {
+      window.showHistoryModal();
+      return;
+    }
     const modal = document.getElementById('log-modal');
     if (!modal) return;
     modal.classList.add('active');   // .modal-overlay.active { display:flex; } で表示
   }
 
   function closeLogModal(){
+    if (typeof window.hideHistoryModal === 'function') {
+      window.hideHistoryModal();
+      return;
+    }
     const modal = document.getElementById('log-modal');
     if (!modal) return;
     modal.classList.remove('active');
   }
 
   document.addEventListener('click', (ev) => {
-    // 「操作履歴」ボタンが押されたときにモーダルを開く
+    // 「履歴」ボタンが押されたときにモーダルを開く
     const openBtn = ev.target && ev.target.closest && ev.target.closest('#log-view-btn');
     if (openBtn) {
       ev.preventDefault();
       if (!document.body.classList.contains('admin-logged-in')) {
         // 念のため：管理者ログインしていないときは何もしない
-        alert('管理者ログインすると操作履歴を表示できます。');
+        alert('管理者ログインすると履歴を表示できます。');
         return;
       }
       openLogModal();
@@ -4042,6 +4050,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 
     // 全ての関数をグローバルスコープに配置
     async function addLog(action, details){
+        if (!isTrackedHistoryAction(action)) return;
         try{
             await db.collection("logs").add({
                 action, details,
@@ -4051,6 +4060,12 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
         }catch(e){
             console.error('addLog error',e);
         }
+    }
+
+    const TRACKED_HISTORY_ACTIONS = new Set(['受け取り', '個数変更']);
+
+    function isTrackedHistoryAction(action){
+      return TRACKED_HISTORY_ACTIONS.has(String(action || ''));
     }
 
     // 安全なカラーコード (#RGB / #RRGGBB) のみ許可
@@ -4394,6 +4409,12 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
             if (next < 0) next = 0;
             if (next === current) return;
             t.update(docRef, { [type]: next });
+          }).then(() => {
+            try {
+              const typeJa = (type === 'luggage') ? '荷物' : '郵便';
+              const dormKey = (targetCollection.split('_')[1] || '');
+              addLog('個数変更', `[${dormKey}] ${residentName} の${typeJa}を ${value > 0 ? '+1' : '-1'}`);
+            } catch (_) {}
           }).catch(err => console.error('updateCount フォールバック失敗', err));
         });
     }
@@ -5971,17 +5992,21 @@ if(elements.changePasswordForm){
 
         function renderLogs(snapshot){
             const list = document.getElementById('log-list');
-            if(snapshot.empty){
+            const docs = snapshot && snapshot.docs
+              ? snapshot.docs.filter(doc => isTrackedHistoryAction((doc.data() || {}).action))
+              : [];
+            if(!docs.length){
                 list.innerHTML = '<li>履歴はありません。</li>';
                 return;
             }
             list.innerHTML = '';
-            snapshot.forEach(doc=>{
-                const d = doc.data();
+            docs.forEach(doc=>{
+                const d = doc.data() || {};
                 const date = d.timestamp ? d.timestamp.toDate().toLocaleString('ja-JP') : '日時不明';
-                const admin = d.isAdmin ? ' (管理者)' : '';
                 const li = document.createElement('li');
-                li.innerHTML = `${d.details}${admin}<span class="log-time">${date}</span>`;
+                const action = escapeHtml(d.action || '履歴');
+                const details = escapeHtml(d.details || '');
+                li.innerHTML = `<strong>${action}</strong><br>${details}<span class="log-time">${date}</span>`;
                 list.appendChild(li);
             });
         }
@@ -6085,11 +6110,16 @@ if(elements.changePasswordForm){
         }
 
         function showLogModal(){
+            if (!document.body.classList.contains('admin-logged-in')) {
+                alert('管理者ログインすると履歴を表示できます。');
+                return;
+            }
             elements.logModal.classList.add('active');
+            document.getElementById('log-list').innerHTML = '<li>読み込み中...</li>';
             if(logUnsubscribe) logUnsubscribe();
             logUnsubscribe = db.collection('logs')
                   .orderBy('timestamp','desc')
-                  .limit(50)
+                  .limit(500)
                   .onSnapshot(renderLogs, err=>{
                      console.error('logs listener',err);
                      document.getElementById('log-list').innerHTML='<li>履歴の読み込みに失敗しました。</li>';
@@ -6100,6 +6130,9 @@ if(elements.changePasswordForm){
             elements.logModal.classList.remove('active');
             if(logUnsubscribe){ logUnsubscribe(); logUnsubscribe=null; }
         }
+
+        window.showHistoryModal = showLogModal;
+        window.hideHistoryModal = hideLogModal;
 
 
         // async function fetchLogs() {
