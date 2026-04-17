@@ -280,6 +280,26 @@
           white-space: pre-wrap;
           word-break: break-word;
         }
+        .announcement-color-controls {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .announcement-color-controls input[type="color"] {
+          width: 52px;
+          min-width: 52px;
+          height: 40px;
+          padding: 0;
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          background: transparent;
+          cursor: pointer;
+        }
+        .announcement-color-controls .announcement-color-hex {
+          width: 140px;
+          max-width: 160px;
+        }
         .announcement-preview-placeholder {
           color: #7f8c8d;
         }
@@ -1074,6 +1094,15 @@
       <div class="form-group">
         <label for="post-body">本文</label>
         <textarea id="post-body" rows="6" placeholder="本文を入力（改行可）"></textarea>
+      </div>
+      <div class="form-group">
+        <label for="post-color-hex-input">文字色</label>
+        <div class="announcement-color-controls">
+          <input type="color" id="post-color-input" value="#333333" aria-label="文字色を選択">
+          <input type="text" id="post-color-hex-input" class="announcement-color-hex" maxlength="7" placeholder="未設定で通常色">
+          <button type="button" id="post-color-clear-btn" class="header-btn" style="background:#7f8c8d;">通常色に戻す</button>
+        </div>
+        <small style="display:block; margin-top:6px; opacity:.8;">未設定なら通常色のまま、設定するとタイトルと本文の色に反映されます。</small>
       </div>
       <div class="form-group" id="emphasis-tools">
         <label>強調</label>
@@ -3085,6 +3114,7 @@ function unifiedConfirm(action){
     editingId: null,
     saving: false
   };
+  const DEFAULT_COMPOSER_COLOR_PICKER = '#333333';
   const pendingAnnouncementIds = new Set();
 
   function isAdmin(){
@@ -3302,6 +3332,30 @@ function unifiedConfirm(action){
     return annCache.find(item => item && item.id === id) || null;
   }
 
+  function getComposerColorElements(){
+    return {
+      picker: document.getElementById('post-color-input'),
+      hex: document.getElementById('post-color-hex-input')
+    };
+  }
+
+  function getComposerSelectedColor(){
+    const { picker, hex } = getComposerColorElements();
+    if (hex){
+      const rawHex = String(hex.value || '').trim();
+      if (!rawHex) return '';
+      return sanitizeColor(rawHex);
+    }
+    return sanitizeColor(picker && picker.value);
+  }
+
+  function setComposerSelectedColor(color){
+    const { picker, hex } = getComposerColorElements();
+    const safeColor = sanitizeColor(color);
+    if (picker) picker.value = safeColor || DEFAULT_COMPOSER_COLOR_PICKER;
+    if (hex) hex.value = safeColor || '';
+  }
+
   function refreshComposerPreview(){
     const titleInput = document.getElementById('post-title');
     const bodyInput = document.getElementById('post-body');
@@ -3311,9 +3365,14 @@ function unifiedConfirm(action){
 
     const titleHtml = renderComposerMarkup(titleInput.value || '').replace(/<br\s*\/?>/gi, '');
     const bodyHtml = renderComposerMarkup(bodyInput.value || '');
+    const customColor = getComposerSelectedColor();
+    const titleHasContent = !!titleHtml;
+    const bodyHasContent = !!bodyHtml;
 
     previewTitle.innerHTML = titleHtml || '<span class="announcement-preview-placeholder">タイトルなし</span>';
     previewBody.innerHTML = bodyHtml || '<span class="announcement-preview-placeholder">本文プレビュー</span>';
+    previewTitle.style.color = (customColor && titleHasContent) ? customColor : '';
+    previewBody.style.color = (customColor && bodyHasContent) ? customColor : '';
   }
 
   function setComposerTarget(targetEl){
@@ -3338,6 +3397,7 @@ function unifiedConfirm(action){
     submitBtn.textContent = composerState.editingId ? '更新' : '投稿';
     titleInput.value = htmlToComposerMarkup(data.title || '');
     bodyInput.value = htmlToComposerMarkup(data.body || '');
+    setComposerSelectedColor(data.color || '');
     modal.classList.add('active');
     setComposerTarget(bodyInput);
     refreshComposerPreview();
@@ -3354,6 +3414,7 @@ function unifiedConfirm(action){
     composerState.saving = false;
     if (titleInput) titleInput.value = '';
     if (bodyInput) bodyInput.value = '';
+    setComposerSelectedColor('');
     refreshComposerPreview();
     setComposerTarget(bodyInput);
   }
@@ -3418,6 +3479,8 @@ function unifiedConfirm(action){
       const titleSpan = document.createElement('span');
       titleSpan.className = 'announce-title';
       titleSpan.innerHTML = normalizeAnnouncementBody(d.title || '').replace(/<br\s*\/?>/gi, '') || '(タイトルなし)';
+      const safeColor = sanitizeColor(d.color || '');
+      if (safeColor) titleSpan.style.color = safeColor;
       head.appendChild(titleSpan);
 
       const ts = getAnnouncementSortTs(d);
@@ -3433,6 +3496,7 @@ function unifiedConfirm(action){
       body.className = 'announce-body';
       // 投稿時の <span> 等を保持したいので innerHTML で描画
       body.innerHTML = normalizeAnnouncementBody(d.body || d.text || '');
+      if (safeColor) body.style.color = safeColor;
 
       li.appendChild(head);
       li.appendChild(body);
@@ -3571,6 +3635,7 @@ function unifiedConfirm(action){
       const submitBtn = document.querySelector('#post-announcement-form button[type="submit"]');
       const titleRaw = (titleInput && titleInput.value || '').trim();
       const bodyRaw  = (bodyInput && bodyInput.value  || '').trim();
+      const safeColor = getComposerSelectedColor();
 
       if (!titleRaw && !bodyRaw){
         alert('タイトルか本文を入力してください。');
@@ -3586,8 +3651,10 @@ function unifiedConfirm(action){
           body: renderComposerMarkup(bodyRaw),
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
+        if (safeColor) payload.color = safeColor;
 
         if (composerState.editingId){
+          if (!safeColor) payload.color = firebase.firestore.FieldValue.delete();
           await db.collection(COL).doc(composerState.editingId).set(payload, { merge:true });
         } else {
           payload.pinned = false;
@@ -3663,7 +3730,8 @@ function unifiedConfirm(action){
           openComposerModal({
             id,
             title: found.data && found.data.title,
-            body: found.data && (found.data.body || found.data.text)
+            body: found.data && (found.data.body || found.data.text),
+            color: found.data && found.data.color
           });
           return;
         }
@@ -3717,7 +3785,8 @@ function unifiedConfirm(action){
       openComposerModal({
         id,
         title: found.data && found.data.title,
-        body: found.data && (found.data.body || found.data.text)
+        body: found.data && (found.data.body || found.data.text),
+        color: found.data && found.data.color
       });
     },
     closeModal: closeComposerModal,
@@ -5565,6 +5634,9 @@ function applySohmuUI(){
           postAnnouncementForm  : document.getElementById('post-announcement-form'),
           postTitleInput        : document.getElementById('post-title'),
           postBodyInput         : document.getElementById('post-body'),
+          postColorInput        : document.getElementById('post-color-input'),
+          postColorHexInput     : document.getElementById('post-color-hex-input'),
+          postColorClearBtn     : document.getElementById('post-color-clear-btn'),
           postCancelBtn         : document.getElementById('post-cancel-btn'),
           postModalTitle        : document.querySelector('#post-announcement-modal h2'),
           postSubmitBtn         : document.querySelector('#post-announcement-form button[type="submit"]'),
@@ -6229,6 +6301,36 @@ if(elements.changePasswordForm){
             }
           });
           elements.postBodyInput.addEventListener('input', function(){
+            if (window.__announcementV2Api && typeof window.__announcementV2Api.refreshComposerPreview === 'function') {
+              window.__announcementV2Api.refreshComposerPreview();
+            }
+          });
+        }
+        if (elements.postColorInput && !elements.postColorInput.dataset.previewBound) {
+          elements.postColorInput.dataset.previewBound = '1';
+          elements.postColorInput.addEventListener('input', function(e){
+            if (elements.postColorHexInput) elements.postColorHexInput.value = e.target.value;
+            if (window.__announcementV2Api && typeof window.__announcementV2Api.refreshComposerPreview === 'function') {
+              window.__announcementV2Api.refreshComposerPreview();
+            }
+          });
+        }
+        if (elements.postColorHexInput && !elements.postColorHexInput.dataset.previewBound) {
+          elements.postColorHexInput.dataset.previewBound = '1';
+          elements.postColorHexInput.addEventListener('input', function(e){
+            var raw = String(e.target.value || '').trim();
+            var safe = sanitizeColor(raw);
+            if (elements.postColorInput && safe) elements.postColorInput.value = safe;
+            if (window.__announcementV2Api && typeof window.__announcementV2Api.refreshComposerPreview === 'function') {
+              window.__announcementV2Api.refreshComposerPreview();
+            }
+          });
+        }
+        if (elements.postColorClearBtn && !elements.postColorClearBtn.dataset.previewBound) {
+          elements.postColorClearBtn.dataset.previewBound = '1';
+          elements.postColorClearBtn.addEventListener('click', function(){
+            if (elements.postColorInput) elements.postColorInput.value = '#333333';
+            if (elements.postColorHexInput) elements.postColorHexInput.value = '';
             if (window.__announcementV2Api && typeof window.__announcementV2Api.refreshComposerPreview === 'function') {
               window.__announcementV2Api.refreshComposerPreview();
             }
