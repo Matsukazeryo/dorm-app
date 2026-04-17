@@ -644,6 +644,12 @@
             align-items: flex-start;
             flex-direction: column;
           }
+          .notification-settings-head {
+            flex-direction: column;
+          }
+          .notification-settings-enable-btn{
+            width:100%;
+          }
         }
         /* === 庶務モードOFF: 上部のコントロールを非表示にする === */
         body.sohmu-off .controls-container,
@@ -677,6 +683,86 @@
     background:rgba(255,243,205,0.06);
     border-color:rgba(255,238,186,0.4);
     color:#f9e79f;
+  }
+  .notification-settings-card{
+    display:none;
+    margin:12px 0;
+    padding:14px;
+    border:1px solid var(--border-color);
+    border-radius:10px;
+    background:var(--announce-item-bg);
+  }
+  .notification-settings-head{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:12px;
+  }
+  .notification-settings-title{
+    margin:0;
+    color:var(--header-text);
+    font-size:1rem;
+  }
+  .notification-settings-note{
+    margin:4px 0 0;
+    font-size:0.84rem;
+    line-height:1.4;
+    color:#7f8c8d;
+  }
+  body.dark-theme .notification-settings-note{
+    color:#bdc3c7;
+  }
+  .notification-settings-list{
+    display:grid;
+    gap:10px;
+    margin-top:12px;
+  }
+  .notification-settings-item{
+    display:flex;
+    gap:10px;
+    align-items:flex-start;
+    padding:10px 12px;
+    border-radius:8px;
+    background:rgba(52,152,219,0.06);
+  }
+  body.dark-theme .notification-settings-item{
+    background:rgba(93,173,226,0.14);
+  }
+  .notification-settings-item.is-disabled{
+    opacity:0.58;
+  }
+  .notification-settings-item input{
+    margin-top:3px;
+  }
+  .notification-settings-item strong{
+    display:block;
+    font-size:0.95rem;
+    color:var(--text-color);
+  }
+  .notification-settings-item span{
+    display:block;
+    margin-top:2px;
+    font-size:0.82rem;
+    line-height:1.4;
+    color:#7f8c8d;
+  }
+  body.dark-theme .notification-settings-item span{
+    color:#bdc3c7;
+  }
+  .notification-settings-status{
+    min-height:1.3em;
+    margin-top:10px;
+    font-size:0.84rem;
+    color:#7f8c8d;
+  }
+  body.dark-theme .notification-settings-status{
+    color:#bdc3c7;
+  }
+  .notification-settings-status.is-error{
+    color:#c0392b;
+  }
+  .notification-settings-status.is-success{
+    color:#1e8449;
   }
   .morning-banner .left{ font-weight:600; color:var(--header-text); }
   .ref-line{ display:block; font-size:0.78em; opacity:.85; margin-top:2px; color:#7f8c8d; }
@@ -761,6 +847,47 @@
       通知を受け取るには、このページをホーム画面に追加してください。
     </div>
     <!-- ===== PWA利用ヒントここまで ===== -->
+
+    <div id="notification-settings-card" class="notification-settings-card">
+      <div class="notification-settings-head">
+        <div>
+          <h2 class="notification-settings-title">通知設定</h2>
+          <p class="notification-settings-note">この端末で受け取る通知だけを切り替えられます。変更は自動保存されます。</p>
+        </div>
+        <button id="notification-settings-enable-btn" type="button" class="header-btn notification-settings-enable-btn" style="background:#2ecc71; display:none;">通知を有効化</button>
+      </div>
+      <div class="notification-settings-list">
+        <label id="notification-settings-master-row" class="notification-settings-item">
+          <input id="notif-master-off-toggle" type="checkbox">
+          <span>
+            <strong>全通知をオフにする</strong>
+            <span>荷物・郵便・朝の庶務終了・お知らせをこの端末で止めます。</span>
+          </span>
+        </label>
+        <label id="notification-settings-luggage-row" class="notification-settings-item">
+          <input id="notif-luggage-toggle" type="checkbox">
+          <span>
+            <strong>荷物の通知を受け取る</strong>
+            <span>自分の荷物が増えたときだけ通知します。</span>
+          </span>
+        </label>
+        <label id="notification-settings-mail-row" class="notification-settings-item">
+          <input id="notif-mail-toggle" type="checkbox">
+          <span>
+            <strong>郵便の通知を受け取る</strong>
+            <span>自分の郵便が増えたときだけ通知します。</span>
+          </span>
+        </label>
+        <label id="notification-settings-morning-row" class="notification-settings-item">
+          <input id="notif-morning-toggle" type="checkbox">
+          <span>
+            <strong>朝の庶務終了通知を受け取る</strong>
+            <span>朝の庶務が終わって数が反映されたときに通知します。</span>
+          </span>
+        </label>
+      </div>
+      <div id="notification-settings-status" class="notification-settings-status"></div>
+    </div>
 
     <div class="table-container">
         <table id="resident-table">
@@ -1388,6 +1515,68 @@
 
 
 let currentDeviceToken = null;   // このデバイスの FCM トークンを保持
+const NOTIFICATION_PREFS_STORAGE_KEY = 'notification_prefs_v1';
+const DEFAULT_NOTIFICATION_PREFS = Object.freeze({
+  notificationsEnabled: true,
+  notifyLuggage: true,
+  notifyMail: true,
+  notifyMorning: true
+});
+let notificationPrefsState = null;
+let notificationPrefsStatus = '';
+let notificationPrefsStatusTone = '';
+
+function normalizeNotificationPrefs(raw){
+  const src = raw && typeof raw === 'object' ? raw : {};
+  return {
+    notificationsEnabled: src.notificationsEnabled !== false,
+    notifyLuggage: src.notifyLuggage !== false,
+    notifyMail: src.notifyMail !== false,
+    notifyMorning: src.notifyMorning !== false
+  };
+}
+
+function loadStoredNotificationPrefs(){
+  try{
+    const raw = localStorage.getItem(NOTIFICATION_PREFS_STORAGE_KEY);
+    if (!raw) return normalizeNotificationPrefs(DEFAULT_NOTIFICATION_PREFS);
+    return normalizeNotificationPrefs(JSON.parse(raw));
+  }catch(_){
+    return normalizeNotificationPrefs(DEFAULT_NOTIFICATION_PREFS);
+  }
+}
+
+function getNotificationPrefs(){
+  if (!notificationPrefsState) {
+    notificationPrefsState = loadStoredNotificationPrefs();
+  }
+  return normalizeNotificationPrefs(notificationPrefsState);
+}
+
+function storeNotificationPrefs(nextPrefs){
+  notificationPrefsState = normalizeNotificationPrefs(nextPrefs);
+  try {
+    localStorage.setItem(NOTIFICATION_PREFS_STORAGE_KEY, JSON.stringify(notificationPrefsState));
+  } catch(_){}
+  return notificationPrefsState;
+}
+
+function buildNotificationPrefsPayload(){
+  const prefs = getNotificationPrefs();
+  return {
+    notificationsEnabled: prefs.notificationsEnabled,
+    notifyLuggage: prefs.notifyLuggage,
+    notifyMail: prefs.notifyMail,
+    notifyMorning: prefs.notifyMorning,
+    notificationPrefsUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+}
+
+function setNotificationSettingsStatus(message, tone){
+  notificationPrefsStatus = message || '';
+  notificationPrefsStatusTone = tone || '';
+  try { updateNotificationSettingsUI(); } catch(_){}
+}
 
     // =============================================================
     // 朝の庶務中は「個別の数変更通知」を抑止し、終了時だけ通知する
@@ -1888,25 +2077,35 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       const dormLabel = (window.__morningModeTargetDorm === 'shofu') ? '松風寮'
                       : (window.__morningModeTargetDorm === 'meizen') ? '明善寮'
                       : '両方';
+      const title = '🌅 朝の庶務が終了しました';
       const msg = `朝の庶務が終了しました（${dormLabel}の数を反映）`;
 
-      // 既存実装に合わせて、見つかった送信関数を1つだけ使う
-      const candidates = [
-        'sendPushNotification',
-        'sendNotificationToAll',
-        'sendNotification',
-        'sendPush'
-      ];
+      try{
+        await db.collection('logs').add({
+          action: '__notify_morning_finished__',
+          details: msg,
+          title,
+          targetDorm: window.__morningModeTargetDorm || 'all',
+          isAdmin: sessionStorage.getItem('isAdminLoggedIn') === 'true',
+          timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        console.log('[morning] finish push queued via logs');
+        return;
+      }catch(e){
+        console.warn('[morning] finish push queue failed', e);
+      }
+
+      // フォールバック: 既存実装がどこかで差し込まれている場合だけ使う
+      const candidates = ['sendPushNotification', 'sendNotificationToAll', 'sendNotification', 'sendPush'];
       for (const name of candidates){
         try{
           if (typeof window[name] === 'function'){
-            // ラッパーをバイパスするために最後に {force:true} を付ける
             await window[name](msg, { force:true });
-            console.log('[morning] finish push via', name);
+            console.log('[morning] finish push via fallback', name);
             return;
           }
         }catch(e){
-          console.warn('[morning] finish push failed via', name, e);
+          console.warn('[morning] finish push failed via fallback', name, e);
         }
       }
       console.log('[morning] no push function found; skipped finish notification');
@@ -2005,6 +2204,134 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       }
     }
 
+    async function saveFcmTokenDocument(token, extraFields){
+      if (!token) return false;
+      const platform = /iPhone|iPad/.test(navigator.userAgent) ? 'ios'
+                        : /Android/.test(navigator.userAgent)    ? 'android'
+                        : 'desktop';
+      const payload = Object.assign({
+        residentId: localStorage.getItem('myResidentId') || null,
+        dorm     : getCurrentDormForToken(),
+        lastSeen : firebase.firestore.FieldValue.serverTimestamp(),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        platform,
+        ua       : navigator.userAgent
+      }, buildNotificationPrefsPayload(), extraFields || {});
+      await db.collection('fcm_tokens')
+              .doc(token)
+              .set(payload, { merge: true });
+      return true;
+    }
+
+    async function syncNotificationPrefsToCurrentToken(options){
+      const opts = Object.assign({ requestPermission:false, silent:false }, options || {});
+      let token = currentDeviceToken || localStorage.getItem('fcm_token');
+      if (!token && opts.requestPermission) {
+        token = await requestNotificationPermission();
+      }
+      if (!token) {
+        if (!opts.silent) {
+          setNotificationSettingsStatus('通知を許可すると、この端末の設定を保存できます。', '');
+        }
+        return false;
+      }
+      try{
+        await saveFcmTokenDocument(token);
+        window.__fcmSaveError = null;
+        if (!opts.silent) {
+          setNotificationSettingsStatus('通知設定を保存しました。', 'success');
+        }
+        return true;
+      }catch(e){
+        window.__fcmSaveError = e;
+        if (!opts.silent) {
+          setNotificationSettingsStatus('通知設定の保存に失敗しました。時間をおいて再度お試しください。', 'error');
+        }
+        console.warn('Notification prefs sync failed:', (e && (e.code || e.message)) || e);
+        try { scheduleFcmResyncRetries(); } catch(_) {}
+        return false;
+      }
+    }
+
+    function updateNotificationSettingsUI(){
+      const card = document.getElementById('notification-settings-card');
+      if (!card) return;
+      const enableBtn = document.getElementById('notification-settings-enable-btn');
+      const statusEl = document.getElementById('notification-settings-status');
+      const masterOff = document.getElementById('notif-master-off-toggle');
+      const luggageToggle = document.getElementById('notif-luggage-toggle');
+      const mailToggle = document.getElementById('notif-mail-toggle');
+      const morningToggle = document.getElementById('notif-morning-toggle');
+      const sohmuToggle = document.getElementById('sohmu-toggle');
+      const rows = [
+        { el: document.getElementById('notification-settings-master-row'), disabled: false },
+        { el: document.getElementById('notification-settings-luggage-row'), disabled: false },
+        { el: document.getElementById('notification-settings-mail-row'), disabled: false },
+        { el: document.getElementById('notification-settings-morning-row'), disabled: false }
+      ];
+      const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
+      const myResidentId = localStorage.getItem('myResidentId');
+      const isSohmuOn = !!(sohmuToggle && sohmuToggle.checked);
+      const supported = ('Notification' in window) && ('serviceWorker' in navigator);
+      const permission = supported ? Notification.permission : 'unsupported';
+      const tokenReady = !!(currentDeviceToken || localStorage.getItem('fcm_token'));
+      const prefs = getNotificationPrefs();
+      const shouldShow = !isAdmin && !!myResidentId && !isSohmuOn;
+
+      card.style.display = shouldShow ? 'block' : 'none';
+      if (!shouldShow) return;
+
+      if (masterOff) masterOff.checked = !prefs.notificationsEnabled;
+      if (luggageToggle) luggageToggle.checked = !!prefs.notifyLuggage;
+      if (mailToggle) mailToggle.checked = !!prefs.notifyMail;
+      if (morningToggle) morningToggle.checked = !!prefs.notifyMorning;
+
+      const detailDisabled = !supported || !prefs.notificationsEnabled;
+      if (masterOff) masterOff.disabled = !supported;
+      if (luggageToggle) luggageToggle.disabled = detailDisabled;
+      if (mailToggle) mailToggle.disabled = detailDisabled;
+      if (morningToggle) morningToggle.disabled = detailDisabled;
+
+      rows[0].disabled = !!(masterOff && masterOff.disabled);
+      rows[1].disabled = !!(luggageToggle && luggageToggle.disabled);
+      rows[2].disabled = !!(mailToggle && mailToggle.disabled);
+      rows[3].disabled = !!(morningToggle && morningToggle.disabled);
+      rows.forEach(row => {
+        if (row.el) row.el.classList.toggle('is-disabled', row.disabled);
+      });
+
+      if (enableBtn) {
+        const needsPermission = supported && permission !== 'granted';
+        enableBtn.style.display = needsPermission ? 'inline-block' : 'none';
+        enableBtn.textContent = permission === 'denied' ? '通知を再設定する' : '通知を有効化';
+      }
+
+      if (statusEl) {
+        let message = notificationPrefsStatus;
+        let tone = notificationPrefsStatusTone;
+        if (!message) {
+          if (!supported) {
+            message = 'このブラウザではプッシュ通知に対応していません。';
+          } else if (permission === 'denied') {
+            message = '通知がブロックされています。ブラウザ設定で許可すると、この端末の設定を反映できます。';
+            tone = 'error';
+          } else if (permission !== 'granted') {
+            message = '通知を許可すると、この端末で受け取る内容を細かく切り替えられます。';
+          } else if (!prefs.notificationsEnabled) {
+            message = 'この端末では、すべての通知を停止中です。';
+          } else if (!tokenReady) {
+            message = '通知設定を端末へ反映しています。少し待ってからもう一度確認してください。';
+          } else {
+            message = 'この端末だけの通知設定です。変更は自動保存されます。';
+          }
+        }
+        statusEl.textContent = message;
+        statusEl.classList.remove('is-error', 'is-success');
+        if (tone === 'error') statusEl.classList.add('is-error');
+        if (tone === 'success') statusEl.classList.add('is-success');
+      }
+    }
+
     // ===== FCM token 保存のリトライ（新端末で residentId / dorm が遅れても拾う） =====
     function scheduleFcmResyncRetries(){
       if (window.__fcmResyncTimer) return;
@@ -2081,20 +2408,8 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
           console.log('FCM token:', token);
           if (token) {
             try { localStorage.setItem('fcm_token', token); } catch(_){}
-            const platform = /iPhone|iPad/.test(navigator.userAgent) ? 'ios'
-                              : /Android/.test(navigator.userAgent)    ? 'android'
-                              : 'desktop';
             try {
-              await db.collection('fcm_tokens')
-                      .doc(token)
-                      .set({
-                        residentId: localStorage.getItem('myResidentId') || null,
-                        dorm     : getCurrentDormForToken(),
-                        lastSeen : firebase.firestore.FieldValue.serverTimestamp(),
-                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                        platform,
-                        ua       : navigator.userAgent
-                      }, { merge: true });
+              await saveFcmTokenDocument(token);
               console.log('Token saved to Firestore');
               window.__fcmSaveError = null;
             } catch (e) {
@@ -2146,6 +2461,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       }
       // 代わりにPWAヒントだけ更新
       try { updatePwaHint(); } catch(_) {}
+      try { updateNotificationSettingsUI(); } catch(_) {}
     }
 
     // 自分の寮生を選択したタイミングで、一度だけ通知の許可をお願いする
@@ -2188,7 +2504,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
     function showNotificationUnblockHelp(){
       const isAndroid = /Android/i.test(navigator.userAgent);
       const msg = isAndroid
-        ? 'Android: 右上の⋮ → サイト設定 → 通知 → 許可 に切り替えてください。\nその後、画面に戻って「通知をオンにする」を押してください。'
+        ? 'Android: 右上の⋮ → サイト設定 → 通知 → 許可 に切り替えてください。\nその後、画面に戻って通知設定の「通知を有効化」を押してください。'
         : '通知がブロックされています。設定から通知を許可してください。';
       try { alert(msg); } catch(_) {}
     }
@@ -2206,20 +2522,8 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
     async function resyncFcmToken(){
       const token = currentDeviceToken || localStorage.getItem('fcm_token');
       if (!token) return;
-      const platform = /iPhone|iPad/.test(navigator.userAgent) ? 'ios'
-                        : /Android/.test(navigator.userAgent)    ? 'android'
-                        : 'desktop';
       try {
-        await db.collection('fcm_tokens')
-                .doc(token)
-                .set({
-                  residentId: localStorage.getItem('myResidentId') || null,
-                  dorm     : getCurrentDormForToken(),
-                  lastSeen : firebase.firestore.FieldValue.serverTimestamp(),
-                  createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                  platform,
-                  ua       : navigator.userAgent
-                }, { merge: true });
+        await saveFcmTokenDocument(token);
         console.log('FCM token re-synced.');
         window.__fcmSaveError = null;
       } catch(e){
@@ -4792,6 +5096,7 @@ function applySohmuUI(){
         // 見た目も切り替え（赤ボタン=ログアウト状態）
         if (btn.classList) btn.classList.toggle('logout', isAdmin);
       }
+      try { updateNotificationSettingsUI(); } catch(_){}
     }
     async function promptAdminLogin(){
       try { await initAdminPassword(); } catch(_){}
@@ -4972,6 +5277,13 @@ function applySohmuUI(){
           middleControls: document.querySelector('.middle-controls'),
           opsContainer: document.querySelector('.ops-container'),
           changeResidentBtn: document.getElementById('change-resident-btn'),
+          notificationSettingsCard: document.getElementById('notification-settings-card'),
+          notificationSettingsEnableBtn: document.getElementById('notification-settings-enable-btn'),
+          notificationSettingsStatus: document.getElementById('notification-settings-status'),
+          notifMasterOffToggle: document.getElementById('notif-master-off-toggle'),
+          notifLuggageToggle: document.getElementById('notif-luggage-toggle'),
+          notifMailToggle: document.getElementById('notif-mail-toggle'),
+          notifMorningToggle: document.getElementById('notif-morning-toggle'),
           receiveModal: document.getElementById('receive-modal'),
           receiveResidentName: document.getElementById('receive-resident-name'),
           receiveSummary: document.getElementById('receive-summary'),
@@ -5044,6 +5356,54 @@ function applySohmuUI(){
           morningCancelBtn    : document.getElementById('morning-cancel-btn'),
           morningFinishBtn    : document.getElementById('morning-finish-btn'),
         };
+
+        async function handleNotificationPreferenceChange(){
+          const nextPrefs = {
+            notificationsEnabled: !(elements.notifMasterOffToggle && elements.notifMasterOffToggle.checked),
+            notifyLuggage: !!(elements.notifLuggageToggle && elements.notifLuggageToggle.checked),
+            notifyMail: !!(elements.notifMailToggle && elements.notifMailToggle.checked),
+            notifyMorning: !!(elements.notifMorningToggle && elements.notifMorningToggle.checked)
+          };
+          storeNotificationPrefs(nextPrefs);
+          setNotificationSettingsStatus('', '');
+          updateNotificationSettingsUI();
+          await syncNotificationPrefsToCurrentToken({ silent: false });
+        }
+
+        [
+          elements.notifMasterOffToggle,
+          elements.notifLuggageToggle,
+          elements.notifMailToggle,
+          elements.notifMorningToggle
+        ].forEach(input => {
+          if (input && !input.dataset.bound) {
+            input.dataset.bound = '1';
+            input.addEventListener('change', () => {
+              handleNotificationPreferenceChange().catch(error => {
+                console.warn('notification preference change failed', error);
+              });
+            });
+          }
+        });
+
+        if (elements.notificationSettingsEnableBtn && !elements.notificationSettingsEnableBtn.dataset.bound) {
+          elements.notificationSettingsEnableBtn.dataset.bound = '1';
+          elements.notificationSettingsEnableBtn.addEventListener('click', async () => {
+            setNotificationSettingsStatus('通知を有効化しています...', '');
+            const token = await requestNotificationPermission();
+            updateNotificationUI();
+            if (token) {
+              await syncNotificationPrefsToCurrentToken({ silent: false });
+            } else if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {
+              showNotificationUnblockHelp();
+              setNotificationSettingsStatus('通知がブロックされています。ブラウザ設定から許可してください。', 'error');
+            } else {
+              setNotificationSettingsStatus('', '');
+            }
+          });
+        }
+
+        updateNotificationSettingsUI();
 
 const receiveModalState = {
   residentId: null,
@@ -5740,7 +6100,7 @@ if(elements.changePasswordForm){
           try {
             if (!currentDeviceToken) { await requestNotificationPermission(); }
             if (currentDeviceToken) {
-              await db.collection('fcm_tokens').doc(currentDeviceToken).set({ residentId: id }, { merge: true });
+              await saveFcmTokenDocument(currentDeviceToken, { residentId: id });
             }
           } catch(e) { console.warn('save token failed', e); }
           closeSelfSelectModal();
@@ -5827,9 +6187,7 @@ if(elements.changePasswordForm){
                         }
                         if (currentDeviceToken) {
                           try {
-                            await db.collection('fcm_tokens')
-                                    .doc(currentDeviceToken)
-                                    .set({ residentId: id }, { merge: true });
+                            await saveFcmTokenDocument(currentDeviceToken, { residentId: id });
                             console.log('residentId saved to Firestore:', id);
                           } catch (e) {
                             console.warn('residentId save skipped due to permission error:', (e && (e.code || e.message)) || e);
@@ -6008,6 +6366,7 @@ if(elements.changePasswordForm){
                 });
             }
             updateDeleteButtonState();
+            try { updateNotificationSettingsUI(); } catch(_){}
         }
         
 
@@ -6595,6 +6954,7 @@ if(elements.changePasswordForm){
         elements.changeResidentBtn.addEventListener('click', async () => {
           // Reset stored ID and reload list each time
           localStorage.removeItem('myResidentId');
+          try { updateNotificationSettingsUI(); } catch(_){}
           await populateSelfSelectOptions();
           document.getElementById('self-select-modal').classList.add('active');
           // Setup self-select-btn handler again (with loading overlay)
@@ -6614,9 +6974,7 @@ if(elements.changePasswordForm){
               await requestNotificationPermission();
             }
             if (currentDeviceToken) {
-              await db.collection('fcm_tokens')
-                      .doc(currentDeviceToken)
-                      .set({ residentId: id }, { merge: true });
+              await saveFcmTokenDocument(currentDeviceToken, { residentId: id });
               console.log('residentId saved to Firestore:', id);
             }
             document.getElementById('self-select-modal').classList.remove('active');

@@ -18,11 +18,24 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
+// SW を即時適用してコントローラ化（トークン取得の安定化に寄与）
+self.addEventListener('install', () => {
+  try { self.skipWaiting(); } catch(_) {}
+});
+self.addEventListener('activate', (event) => {
+  event.waitUntil((async () => {
+    try { await self.clients.claim(); } catch(_) {}
+  })());
+});
+
 // 直近表示のゆるい重複除去（同じ内容が2秒以内に来たら捨てる）
 let __lastShown = { title: '', body: '', t: 0 };
 
 // 3) バックグラウンド受信
 messaging.onBackgroundMessage((payload) => {
+  // 受信ログ（Safari のリモートデバッグで確認可）
+  try { console.log('[SW] onBackgroundMessage payload:', payload); } catch(_) {}
+  if (!payload || typeof payload !== 'object') return;
   // ★ここが肝★
   // payload.notification が付いている通知は、ブラウザ/SDKが自動表示することがある。
   // → 自前の showNotification は呼ばない（重複防止）。
@@ -34,7 +47,7 @@ messaging.onBackgroundMessage((payload) => {
   const d = (payload && payload.data) || {};
   const title = d.title || '通知';
   const body  = d.body  || '';
-  const icon  = d.icon  || '/icons/icon-180.png';
+  const icon  = d.icon  || (payload.notification && payload.notification.icon) || '/icons/icon-180.png';
   const url   = d.click_action || d.link || '/';
   const tag   = d.tag; // 送信側が tag を付けていれば置換・集約に使える
 
@@ -47,13 +60,37 @@ messaging.onBackgroundMessage((payload) => {
   self.registration.showNotification(title, { body, icon, tag, data: { url } });
 });
 
-// 4) クリックで復帰
+// 4) クリックで復帰（同一オリジンの既存タブを優先し、なければ新規）
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = (event.notification && event.notification.data && event.notification.data.url) || '/';
+  const raw = (event.notification && event.notification.data && event.notification.data.url) || '/';
+  const targetUrl = (() => {
+    try { return new URL(raw, self.location.origin).toString(); }
+    catch(_) { return self.location.origin + '/'; }
+  })();
+
   event.waitUntil((async () => {
-    const all = await clients.matchAll({ type: 'window', includeUncontrolled: true });
-    for (const c of all) { if ('focus' in c) return c.focus(); }
-    if (clients.openWindow) return clients.openWindow(targetUrl);
+    try {
+      const all = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+      // 1) 同一オリジンの既存クライアントを探す
+      let best = null;
+      for (const c of all) {
+        try {
+          if (new URL(c.url).origin === self.location.origin) { best = c; break; }
+        } catch(_) {}
+      }
+      if (best) {
+        await best.focus();
+        // URL が違う場合は遷移（navigate はフォアグラウンドでのみ有効）
+        try {
+          if (typeof best.navigate === 'function' && best.url !== targetUrl) {
+            await best.navigate(targetUrl);
+          }
+        } catch(_) {}
+        return;
+      }
+      // 2) 無ければ新規で開く
+      if (clients.openWindow) return clients.openWindow(targetUrl);
+    } catch(_) {}
   })());
 });
