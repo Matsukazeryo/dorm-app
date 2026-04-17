@@ -298,7 +298,12 @@
         .bulk-add-entry:last-child { border-bottom: none; }
         .bulk-add-controls { display: flex; justify-content: space-between; margin-top: 20px; }
 
-        .footer { margin-top: 24px; padding: 10px; display: flex; justify-content: center; align-items: center; gap: 10px; font-size: 14px; color: #7f8c8d; }
+        .footer-settings-panel{
+          max-width:800px;
+          margin:24px auto 0;
+          padding:0 20px 20px;
+        }
+        .footer { padding: 10px; display: flex; justify-content: center; align-items: center; gap: 10px; font-size: 14px; color: #7f8c8d; }
         body.dark-theme .footer { color: #bdc3c7; }
         #theme-selector { background-color: var(--mode-label-bg); color: var(--text-color); border: 1px solid var(--mode-selector-border); border-radius: 6px; padding: 5px; }
         /* ===== スマホ用の省スペース調整 ===== */
@@ -848,47 +853,6 @@
     </div>
     <!-- ===== PWA利用ヒントここまで ===== -->
 
-    <div id="notification-settings-card" class="notification-settings-card">
-      <div class="notification-settings-head">
-        <div>
-          <h2 class="notification-settings-title">通知設定</h2>
-          <p class="notification-settings-note">この端末で受け取る通知だけを切り替えられます。変更は自動保存されます。</p>
-        </div>
-        <button id="notification-settings-enable-btn" type="button" class="header-btn notification-settings-enable-btn" style="background:#2ecc71; display:none;">通知を有効化</button>
-      </div>
-      <div class="notification-settings-list">
-        <label id="notification-settings-master-row" class="notification-settings-item">
-          <input id="notif-master-off-toggle" type="checkbox">
-          <span>
-            <strong>全通知をオフにする</strong>
-            <span>荷物・郵便・朝の庶務終了・お知らせをこの端末で止めます。</span>
-          </span>
-        </label>
-        <label id="notification-settings-luggage-row" class="notification-settings-item">
-          <input id="notif-luggage-toggle" type="checkbox">
-          <span>
-            <strong>荷物の通知を受け取る</strong>
-            <span>自分の荷物が増えたときだけ通知します。</span>
-          </span>
-        </label>
-        <label id="notification-settings-mail-row" class="notification-settings-item">
-          <input id="notif-mail-toggle" type="checkbox">
-          <span>
-            <strong>郵便の通知を受け取る</strong>
-            <span>自分の郵便が増えたときだけ通知します。</span>
-          </span>
-        </label>
-        <label id="notification-settings-morning-row" class="notification-settings-item">
-          <input id="notif-morning-toggle" type="checkbox">
-          <span>
-            <strong>朝の庶務終了通知を受け取る</strong>
-            <span>朝の庶務が終わって数が反映されたときに通知します。</span>
-          </span>
-        </label>
-      </div>
-      <div id="notification-settings-status" class="notification-settings-status"></div>
-    </div>
-
     <div class="table-container">
         <table id="resident-table">
             <thead>
@@ -1179,15 +1143,57 @@
 </div>
 <!-- ==== 統一確認モーダル ここまで ==== -->
 
+<div class="footer-settings-panel">
+  <footer class="footer">
+      <span>表示テーマ:</span>
+      <select id="theme-selector">
+          <option value="system">システム</option>
+          <option value="light">昼</option>
+          <option value="dark">夜</option>
+      </select>
+  </footer>
 
-<footer class="footer">
-    <span>表示テーマ:</span>
-    <select id="theme-selector">
-        <option value="system">システム</option>
-        <option value="light">昼</option>
-        <option value="dark">夜</option>
-    </select>
-</footer>
+  <div id="notification-settings-card" class="notification-settings-card">
+    <div class="notification-settings-head">
+      <div>
+        <h2 class="notification-settings-title">通知設定</h2>
+        <p class="notification-settings-note">この端末で受け取る通知だけを切り替えられます。変更は自動保存されます。</p>
+      </div>
+      <button id="notification-settings-enable-btn" type="button" class="header-btn notification-settings-enable-btn" style="background:#2ecc71; display:none;">通知を有効化</button>
+    </div>
+    <div class="notification-settings-list">
+      <label id="notification-settings-master-row" class="notification-settings-item">
+        <input id="notif-master-off-toggle" type="checkbox">
+        <span>
+          <strong>全通知をオフにする</strong>
+          <span>荷物・郵便・朝の庶務終了・お知らせをこの端末で止めます。</span>
+        </span>
+      </label>
+      <label id="notification-settings-luggage-row" class="notification-settings-item">
+        <input id="notif-luggage-toggle" type="checkbox">
+        <span>
+          <strong>荷物の通知を受け取る</strong>
+          <span>自分の荷物が増えたときだけ通知します。</span>
+        </span>
+      </label>
+      <label id="notification-settings-mail-row" class="notification-settings-item">
+        <input id="notif-mail-toggle" type="checkbox">
+        <span>
+          <strong>郵便の通知を受け取る</strong>
+          <span>自分の郵便が増えたときだけ通知します。</span>
+        </span>
+      </label>
+      <label id="notification-settings-morning-row" class="notification-settings-item">
+        <input id="notif-morning-toggle" type="checkbox">
+        <span>
+          <strong>朝の庶務終了通知を受け取る</strong>
+          <span>朝の庶務が終わって数が反映されたときに通知します。</span>
+        </span>
+      </label>
+    </div>
+    <div id="notification-settings-status" class="notification-settings-status"></div>
+  </div>
+</div>
 
 <script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore-compat.js"></script>
