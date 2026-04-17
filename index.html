@@ -1637,9 +1637,22 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       }
     }
 
-    function __getResidentSnapshotValue(residentId, fieldName){
+    function __getResidentSnapshotForMorning(residentId){
       try{
         const resident = Array.isArray(allResidents) ? allResidents.find(r => r.id === residentId) : null;
+        if (resident) return resident;
+      }catch(_){ }
+      try{
+        if (morningRef && morningRef.byId && typeof morningRef.byId.get === 'function') {
+          return morningRef.byId.get(residentId) || null;
+        }
+      }catch(_){ }
+      return null;
+    }
+
+    function __getResidentSnapshotValue(residentId, fieldName){
+      try{
+        const resident = __getResidentSnapshotForMorning(residentId);
         if (!resident) return null;
         const raw = resident[fieldName];
         const num = (typeof raw === 'number') ? raw : parseInt(raw, 10);
@@ -1647,6 +1660,35 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       }catch(_){
         return null;
       }
+    }
+
+    function __normalizeMorningCountValue(value){
+      try{
+        if (typeof value === 'number') return Number.isFinite(value) ? Math.max(0, value) : null;
+        if (value == null || value === '') return null;
+        const num = parseInt(value, 10);
+        return Number.isFinite(num) ? Math.max(0, num) : null;
+      }catch(_){
+        return null;
+      }
+    }
+
+    function __resolveMorningResidentPath(key, residentId){
+      try{
+        const parts = String(key || '').split('/').filter(Boolean);
+        const collectionName = parts.length >= 2 ? parts[parts.length - 2] : '';
+        if ((collectionName === 'residents_shofu' || collectionName === 'residents_meizen') && residentId) {
+          return collectionName + '/' + residentId;
+        }
+      }catch(_){ }
+
+      try{
+        const resident = __getResidentSnapshotForMorning(residentId);
+        const dorm = resident && (resident.dorm === 'shofu' || resident.dorm === 'meizen') ? resident.dorm : null;
+        if (dorm && residentId) return `residents_${dorm}/${residentId}`;
+      }catch(_){ }
+
+      return '';
     }
 
     function __toUpdateObject(args){
@@ -1682,15 +1724,37 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
           patchObj = maybePatch;
         }
         if (!key || !patchObj) return;
-        const cur = window.__morningStagedWrites.get(key) || {};
-        const next = __mergeObject(cur, patchObj);
         const residentId = __getResidentIdFromMorningKey(key);
-        ['luggage', 'mail'].forEach((fieldName) => {
-          if (typeof next[fieldName] === 'number') return;
-          const resolved = __getResidentSnapshotValue(residentId, fieldName);
-          if (resolved != null) next[fieldName] = resolved;
-        });
-        window.__morningStagedWrites.set(key, next);
+        const canonicalKey = __resolveMorningResidentPath(key, residentId);
+        if (!canonicalKey || !residentId) return;
+
+        const cur = window.__morningStagedWrites.get(canonicalKey) || {};
+        const merged = __mergeObject(cur, patchObj);
+        const touchesCounts =
+          Object.prototype.hasOwnProperty.call(merged, 'luggage') ||
+          Object.prototype.hasOwnProperty.call(merged, 'mail') ||
+          Object.prototype.hasOwnProperty.call(merged, 'luggageCount') ||
+          Object.prototype.hasOwnProperty.call(merged, 'mailCount');
+        if (!touchesCounts) return;
+
+        const next = {};
+        const luggageValue = __normalizeMorningCountValue(
+          Object.prototype.hasOwnProperty.call(merged, 'luggage') ? merged.luggage : merged.luggageCount
+        );
+        const mailValue = __normalizeMorningCountValue(
+          Object.prototype.hasOwnProperty.call(merged, 'mail') ? merged.mail : merged.mailCount
+        );
+        const fallbackLuggage = __getResidentSnapshotValue(residentId, 'luggage');
+        const fallbackMail = __getResidentSnapshotValue(residentId, 'mail');
+
+        if (luggageValue != null) next.luggage = luggageValue;
+        else if (fallbackLuggage != null) next.luggage = fallbackLuggage;
+
+        if (mailValue != null) next.mail = mailValue;
+        else if (fallbackMail != null) next.mail = fallbackMail;
+
+        if (!Object.keys(next).length) return;
+        window.__morningStagedWrites.set(canonicalKey, next);
       }catch(_){ }
     }
 
@@ -1702,30 +1766,66 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
 
         window.__morningCommitInProgress = true;
         window.__morningLastCommitError = null;
+        const normalizedEntries = [];
+        for (const [key, patch] of window.__morningStagedWrites.entries()){
+          const residentId = __getResidentIdFromMorningKey(key);
+          const canonicalPath = __resolveMorningResidentPath(key, residentId);
+          if (!canonicalPath) continue;
+          const safePatch = {};
+          const luggageValue = __normalizeMorningCountValue(patch && patch.luggage);
+          const mailValue = __normalizeMorningCountValue(patch && patch.mail);
+          if (luggageValue != null) safePatch.luggage = luggageValue;
+          if (mailValue != null) safePatch.mail = mailValue;
+          if (!Object.keys(safePatch).length) continue;
+          normalizedEntries.push({ path: canonicalPath, patch: safePatch });
+        }
+        if (!normalizedEntries.length) {
+          committed = true;
+          return true;
+        }
+
         let batch = db.batch();
         let opCount = 0;
-        for (const [key, patch] of window.__morningStagedWrites.entries()){
-          try{
-            const path = String(key || '');
-            if (!path) continue;
-            const ref = db.doc(path);
-            batch.set(ref, patch, { merge:true });
-            opCount++;
-            if (opCount >= 450){
-              await batch.commit();
-              batch = db.batch();
-              opCount = 0;
-            }
-          }catch(_){ }
+        for (const entry of normalizedEntries){
+          const ref = db.doc(entry.path);
+          batch.update(ref, entry.patch);
+          opCount++;
+          if (opCount >= 450){
+            await batch.commit();
+            batch = db.batch();
+            opCount = 0;
+          }
         }
         if (opCount > 0) {
           await batch.commit();
         }
         committed = true;
       }catch(e){
-        window.__morningLastCommitError = e;
-        console.warn('[morning] commitMorningStagedWrites failed', e);
-        return false;
+        console.warn('[morning] batch commit failed; retrying one by one', e);
+        try{
+          if (!window.__morningStagedWrites || window.__morningStagedWrites.size === 0) {
+            committed = true;
+            return true;
+          }
+          for (const [key, patch] of window.__morningStagedWrites.entries()){
+            const residentId = __getResidentIdFromMorningKey(key);
+            const canonicalPath = __resolveMorningResidentPath(key, residentId);
+            if (!canonicalPath) continue;
+            const safePatch = {};
+            const luggageValue = __normalizeMorningCountValue(patch && patch.luggage);
+            const mailValue = __normalizeMorningCountValue(patch && patch.mail);
+            if (luggageValue != null) safePatch.luggage = luggageValue;
+            if (mailValue != null) safePatch.mail = mailValue;
+            if (!Object.keys(safePatch).length) continue;
+            await db.doc(canonicalPath).update(safePatch);
+          }
+          committed = true;
+          return true;
+        }catch(retryError){
+          window.__morningLastCommitError = retryError;
+          console.warn('[morning] commitMorningStagedWrites failed', retryError);
+          return false;
+        }
       } finally {
         if (committed) {
           try { window.__morningStagedWrites && window.__morningStagedWrites.clear && window.__morningStagedWrites.clear(); } catch(_){ }
