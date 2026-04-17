@@ -9,7 +9,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png">
     <link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="icons/icon-16.png">
-    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="manifest" href="/manifest.json">
     <!-- ===== PWA / Standalone meta for iOS & others ===== -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -1531,6 +1531,11 @@ const DEFAULT_NOTIFICATION_PREFS = Object.freeze({
 let notificationPrefsState = null;
 let notificationPrefsStatus = '';
 let notificationPrefsStatusTone = '';
+let notificationDebugState = {
+  lastSyncOkAt: null,
+  lastSyncError: '',
+  lastForegroundMessageAt: null
+};
 
 function normalizeNotificationPrefs(raw){
   const src = raw && typeof raw === 'object' ? raw : {};
@@ -1582,6 +1587,24 @@ function setNotificationSettingsStatus(message, tone){
   notificationPrefsStatus = message || '';
   notificationPrefsStatusTone = tone || '';
   try { updateNotificationSettingsUI(); } catch(_){}
+}
+
+function getNotificationDiagnosticSummary(){
+  const permission = (typeof Notification !== 'undefined') ? Notification.permission : 'unsupported';
+  const tokenReady = !!(currentDeviceToken || localStorage.getItem('fcm_token'));
+  const parts = [
+    `許可:${permission}`,
+    `トークン:${tokenReady ? 'あり' : 'なし'}`
+  ];
+  if (notificationDebugState.lastSyncOkAt) {
+    parts.push(`保存:${new Date(notificationDebugState.lastSyncOkAt).toLocaleString('ja-JP')}`);
+  } else if (notificationDebugState.lastSyncError) {
+    parts.push(`保存失敗:${notificationDebugState.lastSyncError}`);
+  }
+  if (notificationDebugState.lastForegroundMessageAt) {
+    parts.push(`前面受信:${new Date(notificationDebugState.lastForegroundMessageAt).toLocaleTimeString('ja-JP')}`);
+  }
+  return parts.join(' / ');
 }
 
     // =============================================================
@@ -2226,6 +2249,8 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       await db.collection('fcm_tokens')
               .doc(token)
               .set(payload, { merge: true });
+      notificationDebugState.lastSyncOkAt = Date.now();
+      notificationDebugState.lastSyncError = '';
       return true;
     }
 
@@ -2250,6 +2275,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
         return true;
       }catch(e){
         window.__fcmSaveError = e;
+        notificationDebugState.lastSyncError = (e && (e.code || e.message)) ? String(e.code || e.message) : 'unknown';
         if (!opts.silent) {
           setNotificationSettingsStatus('通知設定の保存に失敗しました。時間をおいて再度お試しください。', 'error');
         }
@@ -2315,6 +2341,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       if (statusEl) {
         let message = notificationPrefsStatus;
         let tone = notificationPrefsStatusTone;
+        const diag = getNotificationDiagnosticSummary();
         if (!message) {
           if (!supported) {
             message = 'このブラウザではプッシュ通知に対応していません。';
@@ -2331,7 +2358,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
             message = 'この端末だけの通知設定です。変更は自動保存されます。';
           }
         }
-        statusEl.textContent = message;
+        statusEl.textContent = diag ? `${message} (${diag})` : message;
         statusEl.classList.remove('is-error', 'is-success');
         if (tone === 'error') statusEl.classList.add('is-error');
         if (tone === 'success') statusEl.classList.add('is-success');
@@ -2547,12 +2574,51 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
         }
       } catch(_) {}
     });
+
+    let __lastForegroundShown = { title:'', body:'', t:0 };
+    async function showForegroundPushNotification(payload){
+      if (!payload || typeof payload !== 'object') return;
+      if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+
+      const notificationPart = payload.notification || {};
+      const dataPart = payload.data || {};
+      const title = notificationPart.title || dataPart.title || '通知';
+      const body = notificationPart.body || dataPart.body || '';
+      if (!title && !body) return;
+
+      const now = Date.now();
+      if (__lastForegroundShown.title === title && __lastForegroundShown.body === body && (now - __lastForegroundShown.t) < 2500) {
+        return;
+      }
+      __lastForegroundShown = { title, body, t: now };
+
+      const options = {
+        body,
+        icon: notificationPart.icon || dataPart.icon || '/icons/icon-180.png',
+        badge: dataPart.badge || '/icons/icon-192.png',
+        tag: dataPart.tag || undefined,
+        data: { url: dataPart.click_action || dataPart.link || '/' }
+      };
+
+      try{
+        const registration = await navigator.serviceWorker.getRegistration('/');
+        if (registration && typeof registration.showNotification === 'function') {
+          await registration.showNotification(title, options);
+          return;
+        }
+      }catch(_){ }
+
+      try { new Notification(title, options); } catch(_){ }
+    }
     
-    // Foreground messages: avoid duplicating OS notifications
+    // Foreground messages: Firebase docs route foreground messages to onMessage only.
+    // 以前は console のみで見える通知が出なかったので、前面表示中も通知を見せる。
     if (messaging && typeof messaging.onMessage === 'function') {
-      messaging.onMessage(payload => {
+      messaging.onMessage(async payload => {
         console.log('Foreground FCM message received:', payload);
-        // (Intentionally do not call new Notification(...) here to avoid duplicates)
+        notificationDebugState.lastForegroundMessageAt = Date.now();
+        try { updateNotificationSettingsUI(); } catch(_){}
+        try { await showForegroundPushNotification(payload); } catch(_){}
       });
     }
     /* ===================================== */
