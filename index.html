@@ -306,6 +306,14 @@
         .footer { padding: 10px; display: flex; justify-content: center; align-items: center; gap: 10px; font-size: 14px; color: #7f8c8d; }
         body.dark-theme .footer { color: #bdc3c7; }
         #theme-selector { background-color: var(--mode-label-bg); color: var(--text-color); border: 1px solid var(--mode-selector-border); border-radius: 6px; padding: 5px; }
+        .notification-settings-launcher{
+          display:none;
+          text-align:center;
+          margin-top:8px;
+        }
+        .notification-settings-toggle-btn{
+          min-width:180px;
+        }
         /* ===== スマホ用の省スペース調整 ===== */
         @media (max-width:600px){
             /* テーブル全体を少し小さく */
@@ -847,12 +855,6 @@
     </div>
     <!-- ===== 朝の庶務バナーここまで ===== -->
 
-    <!-- ===== PWA利用ヒント ===== -->
-    <div id="pwa-hint" class="pwa-hint">
-      通知を受け取るには、このページをホーム画面に追加してください。
-    </div>
-    <!-- ===== PWA利用ヒントここまで ===== -->
-
     <div class="table-container">
         <table id="resident-table">
             <thead>
@@ -1153,6 +1155,10 @@
       </select>
   </footer>
 
+  <div id="notification-settings-launcher" class="notification-settings-launcher">
+    <button id="notification-settings-toggle-btn" type="button" class="header-btn notification-settings-toggle-btn" style="background:#3498db;">通知設定を開く</button>
+  </div>
+
   <div id="notification-settings-card" class="notification-settings-card">
     <div class="notification-settings-head">
       <div>
@@ -1192,6 +1198,9 @@
       </label>
     </div>
     <div id="notification-settings-status" class="notification-settings-status"></div>
+    <div class="form-actions" style="margin-top:12px;">
+      <button id="notification-settings-close-btn" type="button" class="header-btn" style="background:#7f8c8d; margin-left:auto;">閉じる</button>
+    </div>
   </div>
 </div>
 
@@ -1531,6 +1540,7 @@ const DEFAULT_NOTIFICATION_PREFS = Object.freeze({
 let notificationPrefsState = null;
 let notificationPrefsStatus = '';
 let notificationPrefsStatusTone = '';
+let notificationSettingsPanelOpen = false;
 let notificationDebugState = {
   lastSyncOkAt: null,
   lastSyncError: '',
@@ -1616,6 +1626,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
     // 朝の庶務中の「個数変更」はサーバへ即時反映せず、最後の値だけをステージングする
     window.__morningStagedWrites = new Map(); // key: `${collection}/${docId}` -> {luggage, mail, ...}
     window.__morningCommitInProgress = false; // commit/restore中はステージングをバイパス
+    window.__morningFinishing = false;
 
     function __mergeObject(a,b){
       const out = Object.assign({}, a || {});
@@ -1663,27 +1674,42 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
     }
 
     async function commitMorningStagedWrites(){
+      let committed = false;
       try{
-        if (!window.__morningStagedWrites || window.__morningStagedWrites.size === 0) return;
-        if (!window.db || !window.db.batch) return;
+        if (!window.__morningStagedWrites || window.__morningStagedWrites.size === 0) return true;
+        if (!window.db || !window.db.batch) return false;
 
         window.__morningCommitInProgress = true;
-        const batch = db.batch();
+        let batch = db.batch();
+        let opCount = 0;
         for (const [key, patch] of window.__morningStagedWrites.entries()){
           try{
             const path = String(key || '');
             if (!path) continue;
             const ref = db.doc(path);
             batch.set(ref, patch, { merge:true });
+            opCount++;
+            if (opCount >= 450){
+              await batch.commit();
+              batch = db.batch();
+              opCount = 0;
+            }
           }catch(_){ }
         }
-        await batch.commit();
+        if (opCount > 0) {
+          await batch.commit();
+        }
+        committed = true;
       }catch(e){
         console.warn('[morning] commitMorningStagedWrites failed', e);
+        return false;
       } finally {
-        try { window.__morningStagedWrites && window.__morningStagedWrites.clear && window.__morningStagedWrites.clear(); } catch(_){ }
+        if (committed) {
+          try { window.__morningStagedWrites && window.__morningStagedWrites.clear && window.__morningStagedWrites.clear(); } catch(_){ }
+        }
         window.__morningCommitInProgress = false;
       }
+      return true;
     }
 
     function __isMorningMode(){
@@ -2287,6 +2313,8 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
 
     function updateNotificationSettingsUI(){
       const card = document.getElementById('notification-settings-card');
+      const launcher = document.getElementById('notification-settings-launcher');
+      const toggleBtn = document.getElementById('notification-settings-toggle-btn');
       if (!card) return;
       const enableBtn = document.getElementById('notification-settings-enable-btn');
       const statusEl = document.getElementById('notification-settings-status');
@@ -2310,8 +2338,13 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       const prefs = getNotificationPrefs();
       const shouldShow = !isAdmin && !!myResidentId && !isSohmuOn;
 
-      card.style.display = shouldShow ? 'block' : 'none';
-      if (!shouldShow) return;
+      if (launcher) launcher.style.display = shouldShow ? 'block' : 'none';
+      if (toggleBtn) toggleBtn.textContent = notificationSettingsPanelOpen ? '通知設定を閉じる' : '通知設定を開く';
+      card.style.display = (shouldShow && notificationSettingsPanelOpen) ? 'block' : 'none';
+      if (!shouldShow) {
+        notificationSettingsPanelOpen = false;
+        return;
+      }
 
       if (masterOff) masterOff.checked = !prefs.notificationsEnabled;
       if (luggageToggle) luggageToggle.checked = !!prefs.notifyLuggage;
@@ -2478,11 +2511,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
     }
 
     function updatePwaHint(){
-      var el = document.getElementById('pwa-hint');
-      if (!el) return;
-      var standalone = false;
-      try { standalone = isStandaloneDisplayMode(); } catch(_){ standalone = false; }
-      el.style.display = standalone ? 'none' : 'block';
+      return;
     }
 
     // ===== 通知UIの更新 & アンブロック案内 =====
@@ -4280,7 +4309,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       }
     }
 
-    function finishMorning(){
+    function closeMorningModeUI(){
       isMorningMode = false;
       document.body.classList.remove('morning-mode');
       const b = document.getElementById('morning-banner');
@@ -4292,6 +4321,40 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       if (__morningObserver){
         try { __morningObserver.disconnect(); } catch(_){}
         __morningObserver = null;
+      }
+    }
+
+    async function finishMorning(){
+      if (window.__morningFinishing) return;
+      window.__morningFinishing = true;
+
+      const overlay = document.getElementById('loading-overlay');
+      if (overlay) overlay.style.display = 'flex';
+
+      try{
+        try{
+          window.__morningModeTargetDorm = (morningRef && morningRef.dorm === 'both') ? 'all' : (morningRef && morningRef.dorm) || 'all';
+        }catch(_){
+          window.__morningModeTargetDorm = window.__morningModeTargetDorm || 'all';
+        }
+
+        const ok = await commitMorningStagedWrites();
+        if (ok === false) {
+          alert('朝の庶務の数の反映に失敗しました。朝の庶務モードはそのままにしてあります。通信状態を確認して、もう一度終了してください。');
+          return;
+        }
+
+        window.__morningFinishRequested = false;
+        closeMorningModeUI();
+        try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_){}
+        try { await sendMorningFinishedNotification(); } catch(e){ console.warn('[morning] finish notification failed', e); }
+      }catch(e){
+        console.error('finishMorning error', e);
+        const detail = (e && (e.code || e.message)) ? `\n[${e.code || 'error'}] ${e.message}` : '';
+        alert('朝の庶務の終了に失敗しました。' + detail);
+      } finally {
+        if (overlay) overlay.style.display = 'none';
+        window.__morningFinishing = false;
       }
     }
 
@@ -4770,7 +4833,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
         const btn = document.getElementById('morning-cancel-btn');
         if (btn) btn.disabled = false;
         // 表示上も朝モードを終了して注釈を消す
-        finishMorning();
+        closeMorningModeUI();
         try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_){}
       }
     }
@@ -5349,8 +5412,11 @@ function applySohmuUI(){
           middleControls: document.querySelector('.middle-controls'),
           opsContainer: document.querySelector('.ops-container'),
           changeResidentBtn: document.getElementById('change-resident-btn'),
+          notificationSettingsLauncher: document.getElementById('notification-settings-launcher'),
+          notificationSettingsToggleBtn: document.getElementById('notification-settings-toggle-btn'),
           notificationSettingsCard: document.getElementById('notification-settings-card'),
           notificationSettingsEnableBtn: document.getElementById('notification-settings-enable-btn'),
+          notificationSettingsCloseBtn: document.getElementById('notification-settings-close-btn'),
           notificationSettingsStatus: document.getElementById('notification-settings-status'),
           notifMasterOffToggle: document.getElementById('notif-master-off-toggle'),
           notifLuggageToggle: document.getElementById('notif-luggage-toggle'),
@@ -5472,6 +5538,22 @@ function applySohmuUI(){
             } else {
               setNotificationSettingsStatus('', '');
             }
+          });
+        }
+
+        if (elements.notificationSettingsToggleBtn && !elements.notificationSettingsToggleBtn.dataset.bound) {
+          elements.notificationSettingsToggleBtn.dataset.bound = '1';
+          elements.notificationSettingsToggleBtn.addEventListener('click', () => {
+            notificationSettingsPanelOpen = !notificationSettingsPanelOpen;
+            updateNotificationSettingsUI();
+          });
+        }
+
+        if (elements.notificationSettingsCloseBtn && !elements.notificationSettingsCloseBtn.dataset.bound) {
+          elements.notificationSettingsCloseBtn.dataset.bound = '1';
+          elements.notificationSettingsCloseBtn.addEventListener('click', () => {
+            notificationSettingsPanelOpen = false;
+            updateNotificationSettingsUI();
           });
         }
 
