@@ -1627,11 +1627,33 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
     window.__morningStagedWrites = new Map(); // key: `${collection}/${docId}` -> {luggage, mail, ...}
     window.__morningCommitInProgress = false; // commit/restore中はステージングをバイパス
     window.__morningFinishing = false;
+    window.__morningLastCommitError = null;
 
     function __mergeObject(a,b){
       const out = Object.assign({}, a || {});
       if (b && typeof b === 'object') Object.keys(b).forEach(k => { out[k] = b[k]; });
       return out;
+    }
+
+    function __getResidentIdFromMorningKey(key){
+      try{
+        const parts = String(key || '').split('/');
+        return parts.length ? parts[parts.length - 1] : '';
+      }catch(_){
+        return '';
+      }
+    }
+
+    function __getResidentSnapshotValue(residentId, fieldName){
+      try{
+        const resident = Array.isArray(allResidents) ? allResidents.find(r => r.id === residentId) : null;
+        if (!resident) return null;
+        const raw = resident[fieldName];
+        const num = (typeof raw === 'number') ? raw : parseInt(raw, 10);
+        return Number.isFinite(num) ? num : null;
+      }catch(_){
+        return null;
+      }
     }
 
     function __toUpdateObject(args){
@@ -1669,6 +1691,12 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
         if (!key || !patchObj) return;
         const cur = window.__morningStagedWrites.get(key) || {};
         const next = __mergeObject(cur, patchObj);
+        const residentId = __getResidentIdFromMorningKey(key);
+        ['luggage', 'mail'].forEach((fieldName) => {
+          if (typeof next[fieldName] === 'number') return;
+          const resolved = __getResidentSnapshotValue(residentId, fieldName);
+          if (resolved != null) next[fieldName] = resolved;
+        });
         window.__morningStagedWrites.set(key, next);
       }catch(_){ }
     }
@@ -1680,6 +1708,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
         if (!window.db || !window.db.batch) return false;
 
         window.__morningCommitInProgress = true;
+        window.__morningLastCommitError = null;
         let batch = db.batch();
         let opCount = 0;
         for (const [key, patch] of window.__morningStagedWrites.entries()){
@@ -1701,6 +1730,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
         }
         committed = true;
       }catch(e){
+        window.__morningLastCommitError = e;
         console.warn('[morning] commitMorningStagedWrites failed', e);
         return false;
       } finally {
@@ -4340,7 +4370,9 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 
         const ok = await commitMorningStagedWrites();
         if (ok === false) {
-          alert('朝の庶務の数の反映に失敗しました。朝の庶務モードはそのままにしてあります。通信状態を確認して、もう一度終了してください。');
+          const err = window.__morningLastCommitError;
+          const detail = (err && (err.code || err.message)) ? `\n[${err.code || 'error'}] ${err.message}` : '';
+          alert('朝の庶務の数の反映に失敗しました。朝の庶務モードはそのままにしてあります。通信状態を確認して、もう一度終了してください。' + detail);
           return;
         }
 
@@ -4878,6 +4910,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 
     // 荷物/郵便の個数を ±1（即時にUI反映し、バックグラウンドで保存）
     function updateCount(residentId, residentName, type, value) {
+      let nextValue = null;
       // 1) 楽観的にメモリ上のデータとUIを即反映
       try {
         const idx = Array.isArray(allResidents) ? allResidents.findIndex(r => r.id === residentId) : -1;
@@ -4888,6 +4921,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
           const next = Math.max(0, cur + value);
           if (next !== cur) {
             allResidents[idx][type] = next;
+            nextValue = next;
             if (typeof window.renderTable === 'function') {
               try { window.renderTable(); } catch (_) {}
             }
@@ -4906,6 +4940,23 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
         targetCollection = `residents_${dormKey}`;
       }
       const docRef = db.collection(targetCollection).doc(residentId);
+
+      if ((window.__morningModeSuppressPush || __isMorningMode()) && !window.__morningCommitInProgress) {
+        try {
+          if (nextValue == null) {
+            const resident = Array.isArray(allResidents) ? allResidents.find(r => r.id === residentId) : null;
+            const raw = resident ? resident[type] : 0;
+            nextValue = (typeof raw === 'number') ? raw : (parseInt(raw, 10) || 0);
+          }
+          __stageResidentWrite(targetCollection, residentId, { [type]: nextValue });
+          const typeJa = (type === 'luggage') ? '荷物' : '郵便';
+          const dormKey = (targetCollection.split('_')[1] || '');
+          addLog('個数変更', `[${dormKey}] ${residentName} の${typeJa}を ${value > 0 ? '+1' : '-1'}`);
+        } catch (e) {
+          console.warn('morning staged updateCount failed', e);
+        }
+        return;
+      }
 
       // 3) まずは FieldValue.increment で高速に更新（競合にも強い）
       docRef.update({ [type]: firebase.firestore.FieldValue.increment(value) })
