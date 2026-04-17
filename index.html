@@ -1721,6 +1721,59 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       return '';
     }
 
+    function __buildMorningCommitEntries(){
+      const entryMap = new Map();
+
+      function pushEntry(path, patch){
+        if (!path || !patch) return;
+        const safePatch = {};
+        const luggageValue = __normalizeMorningCountValue(patch.luggage);
+        const mailValue = __normalizeMorningCountValue(patch.mail);
+        if (luggageValue != null) safePatch.luggage = luggageValue;
+        if (mailValue != null) safePatch.mail = mailValue;
+        if (!Object.keys(safePatch).length) return;
+        entryMap.set(path, safePatch);
+      }
+
+      try{
+        if (morningRef && morningRef.byId && typeof morningRef.byId.forEach === 'function') {
+          morningRef.byId.forEach((refObj, residentId) => {
+            const currentResident = __getResidentSnapshotForMorning(residentId) || {};
+            const stagedPatch = window.__morningStagedWrites && window.__morningStagedWrites.get
+              ? window.__morningStagedWrites.get(__resolveMorningResidentPath('', residentId)) || null
+              : null;
+            const dorm = (currentResident && (currentResident.dorm === 'shofu' || currentResident.dorm === 'meizen'))
+              ? currentResident.dorm
+              : ((morningRef && (morningRef.dorm === 'shofu' || morningRef.dorm === 'meizen')) ? morningRef.dorm : null);
+            if (!dorm) return;
+            const currentLuggage = (stagedPatch && Object.prototype.hasOwnProperty.call(stagedPatch, 'luggage'))
+              ? stagedPatch.luggage
+              : ((currentResident && currentResident.luggage != null) ? currentResident.luggage : refObj.luggage);
+            const currentMail = (stagedPatch && Object.prototype.hasOwnProperty.call(stagedPatch, 'mail'))
+              ? stagedPatch.mail
+              : ((currentResident && currentResident.mail != null) ? currentResident.mail : refObj.mail);
+            pushEntry(`residents_${dorm}/${residentId}`, {
+              luggage: currentLuggage,
+              mail: currentMail
+            });
+          });
+        }
+      }catch(_){ }
+
+      try{
+        if (window.__morningStagedWrites && typeof window.__morningStagedWrites.forEach === 'function') {
+          window.__morningStagedWrites.forEach((patch, key) => {
+            const residentId = __getResidentIdFromMorningKey(key);
+            const canonicalPath = __resolveMorningResidentPath(key, residentId);
+            if (!canonicalPath) return;
+            pushEntry(canonicalPath, patch || {});
+          });
+        }
+      }catch(_){ }
+
+      return Array.from(entryMap.entries()).map(([path, patch]) => ({ path, patch }));
+    }
+
     function __toUpdateObject(args){
       // update(obj) or update(field, value, field2, value2...)
       try{
@@ -1791,24 +1844,11 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
     async function commitMorningStagedWrites(){
       let committed = false;
       try{
-        if (!window.__morningStagedWrites || window.__morningStagedWrites.size === 0) return true;
         if (!db || typeof db.batch !== 'function') return false;
 
         window.__morningCommitInProgress = true;
         window.__morningLastCommitError = null;
-        const normalizedEntries = [];
-        for (const [key, patch] of window.__morningStagedWrites.entries()){
-          const residentId = __getResidentIdFromMorningKey(key);
-          const canonicalPath = __resolveMorningResidentPath(key, residentId);
-          if (!canonicalPath) continue;
-          const safePatch = {};
-          const luggageValue = __normalizeMorningCountValue(patch && patch.luggage);
-          const mailValue = __normalizeMorningCountValue(patch && patch.mail);
-          if (luggageValue != null) safePatch.luggage = luggageValue;
-          if (mailValue != null) safePatch.mail = mailValue;
-          if (!Object.keys(safePatch).length) continue;
-          normalizedEntries.push({ path: canonicalPath, patch: safePatch });
-        }
+        const normalizedEntries = __buildMorningCommitEntries();
         if (!normalizedEntries.length) {
           committed = true;
           return true;
@@ -1833,21 +1873,13 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       }catch(e){
         console.warn('[morning] batch commit failed; retrying one by one', e);
         try{
-          if (!window.__morningStagedWrites || window.__morningStagedWrites.size === 0) {
+          const retryEntries = __buildMorningCommitEntries();
+          if (!retryEntries.length) {
             committed = true;
             return true;
           }
-          for (const [key, patch] of window.__morningStagedWrites.entries()){
-            const residentId = __getResidentIdFromMorningKey(key);
-            const canonicalPath = __resolveMorningResidentPath(key, residentId);
-            if (!canonicalPath) continue;
-            const safePatch = {};
-            const luggageValue = __normalizeMorningCountValue(patch && patch.luggage);
-            const mailValue = __normalizeMorningCountValue(patch && patch.mail);
-            if (luggageValue != null) safePatch.luggage = luggageValue;
-            if (mailValue != null) safePatch.mail = mailValue;
-            if (!Object.keys(safePatch).length) continue;
-            await db.doc(canonicalPath).update(safePatch);
+          for (const entry of retryEntries){
+            await db.doc(entry.path).update(entry.patch);
           }
           committed = true;
           return true;
@@ -3211,7 +3243,9 @@ function unifiedConfirm(action){
         const colorAttr = (el.getAttribute('color') || '');
 
         const hay = (String(style) + ' ' + String(colorAttr)).toLowerCase();
+        if (hay.includes('ff0000') || hay.includes('#ff0000') || hay.includes('#f00')) return true;
         if (hay.includes('c0392b') || hay.includes('#c0392b')) return true;
+        if (/rgb\(\s*255\s*,\s*0\s*,\s*0\s*\)/i.test(hay)) return true;
         if (/rgb\(\s*192\s*,\s*57\s*,\s*43\s*\)/i.test(hay)) return true;
         if (/color\s*:\s*red\b/i.test(hay)) return true;
         if (String(colorAttr).toLowerCase() === 'red') return true;
@@ -4795,7 +4829,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
         var col = sanitizeColor(m[1]);
         var isRed = (col === '#ff0000' || col === '#f00');
         if (isRed){
-          out += '<span style="color:#ff0000">' + escapeHtml(m[2]) + '</span>';
+          out += '<span class="ann-red">' + escapeHtml(m[2]) + '</span>';
         } else {
           // 他色はタグを剥がす（中身のみ）
           out += escapeHtml(m[2]);
