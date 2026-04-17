@@ -1275,6 +1275,7 @@
 
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
+    try { window.db = db; } catch(_){ }
     // Enable local persistence (multi-tab safe)
     try {
       if (db && typeof db.enablePersistence === 'function') {
@@ -1791,7 +1792,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       let committed = false;
       try{
         if (!window.__morningStagedWrites || window.__morningStagedWrites.size === 0) return true;
-        if (!window.db || !window.db.batch) return false;
+        if (!db || typeof db.batch !== 'function') return false;
 
         window.__morningCommitInProgress = true;
         window.__morningLastCommitError = null;
@@ -2126,7 +2127,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
     (function stageResidentWritesDuringMorning(){
       if (window.__stageResidentWritesDuringMorning) return;
       window.__stageResidentWritesDuringMorning = true;
-      if (!window.db || typeof db.collection !== 'function') return;
+      if (!db || typeof db.collection !== 'function') return;
 
       const _origCollection = db.collection.bind(db);
 
@@ -2222,7 +2223,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
 (function guardFirestoreNotifQueues(){
       if (window.__guardFirestoreNotifQueues) return;
       window.__guardFirestoreNotifQueues = true;
-      if (!window.db || typeof db.collection !== 'function') return;
+      if (!db || typeof db.collection !== 'function') return;
 
       const _origCollection = db.collection.bind(db);
       db.collection = function(name){
