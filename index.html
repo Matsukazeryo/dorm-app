@@ -1232,6 +1232,149 @@
 <script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-auth-compat.js"></script>
 
 <script>
+    // ===== Legacy compatibility helpers =====
+    (function(){
+      if (!Object.assign) {
+        Object.assign = function(target) {
+          if (target == null) throw new TypeError('Cannot convert undefined or null to object');
+          var to = Object(target);
+          for (var i = 1; i < arguments.length; i++) {
+            var source = arguments[i];
+            if (source == null) continue;
+            for (var key in source) {
+              if (Object.prototype.hasOwnProperty.call(source, key)) {
+                to[key] = source[key];
+              }
+            }
+          }
+          return to;
+        };
+      }
+
+      if (!Array.from) {
+        Array.from = function(value) {
+          return Array.prototype.slice.call(value);
+        };
+      }
+
+      if (!Array.prototype.find) {
+        Array.prototype.find = function(predicate) {
+          if (this == null) throw new TypeError('Array.prototype.find called on null or undefined');
+          if (typeof predicate !== 'function') throw new TypeError('predicate must be a function');
+          for (var i = 0; i < this.length; i++) {
+            var item = this[i];
+            if (predicate.call(arguments[1], item, i, this)) return item;
+          }
+          return undefined;
+        };
+      }
+
+      if (!Array.prototype.includes) {
+        Array.prototype.includes = function(searchElement, fromIndex) {
+          var arr = Object(this);
+          var len = parseInt(arr.length, 10) || 0;
+          if (!len) return false;
+          var start = parseInt(fromIndex || 0, 10);
+          if (start < 0) start = Math.max(len + start, 0);
+          for (var i = start; i < len; i++) {
+            if (arr[i] === searchElement || (searchElement !== searchElement && arr[i] !== arr[i])) return true;
+          }
+          return false;
+        };
+      }
+
+      if (!Array.prototype.flat) {
+        Array.prototype.flat = function() {
+          return Array.prototype.concat.apply([], this);
+        };
+      }
+
+      if (!String.prototype.includes) {
+        String.prototype.includes = function(search, start) {
+          return this.indexOf(search, start || 0) !== -1;
+        };
+      }
+
+      if (!String.prototype.endsWith) {
+        String.prototype.endsWith = function(search, length) {
+          var str = String(this);
+          var end = typeof length === 'number' ? Math.min(length, str.length) : str.length;
+          var searchStr = String(search);
+          return str.substring(end - searchStr.length, end) === searchStr;
+        };
+      }
+
+      if (typeof NodeList !== 'undefined' && NodeList.prototype && !NodeList.prototype.forEach) {
+        NodeList.prototype.forEach = Array.prototype.forEach;
+      }
+
+      if (typeof Element !== 'undefined' && Element.prototype) {
+        if (!Element.prototype.matches) {
+          Element.prototype.matches =
+            Element.prototype.msMatchesSelector ||
+            Element.prototype.webkitMatchesSelector ||
+            function(selector) {
+              var matches = (this.document || this.ownerDocument).querySelectorAll(selector);
+              var i = 0;
+              while (matches[i] && matches[i] !== this) i++;
+              return !!matches[i];
+            };
+        }
+
+        if (!Element.prototype.closest) {
+          Element.prototype.closest = function(selector) {
+            var el = this;
+            while (el && el.nodeType === 1) {
+              if (el.matches(selector)) return el;
+              el = el.parentElement || el.parentNode;
+            }
+            return null;
+          };
+        }
+
+        if (!Element.prototype.remove) {
+          Element.prototype.remove = function() {
+            if (this.parentNode) this.parentNode.removeChild(this);
+          };
+        }
+
+        if (!Element.prototype.replaceWith) {
+          Element.prototype.replaceWith = function() {
+            if (!this.parentNode) return;
+            var parent = this.parentNode;
+            for (var i = 0; i < arguments.length; i++) {
+              parent.insertBefore(arguments[i], this);
+            }
+            parent.removeChild(this);
+          };
+        }
+      }
+
+      if (typeof CharacterData !== 'undefined' && CharacterData.prototype && !CharacterData.prototype.remove) {
+        CharacterData.prototype.remove = function() {
+          if (this.parentNode) this.parentNode.removeChild(this);
+        };
+      }
+
+      if (typeof DocumentType !== 'undefined' && DocumentType.prototype && !DocumentType.prototype.remove) {
+        DocumentType.prototype.remove = function() {
+          if (this.parentNode) this.parentNode.removeChild(this);
+        };
+      }
+
+      if (typeof Promise !== 'undefined' && !Promise.allSettled) {
+        Promise.allSettled = function(promises) {
+          return Promise.all(Array.prototype.map.call(promises, function(promise) {
+            return Promise.resolve(promise).then(function(value) {
+              return { status: 'fulfilled', value: value };
+            }, function(reason) {
+              return { status: 'rejected', reason: reason };
+            });
+          }));
+        };
+      }
+    })();
+
     // 重複した Service Worker を自動で解除
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations()
@@ -1304,6 +1447,33 @@
     }
     const auth = firebase.auth();
 
+    function getElementValueById(id, fallbackValue) {
+      var el = document.getElementById(id);
+      if (!el || typeof el.value === 'undefined' || el.value == null) return fallbackValue;
+      return el.value;
+    }
+
+    async function promiseAllSettledCompat(promises){
+      if (typeof Promise !== 'undefined' && typeof Promise.allSettled === 'function') {
+        return Promise.allSettled(promises);
+      }
+      return Promise.all(Array.prototype.map.call(promises, function(promise){
+        return Promise.resolve(promise).then(function(value){
+          return { status: 'fulfilled', value: value };
+        }, function(reason){
+          return { status: 'rejected', reason: reason };
+        });
+      }));
+    }
+
+    function mergeResidentDocData(doc, dorm) {
+      return Object.assign({ id: doc.id }, (doc && typeof doc.data === 'function' ? doc.data() : {}) || {}, { dorm: dorm });
+    }
+
+    function flattenOneLevel(list) {
+      return Array.prototype.concat.apply([], list || []);
+    }
+
     // ===== Safety: prevent form submits from reloading the page =====
     // (If a submit handler forgets preventDefault, the page will refresh and Firestore write won't run.)
     document.addEventListener('submit', (e) => {
@@ -1330,13 +1500,13 @@
         e.stopImmediatePropagation();
 
         try {
-          const dorm = (document.getElementById('form-dorm')?.value || 'shofu').trim();
-          const name = (document.getElementById('form-name')?.value || '').trim();
-          const room = (document.getElementById('form-room')?.value || '').trim();
-          const furigana = (document.getElementById('form-furigana')?.value || '').trim();
-          const circle = (document.getElementById('form-circle')?.value || '').trim();
-          const luggage = Number(document.getElementById('form-luggage')?.value ?? 0);
-          const mail = Number(document.getElementById('form-mail')?.value ?? 0);
+          const dorm = String(getElementValueById('form-dorm', 'shofu') || 'shofu').trim();
+          const name = String(getElementValueById('form-name', '') || '').trim();
+          const room = String(getElementValueById('form-room', '') || '').trim();
+          const furigana = String(getElementValueById('form-furigana', '') || '').trim();
+          const circle = String(getElementValueById('form-circle', '') || '').trim();
+          const luggage = Number(getElementValueById('form-luggage', 0));
+          const mail = Number(getElementValueById('form-mail', 0));
 
           if (!name) {
             alert('名前を入力してください');
@@ -1430,7 +1600,7 @@
         e.stopPropagation();
 
         try {
-          const dorm = (document.getElementById('bulk-form-dorm')?.value || 'shofu').trim();
+          const dorm = String(getElementValueById('bulk-form-dorm', 'shofu') || 'shofu').trim();
           const dormKey = (dorm === 'meizen') ? 'meizen' : 'shofu';
           const colName = `residents_${dormKey}`;
 
@@ -1974,7 +2144,8 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
           if (typeof orig !== 'function') return;
           if (orig.__morningWrapped) return;
 
-          const wrapped = async function(...args){
+          const wrapped = async function(){
+            var args = Array.prototype.slice.call(arguments);
             // 最後の引数に { force:true } が付いていたら抑止をバイパス
             let force = false;
             try{
@@ -2949,7 +3120,8 @@ function unifiedConfirm(action){
       if (typeof orig !== 'function') return;
       if (orig.__morningCancelWrapped) return;
 
-      function wrapped(msg, ...rest){
+      function wrapped(msg){
+        var rest = Array.prototype.slice.call(arguments, 1);
         const text = (msg == null) ? '' : String(msg);
         if (shouldBlock(text)) return;
 
@@ -2959,7 +3131,7 @@ function unifiedConfirm(action){
         if (now - prev < TTL_MS) return; // 同じメッセージの連打を抑止
         last.set(key, now);
 
-        return orig.call(this, msg, ...rest);
+        return orig.apply(this, [msg].concat(rest));
       }
       wrapped.__morningCancelWrapped = true;
       window[fnName] = wrapped;
@@ -4912,7 +5084,11 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
        list.sort((a,b)=>{  
           const dA = a && a.dorm || '', dB = b && b.dorm || '';
           const order = { shofu: 0, meizen: 1 };
-          if (dA !== dB) return (order[dA] ?? 99) - (order[dB] ?? 99);
+          if (dA !== dB) {
+            const orderA = Object.prototype.hasOwnProperty.call(order, dA) ? order[dA] : 99;
+            const orderB = Object.prototype.hasOwnProperty.call(order, dB) ? order[dB] : 99;
+            return orderA - orderB;
+          }
           const rnA = parseInt(a && a.roomNumber, 10) || 0;
           const rnB = parseInt(b && b.roomNumber, 10) || 0;
           if (rnA !== rnB) return rnA - rnB;
@@ -5153,10 +5329,12 @@ async function deleteResident(residentId, residentName) {
         if (r) return { dorm: (currentCollectionName === 'all' ? null : (currentCollectionName.split('_')[1] || null)), data: r };
       }catch(_){}
       try{
-        const [sh, me] = await Promise.allSettled([
+        const settled = await promiseAllSettledCompat([
           db.collection('residents_shofu').doc(residentId).get(),
           db.collection('residents_meizen').doc(residentId).get()
         ]);
+        const sh = settled[0];
+        const me = settled[1];
         if (sh.status === 'fulfilled' && sh.value && sh.value.exists) return { dorm: 'shofu', data: Object.assign({ id: residentId, dorm: 'shofu' }, sh.value.data()) };
         if (me.status === 'fulfilled' && me.value && me.value.exists) return { dorm: 'meizen', data: Object.assign({ id: residentId, dorm: 'meizen' }, me.value.data()) };
       }catch(_){}
@@ -5203,10 +5381,12 @@ async function __resolveResidentAndDorm(residentId){
     if (r) return { dorm: (currentCollectionName === 'all' ? null : (currentCollectionName.split('_')[1] || null)), data: r };
   }catch(_){}
   try{
-    const [sh, me] = await Promise.allSettled([
+    const settled = await promiseAllSettledCompat([
       db.collection('residents_shofu').doc(residentId).get(),
       db.collection('residents_meizen').doc(residentId).get()
     ]);
+    const sh = settled[0];
+    const me = settled[1];
     if (sh.status === 'fulfilled' && sh.value && sh.value.exists) return { dorm: 'shofu', data: Object.assign({ id: residentId, dorm: 'shofu' }, sh.value.data()) };
     if (me.status === 'fulfilled' && me.value && me.value.exists) return { dorm: 'meizen', data: Object.assign({ id: residentId, dorm: 'meizen' }, me.value.data()) };
   }catch(_){}
@@ -6439,10 +6619,10 @@ if(elements.changePasswordForm){
             try{
                 const lists = await Promise.all(dorms.map(d =>
                    db.collection(`residents_${d}`).get().then(snap =>
-                     snap.docs.map(doc => ({ id: doc.id, ...doc.data(), dorm:d }))
+                     snap.docs.map(doc => mergeResidentDocData(doc, d))
                    )
                 ));
-                const combined = lists.flat().sort((a,b)=>{
+                const combined = flattenOneLevel(lists).sort((a,b)=>{
                     const idxA=dorms.indexOf(a.dorm), idxB=dorms.indexOf(b.dorm);
                     if(idxA!==idxB) return idxA-idxB;
                     return (parseInt(a.roomNumber)||0)-(parseInt(b.roomNumber)||0);
@@ -6534,7 +6714,7 @@ if(elements.changePasswordForm){
             if (unsubscribe) unsubscribe();
             unsubscribe = db.collection(collectionName).onSnapshot(snapshot => {
                 const dormKey = collectionName.split('_')[1];
-                allResidents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), dorm: dormKey }));
+                allResidents = snapshot.docs.map(doc => mergeResidentDocData(doc, dormKey));
                 // Show self-select modal if first visit
                 if (!localStorage.getItem('myResidentId')) {
                   const selectModal = document.getElementById('self-select-modal');
@@ -6543,10 +6723,10 @@ if(elements.changePasswordForm){
                     const dorms = ['shofu', 'meizen'];
                     const lists = await Promise.all(dorms.map(d =>
                       db.collection(`residents_${d}`).get().then(snap =>
-                        snap.docs.map(doc => ({ id: doc.id, ...doc.data(), dorm: d }))
+                        snap.docs.map(doc => mergeResidentDocData(doc, d))
                       )
                     ));
-                    const combined = lists.flat().sort((a, b) => {
+                    const combined = flattenOneLevel(lists).sort((a, b) => {
                       const idxA = dorms.indexOf(a.dorm), idxB = dorms.indexOf(b.dorm);
                       if (idxA !== idxB) return idxA - idxB;
                       return (parseInt(a.roomNumber) || 0) - (parseInt(b.roomNumber) || 0);
@@ -6623,10 +6803,11 @@ if(elements.changePasswordForm){
             let meizenDocs = [];
 
             const renderMerged = () => {
-                allResidents = [
-                    ...shofuDocs.map(doc => ({ id: doc.id, ...doc.data(), dorm: 'shofu' })),
-                    ...meizenDocs.map(doc => ({ id: doc.id, ...doc.data(), dorm: 'meizen' }))
-                ];
+                allResidents = shofuDocs.map(function(doc){
+                    return mergeResidentDocData(doc, 'shofu');
+                }).concat(meizenDocs.map(function(doc){
+                    return mergeResidentDocData(doc, 'meizen');
+                }));
                 renderTable();
             };
 
