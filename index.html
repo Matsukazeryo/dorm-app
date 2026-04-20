@@ -1821,6 +1821,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
     window.__morningCommitInProgress = false; // commit/restore中はステージングをバイパス
     window.__morningFinishing = false;
     window.__morningLastCommitError = null;
+    window.__morningLastNotificationError = null;
 
     function __mergeObject(a,b){
       const out = Object.assign({}, a || {});
@@ -1944,6 +1945,69 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       return Array.from(entryMap.entries()).map(([path, patch]) => ({ path, patch }));
     }
 
+    function __buildMorningNotificationRunId(){
+      const now = Date.now().toString(36);
+      const rand = Math.random().toString(36).slice(2, 8);
+      return 'morning_' + now + '_' + rand;
+    }
+
+    function __parseMorningCommitPath(path){
+      try{
+        const parts = String(path || '').split('/').filter(Boolean);
+        const collectionName = parts.length >= 2 ? parts[parts.length - 2] : '';
+        const residentId = parts.length ? parts[parts.length - 1] : '';
+        const dorm = collectionName === 'residents_shofu'
+          ? 'shofu'
+          : collectionName === 'residents_meizen'
+            ? 'meizen'
+            : null;
+        return { collectionName, residentId, dorm };
+      }catch(_){
+        return { collectionName: '', residentId: '', dorm: null };
+      }
+    }
+
+    function __buildMorningNotificationResidents(entries){
+      const residentMap = new Map();
+      try{
+        (entries || []).forEach((entry) => {
+          const parsed = __parseMorningCommitPath(entry && entry.path);
+          const residentId = parsed && parsed.residentId ? parsed.residentId : '';
+          if (!residentId) return;
+
+          const patch = entry && entry.patch ? entry.patch : {};
+          const luggage = __normalizeMorningCountValue(patch.luggage);
+          const mail = __normalizeMorningCountValue(patch.mail);
+          const luggageCount = luggage != null ? luggage : 0;
+          const mailCount = mail != null ? mail : 0;
+          if ((luggageCount + mailCount) <= 0) return;
+
+          const resident = __getResidentSnapshotForMorning(residentId) || {};
+          residentMap.set(residentId, {
+            residentId,
+            dorm: parsed.dorm || (resident && resident.dorm) || null,
+            name: resident && resident.name ? resident.name : '',
+            luggage: luggageCount,
+            mail: mailCount
+          });
+        });
+      }catch(_){ }
+      return Array.from(residentMap.values());
+    }
+
+    async function __enqueueMorningNotificationSummary(entries, runId){
+      const residents = __buildMorningNotificationResidents(entries);
+      if (!residents.length) return true;
+      await db.collection('logs').add({
+        action: '__notify_morning_summary__',
+        runId: runId || __buildMorningNotificationRunId(),
+        targetDorm: window.__morningModeTargetDorm || 'all',
+        residents: residents,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      return true;
+    }
+
     function __toUpdateObject(args){
       // update(obj) or update(field, value, field2, value2...)
       try{
@@ -2011,22 +2075,38 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       }catch(_){ }
     }
 
-    async function commitMorningStagedWrites(){
+    async function commitMorningStagedWrites(options){
+      const opts = Object.assign({ enqueueSummary: false }, options || {});
       let committed = false;
+      let normalizedEntries = [];
+      let commitEntries = [];
+      let notificationRunId = '';
       try{
         if (!db || typeof db.batch !== 'function') return false;
 
         window.__morningCommitInProgress = true;
         window.__morningLastCommitError = null;
-        const normalizedEntries = __buildMorningCommitEntries();
+        window.__morningLastNotificationError = null;
+        normalizedEntries = __buildMorningCommitEntries();
         if (!normalizedEntries.length) {
           committed = true;
           return true;
         }
 
+        if (opts.enqueueSummary) {
+          notificationRunId = __buildMorningNotificationRunId();
+        }
+        commitEntries = normalizedEntries.map((entry) => {
+          const patch = Object.assign({}, entry && entry.patch ? entry.patch : {});
+          if (notificationRunId) {
+            patch.__skipCountNotificationOnce = notificationRunId;
+          }
+          return { path: entry.path, patch };
+        });
+
         let batch = db.batch();
         let opCount = 0;
-        for (const entry of normalizedEntries){
+        for (const entry of commitEntries){
           const ref = db.doc(entry.path);
           batch.update(ref, entry.patch);
           opCount++;
@@ -2039,17 +2119,42 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
         if (opCount > 0) {
           await batch.commit();
         }
+        if (opts.enqueueSummary) {
+          try{
+            await __enqueueMorningNotificationSummary(normalizedEntries, notificationRunId);
+          }catch(notificationError){
+            window.__morningLastNotificationError = notificationError;
+            console.warn('[morning] summary notification enqueue failed', notificationError);
+          }
+        }
         committed = true;
       }catch(e){
         console.warn('[morning] batch commit failed; retrying one by one', e);
         try{
-          const retryEntries = __buildMorningCommitEntries();
-          if (!retryEntries.length) {
+          normalizedEntries = __buildMorningCommitEntries();
+          if (!normalizedEntries.length) {
             committed = true;
             return true;
           }
-          for (const entry of retryEntries){
+          if (!commitEntries.length) {
+            commitEntries = normalizedEntries.map((entry) => {
+              const patch = Object.assign({}, entry && entry.patch ? entry.patch : {});
+              if (notificationRunId) {
+                patch.__skipCountNotificationOnce = notificationRunId;
+              }
+              return { path: entry.path, patch };
+            });
+          }
+          for (const entry of commitEntries){
             await db.doc(entry.path).update(entry.patch);
+          }
+          if (opts.enqueueSummary) {
+            try{
+              await __enqueueMorningNotificationSummary(normalizedEntries, notificationRunId);
+            }catch(notificationError){
+              window.__morningLastNotificationError = notificationError;
+              console.warn('[morning] summary notification enqueue failed', notificationError);
+            }
           }
           committed = true;
           return true;
@@ -4590,6 +4695,46 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
     let __annotating = false;
     let __annotateTimer = null;
     let __morningConfirmShown = false; // 初回だけ確認ダイアログを出すためのフラグ
+    const MORNING_DORMS = ['shofu', 'meizen'];
+    const MORNING_BATCH_LIMIT = 480;
+
+    function setMorningOverlayVisible(visible){
+      const overlay = document.getElementById('loading-overlay');
+      if (overlay) overlay.style.display = visible ? 'flex' : 'none';
+    }
+
+    function refreshMorningTable(){
+      try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_){}
+    }
+
+    function disconnectMorningObserver(){
+      if (__morningObserver){
+        try { __morningObserver.disconnect(); } catch(_){}
+        __morningObserver = null;
+      }
+    }
+
+    function getMorningDormLabel(dormKey){
+      if (dormKey === 'meizen') return '（明善寮）';
+      if (dormKey === 'both') return '（両寮）';
+      return '（松風寮）';
+    }
+
+    function mergeMorningRefMaps(a, b){
+      const m = new Map();
+      if (a) a.forEach((v, k) => m.set(k, v));
+      if (b) b.forEach((v, k) => m.set(k, v));
+      return m;
+    }
+
+    function syncMorningTargetDormFromRef(){
+      try{
+        window.__morningModeTargetDorm = (morningRef && morningRef.dorm === 'both') ? 'all' : (morningRef && morningRef.dorm) || 'all';
+      }catch(_){
+        window.__morningModeTargetDorm = window.__morningModeTargetDorm || 'all';
+      }
+    }
+
     function scheduleAnnotate(){
       if (!isMorningMode) return;
       if (__annotateTimer) return;
@@ -4621,9 +4766,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
     function ensureMorningObserver(){
       const tbody = document.querySelector('#resident-table tbody');
       if (!tbody) return;
-      if (__morningObserver) {
-        try { __morningObserver.disconnect(); } catch(_){}
-      }
+      disconnectMorningObserver();
       __morningObserver = new MutationObserver((mutations) => {
         if (!isMorningMode) return;
         if (__annotating) return; // ignore our own DOM writes
@@ -4686,7 +4829,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
           }
         }
 
-        if (opCount >= 480){
+        if (opCount >= MORNING_BATCH_LIMIT){
           batch.commit().catch(()=>{});
           batch = db.batch();
           opCount = 0;
@@ -4704,7 +4847,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       snap.forEach(doc => {
         batch.update(db.collection(`residents_${dormKey}`).doc(doc.id), { luggage: 0, mail: 0 });
         opCount++;
-        if (opCount >= 480){
+        if (opCount >= MORNING_BATCH_LIMIT){
           commits.push(batch.commit());
           batch = db.batch();
           opCount = 0;
@@ -4719,12 +4862,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       const l = document.getElementById('morning-banner-dorm');
       if (b){
         b.style.display = 'flex';
-        if (l) {
-          let label = '（松風寮）';
-          if (morningRef.dorm === 'meizen') label = '（明善寮）';
-          else if (morningRef.dorm === 'both') label = '（両寮）';
-          l.textContent = label;
-        }
+        if (l) l.textContent = getMorningDormLabel(morningRef.dorm);
       }
     }
 
@@ -4737,27 +4875,19 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       try {
         document.querySelectorAll('.ref-line, .diff-badge').forEach(el => el.remove());
       } catch(_){}
-      if (__morningObserver){
-        try { __morningObserver.disconnect(); } catch(_){}
-        __morningObserver = null;
-      }
+      disconnectMorningObserver();
     }
 
     async function finishMorning(){
       if (window.__morningFinishing) return;
       window.__morningFinishing = true;
 
-      const overlay = document.getElementById('loading-overlay');
-      if (overlay) overlay.style.display = 'flex';
+      setMorningOverlayVisible(true);
 
       try{
-        try{
-          window.__morningModeTargetDorm = (morningRef && morningRef.dorm === 'both') ? 'all' : (morningRef && morningRef.dorm) || 'all';
-        }catch(_){
-          window.__morningModeTargetDorm = window.__morningModeTargetDorm || 'all';
-        }
+        syncMorningTargetDormFromRef();
 
-        const ok = await commitMorningStagedWrites();
+        const ok = await commitMorningStagedWrites({ enqueueSummary: true });
         if (ok === false) {
           const err = window.__morningLastCommitError;
           const detail = (err && (err.code || err.message)) ? `\n[${err.code || 'error'}] ${err.message}` : '';
@@ -4767,13 +4897,18 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 
         window.__morningFinishRequested = false;
         closeMorningModeUI();
-        try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_){}
+        refreshMorningTable();
+        if (window.__morningLastNotificationError) {
+          const notifyErr = window.__morningLastNotificationError;
+          const notifyDetail = (notifyErr && (notifyErr.code || notifyErr.message)) ? `\n[${notifyErr.code || 'error'}] ${notifyErr.message}` : '';
+          alert('朝の庶務の数は反映しましたが、まとめ通知の登録に失敗しました。' + notifyDetail);
+        }
       }catch(e){
         console.error('finishMorning error', e);
         const detail = (e && (e.code || e.message)) ? `\n[${e.code || 'error'}] ${e.message}` : '';
         alert('朝の庶務の終了に失敗しました。' + detail);
       } finally {
-        if (overlay) overlay.style.display = 'none';
+        setMorningOverlayVisible(false);
         window.__morningFinishing = false;
       }
     }
@@ -4788,8 +4923,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       if (!ok) return;
 
       __morningStarting = true;
-      const overlay = document.getElementById('loading-overlay');
-      if (overlay) overlay.style.display = 'flex';
+      setMorningOverlayVisible(true);
 
       let refShofu = null, refMeizen = null;
       try { refShofu  = await snapshotDormToFirestore('shofu'); }  catch(e){ console.warn('snapshot shofu failed', e); alert('参考データ（松風）の保存に失敗しました。続行します。'); }
@@ -4801,7 +4935,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       } catch(e){
         console.error('zero both failed', e);
         alert('全0の初期化に失敗しました。');
-        if (overlay) overlay.style.display = 'none';
+        setMorningOverlayVisible(false);
         __morningStarting = false;
         return;
       }
@@ -4824,16 +4958,10 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
         }
       } catch(_) {}
       morningRef.dorm = 'both';
-      const mergeMap = (a, b) => {
-        const m = new Map();
-        if (a) a.forEach((v, k) => m.set(k, v));
-        if (b) b.forEach((v, k) => m.set(k, v));
-        return m;
-      };
-      morningRef.byId        = mergeMap(refShofu && refShofu.byId,        refMeizen && refMeizen.byId);
-      morningRef.byName      = mergeMap(refShofu && refShofu.byName,      refMeizen && refMeizen.byName);
-      morningRef.byRoom      = mergeMap(refShofu && refShofu.byRoom,      refMeizen && refMeizen.byRoom);
-      morningRef.byComposite = mergeMap(refShofu && refShofu.byComposite, refMeizen && refMeizen.byComposite);
+      morningRef.byId        = mergeMorningRefMaps(refShofu && refShofu.byId,        refMeizen && refMeizen.byId);
+      morningRef.byName      = mergeMorningRefMaps(refShofu && refShofu.byName,      refMeizen && refMeizen.byName);
+      morningRef.byRoom      = mergeMorningRefMaps(refShofu && refShofu.byRoom,      refMeizen && refMeizen.byRoom);
+      morningRef.byComposite = mergeMorningRefMaps(refShofu && refShofu.byComposite, refMeizen && refMeizen.byComposite);
       morningRef.startedAt   = Date.now();
 
       try { addLog('朝の庶務開始', '[both] 参考＝直前スナップショット取得、両寮を全0初期化'); } catch(_){}
@@ -4847,11 +4975,11 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       if (allBtn) { try { allBtn.click(); } catch(_){ } }
 
       showMorningBanner();
-      try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_){}
+      refreshMorningTable();
       scheduleAnnotate();
       ensureMorningObserver();
 
-      if (overlay) overlay.style.display = 'none';
+      setMorningOverlayVisible(false);
       __morningStarting = false;
     }
 
@@ -5203,8 +5331,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
     async function cancelMorningAndRestore(){
       try{
         if (!isMorningMode) return;
-        const overlay = document.getElementById('loading-overlay');
-        if (overlay) overlay.style.display = 'flex';
+        setMorningOverlayVisible(true);
         const btn = document.getElementById('morning-cancel-btn');
         if (btn) btn.disabled = true;
 
@@ -5227,7 +5354,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
         }
 
         // Firestore バッチで安全に復元（各 480 件で区切る）
-        for (const dormKey of ['shofu','meizen']){
+        for (const dormKey of MORNING_DORMS){
           const list = updatesByDorm[dormKey];
           if (!list || !list.length) continue;
           let batch = db.batch();
@@ -5236,7 +5363,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
             const dref = db.collection(`residents_${dormKey}`).doc(u.id);
             batch.update(dref, { luggage: u.luggage, mail: u.mail });
             opCount++;
-            if (opCount >= 480){
+            if (opCount >= MORNING_BATCH_LIMIT){
               await batch.commit();
               batch = db.batch();
               opCount = 0;
@@ -5252,13 +5379,12 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
         const detail = (e && (e.code || e.message)) ? `\n[${e.code || 'error'}] ${e.message}` : '';
         alert('取り消しに失敗しました。' + detail + '\n権限やネットワークを確認してください。');
       } finally {
-        const overlay = document.getElementById('loading-overlay');
-        if (overlay) overlay.style.display = 'none';
+        setMorningOverlayVisible(false);
         const btn = document.getElementById('morning-cancel-btn');
         if (btn) btn.disabled = false;
         // 表示上も朝モードを終了して注釈を消す
         closeMorningModeUI();
-        try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_){}
+        refreshMorningTable();
       }
     }
 
