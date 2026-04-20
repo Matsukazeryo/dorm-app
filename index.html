@@ -3045,6 +3045,65 @@ function unifiedConfirm(action){
   });
 }
 
+// ==== 朝の庶務ボタンは「確認後に実行」を1本化する ====
+(function bindMorningUnifiedButtons(){
+  if (window.__bindMorningUnifiedButtons) return;
+  window.__bindMorningUnifiedButtons = true;
+  window.__morningUseUnifiedButtonInterceptor = true;
+  window.__morningUnifiedActionInFlight = false;
+
+  document.addEventListener('click', function(ev){
+    var runEl = ev.target && ev.target.closest && ev.target.closest('#morning-run-btn');
+    var cancelEl = ev.target && ev.target.closest && ev.target.closest('#morning-cancel-btn');
+    var finishEl = ev.target && ev.target.closest && ev.target.closest('#morning-finish-btn');
+    var action = '';
+    var btn = null;
+
+    if (runEl) { action = 'start'; btn = runEl; }
+    else if (cancelEl) { action = 'cancel'; btn = cancelEl; }
+    else if (finishEl) { action = 'finish'; btn = finishEl; }
+    else return;
+
+    ev.preventDefault();
+    ev.stopPropagation();
+    ev.stopImmediatePropagation();
+
+    if (!btn || btn.disabled) return;
+    if (window.__morningUnifiedActionInFlight) return;
+
+    window.__morningUnifiedActionInFlight = true;
+    Promise.resolve().then(async function(){
+      try{
+        if (action === 'finish') window.__morningFinishRequested = false;
+        if (action === 'cancel') window.__morningFinishRequested = false;
+
+        var ok = await unifiedConfirm(action);
+        if (!ok) {
+          if (action === 'finish') window.__morningFinishRequested = false;
+          return;
+        }
+
+        if (action === 'start') {
+          await startMorning(true);
+          return;
+        }
+        if (action === 'cancel') {
+          await cancelMorningAndRestore();
+          return;
+        }
+        if (action === 'finish') {
+          window.__morningFinishRequested = true;
+          await finishMorning();
+        }
+      }catch(e){
+        console.warn('morning unified button handler failed', action, e);
+      }finally{
+        window.__morningUnifiedActionInFlight = false;
+      }
+    });
+  }, true);
+})();
+
 // ==== OS confirm() を1回だけ抑止（朝の庶務「取り消し」用）====
 (function patchWindowConfirmOnce(){
   if (window.__confirmPatchedForMorningCancel) return;
@@ -3065,6 +3124,7 @@ function unifiedConfirm(action){
 // ==== 朝の庶務: 「取り消し」実行が先に走る不具合を強制的に修正 ==== 
 // 1回目のクリックでは確認だけ出して処理は止める → OKのときだけ、元のハンドラを2回目クリックで実行させる
 (function fixMorningCancelOrder(){
+  if (window.__morningUseUnifiedButtonInterceptor) return;
   if (window.__fixMorningCancelOrder) return;
   window.__fixMorningCancelOrder = true;
 
@@ -4724,7 +4784,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       if (__morningStarting) return;
 
       // ★ここで必ず確認ダイアログを出し、OKのときだけスナップショット＋0リセットを実行する
-      const ok = await unifiedConfirm('start');
+      const ok = skipConfirm ? true : await unifiedConfirm('start');
       if (!ok) return;
 
       __morningStarting = true;
