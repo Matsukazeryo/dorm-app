@@ -197,7 +197,7 @@
         }
         .resident-note{
             display:block;
-            margin-top:6px;
+            margin-top:0;
             font-size:0.74em;
             line-height:1.45;
             color:#b9770e;
@@ -207,10 +207,16 @@
         body.dark-theme .resident-note{
             color:#f5c16c;
         }
+        .resident-note.is-empty{
+            color:#95a5a6;
+        }
+        body.dark-theme .resident-note.is-empty{
+            color:#7f8c8d;
+        }
         .resident-note-editor{
             display:none;
             width:100%;
-            margin-top:6px;
+            margin-top:0;
         }
         body.count-edit-mode .resident-note-editor{
             display:flex;
@@ -257,6 +263,31 @@
         }
         .resident-note-status.is-error{
             color:#c0392b;
+        }
+        .note-col .cell-content{
+            min-width:180px;
+            justify-content:flex-start;
+            text-align:left;
+            align-items:flex-start;
+        }
+        .off-note{
+          margin:16px auto 0;
+          max-width:420px;
+          padding:12px 14px;
+          border-radius:12px;
+          background:var(--controls-bg);
+          border:1px solid var(--border-color);
+          text-align:left;
+        }
+        .off-note-label{
+          display:block;
+          margin-bottom:4px;
+          font-size:0.78rem;
+          font-weight:700;
+          color:#7f8c8d;
+        }
+        body.dark-theme .off-note-label{
+          color:#bdc3c7;
         }
         body.show-furigana .furigana-text{
             display:block;
@@ -952,11 +983,12 @@
                     <th><div class="cell-content">名前</div></th>
                     <th><div class="cell-content">荷物</div></th>
                     <th><div class="cell-content">郵便</div></th>
+                    <th class="note-col"><div class="cell-content">備考</div></th>
                     <th class="edit-op-header"><div class="cell-content">操作</div></th>
                 </tr>
             </thead>
             <tbody>
-                <tr><td colspan="5">データベースから読み込み中...</td></tr>
+                <tr><td colspan="6">データベースから読み込み中...</td></tr>
             </tbody>
         </table>
     </div>
@@ -1122,7 +1154,7 @@
       </div>
       <div class="form-group">
         <label for="edit-note">備考</label>
-        <textarea id="edit-note" rows="3" maxlength="120" placeholder="例: クール便 / 要冷蔵 / 不在票あり"></textarea>
+        <textarea id="edit-note" rows="3" maxlength="120" placeholder="備考を入力"></textarea>
       </div>
       <div class="form-actions">
         <button type="button" id="edit-cancel-btn" class="header-btn" style="background:#e74c3c;">キャンセル</button>
@@ -5261,12 +5293,27 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       }catch(_){ }
     }
 
-    function renderResidentNoteHtml(value){
+    function renderResidentNoteHtml(value, emptyLabel){
       const note = normalizeResidentNote(value);
-      if (!note) return '';
+      if (!note) {
+        if (!emptyLabel) return '';
+        return `<span class="resident-note is-empty">${escapeHtml(emptyLabel)}</span>`;
+      }
       const title = escapeHtml(note.replace(/\n/g, ' / '));
       const body = escapeHtml(note).replace(/\n/g, '<br>');
-      return `<span class="resident-note" title="${title}">備考: ${body}</span>`;
+      return `<span class="resident-note" title="${title}">${body}</span>`;
+    }
+
+    function renderResidentOffNoteHtml(value){
+      const note = normalizeResidentNote(value);
+      if (!note) return '';
+      const body = escapeHtml(note).replace(/\n/g, '<br>');
+      return `
+        <div class="off-note">
+          <span class="off-note-label">備考</span>
+          <span class="resident-note">${body}</span>
+        </div>
+      `;
     }
 
     function renderResidentNoteEditorHtml(residentId, value){
@@ -5275,7 +5322,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       const body = escapeHtml(sourceValue == null ? '' : String(sourceValue));
       return `
         <div class="resident-note-editor">
-          <textarea class="resident-note-input" data-resident-id="${residentId}" rows="2" maxlength="120" placeholder="例: クール便 / 要冷蔵 / 不在票あり" oninput="updateResidentInlineNoteDraft('${residentId}', this.value)">${body}</textarea>
+          <textarea class="resident-note-input" data-resident-id="${residentId}" rows="2" maxlength="120" placeholder="備考を入力" oninput="updateResidentInlineNoteDraft('${residentId}', this.value)">${body}</textarea>
           <div class="resident-note-editor-actions">
             <span class="resident-note-status" data-resident-note-status="${residentId}"></span>
             <button type="button" class="resident-note-save-btn" data-resident-id="${residentId}" onclick="saveResidentInlineNote('${residentId}')">備考を保存</button>
@@ -7032,7 +7079,7 @@ if(elements.changePasswordForm){
           if (overlay) overlay.style.display = 'flex';
           if (btn){ btn.disabled = true; btn.textContent = '読み込み中...'; }
           const tbody = document.querySelector('#resident-table tbody');
-          if (tbody) tbody.innerHTML = '<tr><td colspan="5">読み込み中...</td></tr>';
+          if (tbody) tbody.innerHTML = '<tr><td colspan="6">読み込み中...</td></tr>';
           const id = select.value;
           localStorage.setItem('myResidentId', id);
           var opt = select.options[select.selectedIndex];
@@ -7113,7 +7160,7 @@ if(elements.changePasswordForm){
                         if (btn) { btn.disabled = true; btn.textContent = '読み込み中...'; }
 
                         const tbody = document.querySelector('#resident-table tbody');
-                        if (tbody) tbody.innerHTML = '<tr><td colspan="5">読み込み中...</td></tr>';
+                        if (tbody) tbody.innerHTML = '<tr><td colspan="6">読み込み中...</td></tr>';
 
                         const id = select.value;
                         localStorage.setItem('myResidentId', id);
@@ -7247,7 +7294,7 @@ if(elements.changePasswordForm){
             );
             elements.tableBody.innerHTML = ''; 
             if (filteredResidents.length === 0) {
-                elements.tableBody.innerHTML = '<tr><td colspan="5">該当する寮生が見つかりません。</td></tr>';
+                elements.tableBody.innerHTML = '<tr><td colspan="6">該当する寮生が見つかりません。</td></tr>';
             } else {
                 filteredResidents.forEach(resident => {
                     const dorm = resident.dorm || currentCollectionName.split('_')[1];
@@ -7256,7 +7303,8 @@ if(elements.changePasswordForm){
                     const residentNoteValue = resident.note || resident.memo || resident.notes || '';
                     const residentNoteHtml = isCountEditMode
                       ? renderResidentNoteEditorHtml(resident.id, residentNoteValue)
-                      : renderResidentNoteHtml(residentNoteValue);
+                      : renderResidentNoteHtml(residentNoteValue, 'なし');
+                    const residentOffNoteHtml = renderResidentOffNoteHtml(residentNoteValue);
                     const row = document.createElement('tr');
                     if (!elements.sohmuToggle.checked) {
                         // 庶務モード OFF のときのレイアウト
@@ -7265,7 +7313,7 @@ if(elements.changePasswordForm){
                         const mailCount = Math.max(0, parseInt(resident.mail, 10) || 0);
                         const hasReceivableItems = (luggageCount + mailCount) > 0;
                         row.innerHTML = `
-                          <td colspan="5" style="border:none; padding:20px; text-align:center;">
+                          <td colspan="6" style="border:none; padding:20px; text-align:center;">
                             <div class="off-mode-container">
                               <div class="off-name"><span class="dorm-marker">${dormMarker}</span>${resident.name}</div>
                               <div class="off-counts">
@@ -7278,6 +7326,7 @@ if(elements.changePasswordForm){
                                   <span class="off-count-number">${mailCount}</span>
                                 </div>
                               </div>
+                              ${residentOffNoteHtml}
                               <div class="off-mode-actions">
                                 <button type="button" class="off-receive-btn" data-resident-id="${resident.id}" ${hasReceivableItems ? '' : 'disabled'}>受け取る</button>
                               </div>
@@ -7298,12 +7347,12 @@ if(elements.changePasswordForm){
                                   <span class="furigana-text${resident.furigana && resident.furigana.length > 6 ? ' furigana-small' : ''}">${resident.furigana || ''}</span>
                                   <span class="kanji-name">${resident.name}</span>
                                 </span>
-                                ${residentNoteHtml}
                               </span>
                             </div>
                           </td>
                           <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1)">-</button><span class="count-span">${resident.luggage}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1)">+</button></div></td>
                           <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', -1)">-</button><span class="count-span">${resident.mail}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', 1)">+</button></div></td>
+                          <td class="note-col"><div class="cell-content">${residentNoteHtml}</div></td>
                           <td class="edit-op-cell">
                             <div class="cell-content">
                               <button class="edit-btn" onclick="openEditResidentModal('${resident.id}')">編集</button>
@@ -7914,7 +7963,7 @@ if(elements.changePasswordForm){
             document.getElementById('loading-overlay').style.display = 'flex';
             btn.disabled = true;
             btn.textContent = '読み込み中...';
-            document.querySelector('#resident-table tbody').innerHTML = '<tr><td colspan="5">読み込み中...</td></tr>';
+            document.querySelector('#resident-table tbody').innerHTML = '<tr><td colspan="6">読み込み中...</td></tr>';
             const select = document.getElementById('self-select');
             const id = select.value;
             localStorage.setItem('myResidentId', id);
