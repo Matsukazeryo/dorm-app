@@ -1131,7 +1131,7 @@
             </div>
             <div class="form-group"><label for="form-name">名前 (必須)</label><input type="text" id="form-name" required></div>
             <div class="form-group"><label for="form-room">部屋番号</label><input type="text" id="form-room" inputmode="numeric" pattern="[0-9]*"></div>
-            <div class="form-group"><label for="form-furigana">ふりがな</label><input type="text" id="form-furigana" inputmode="kana"></div>
+            <div class="form-group"><label for="form-furigana">ふりがな</label><input type="text" id="form-furigana" inputmode="kana" lang="ja-Hira" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></div>
             <div class="form-group">
               <label for="form-circle">サークル</label>
               <select id="form-circle"></select>
@@ -1170,7 +1170,7 @@
       </div>
       <div class="form-group">
         <label for="edit-furigana">ふりがな</label>
-        <input type="text" id="edit-furigana" inputmode="kana">
+        <input type="text" id="edit-furigana" inputmode="kana" lang="ja-Hira" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
       </div>
       <div class="form-group">
         <label for="edit-circle">サークル</label>
@@ -4570,7 +4570,7 @@ window.addEventListener('load', function(){
       </div>
       <div>
         <label>ふりがな</label>
-        <input type="text" name="bulk-furigana[]" inputmode="kana">
+        <input type="text" name="bulk-furigana[]" inputmode="kana" lang="ja-Hira" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
       </div>
       <div>
         <label>サークル</label>
@@ -7640,7 +7640,7 @@ if(elements.changePasswordForm){
             entryDiv.innerHTML = `
                 <div class="form-group"><label>部屋番号</label><input type="text" class="bulk-room" inputmode="numeric" pattern="[0-9]*"></div>
                 <div class="form-group"><label>名前 (必須)</label><input type="text" class="bulk-name" required></div>
-                <div class="form-group"><label>ふりがな</label><input type="text" class="bulk-furigana" inputmode="kana"></div>
+                <div class="form-group"><label>ふりがな</label><input type="text" class="bulk-furigana" inputmode="kana" lang="ja-Hira" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></div>
                 <div class="form-group"><label>サークル</label><select class="bulk-circle"></select></div>
             `;
             const bulkDormSel = document.getElementById('bulk-form-dorm');
