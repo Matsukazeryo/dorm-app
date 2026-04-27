@@ -1122,7 +1122,7 @@
     <div class="modal-content">
         <div class="modal-header">
             <h2>新しい寮生を追加</h2>
-            <button id="add-modal-close-btn" class="modal-close-btn">&times;</button>
+            <button id="add-modal-close-btn" type="button" class="modal-close-btn">&times;</button>
         </div>
         <form id="add-resident-form">
             <div class="form-group">
@@ -1648,16 +1648,62 @@
       } catch (_) {}
     }, true);
 
+    function isFuriganaField(target){
+      try{
+        return !!(target && target.matches && target.matches('#form-furigana, #edit-furigana, .bulk-furigana, input[name="bulk-furigana[]"]'));
+      }catch(_){
+        return false;
+      }
+    }
+
+    function isRoomField(target){
+      try{
+        return !!(target && target.matches && target.matches('#form-room, #edit-room, .bulk-room, input[name="bulk-room[]"]'));
+      }catch(_){
+        return false;
+      }
+    }
+
     // ===== Input guard: room number = half-width digits only / furigana = hiragana only =====
     document.addEventListener('input', function(e){
       try{
         const target = e.target;
         if (!target || !target.matches) return;
-        if (target.matches('#form-room, #edit-room, .bulk-room, input[name="bulk-room[]"]')) {
+        if (isRoomField(target)) {
           sanitizeFieldValue(target, normalizeRoomNumberInput);
           return;
         }
-        if (target.matches('#form-furigana, #edit-furigana, .bulk-furigana, input[name="bulk-furigana[]"]')) {
+        if (isFuriganaField(target)) {
+          if (e.isComposing || target.__jpComposing) return;
+          sanitizeFieldValue(target, normalizeFuriganaInput);
+        }
+      }catch(_){ }
+    }, true);
+
+    document.addEventListener('compositionstart', function(e){
+      try{
+        const target = e.target;
+        if (isFuriganaField(target)) target.__jpComposing = true;
+      }catch(_){ }
+    }, true);
+
+    document.addEventListener('compositionend', function(e){
+      try{
+        const target = e.target;
+        if (!isFuriganaField(target)) return;
+        target.__jpComposing = false;
+        sanitizeFieldValue(target, normalizeFuriganaInput);
+      }catch(_){ }
+    }, true);
+
+    document.addEventListener('change', function(e){
+      try{
+        const target = e.target;
+        if (isRoomField(target)) {
+          sanitizeFieldValue(target, normalizeRoomNumberInput);
+          return;
+        }
+        if (isFuriganaField(target)) {
           sanitizeFieldValue(target, normalizeFuriganaInput);
         }
       }catch(_){ }
@@ -7542,6 +7588,27 @@ if(elements.changePasswordForm){
         function hideAddResidentModal() {
             elements.addResidentModal.classList.remove('active');
         }
+
+        (function bindAddResidentModalCloseFallback(){
+            if (window.__addResidentModalCloseFallbackBound) return;
+            window.__addResidentModalCloseFallbackBound = true;
+            document.addEventListener('click', function(ev){
+                try{
+                    const closeBtn = ev.target && ev.target.closest && ev.target.closest('#add-modal-close-btn');
+                    if (closeBtn) {
+                        ev.preventDefault();
+                        ev.stopImmediatePropagation();
+                        hideAddResidentModal();
+                        return;
+                    }
+                    const overlay = ev.target && ev.target.id === 'add-resident-modal' ? ev.target : null;
+                    if (overlay) {
+                        ev.preventDefault();
+                        hideAddResidentModal();
+                    }
+                }catch(_){ }
+            }, true);
+        })();
 
         function saveNewResident(event) {
             event.preventDefault();
