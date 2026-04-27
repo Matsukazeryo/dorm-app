@@ -1130,8 +1130,8 @@
                 <select id="form-dorm" required><option value="shofu">松風寮</option><option value="meizen">明善寮</option></select>
             </div>
             <div class="form-group"><label for="form-name">名前 (必須)</label><input type="text" id="form-name" required></div>
-            <div class="form-group"><label for="form-room">部屋番号</label><input type="text" id="form-room"></div>
-            <div class="form-group"><label for="form-furigana">ふりがな</label><input type="text" id="form-furigana"></div>
+            <div class="form-group"><label for="form-room">部屋番号</label><input type="text" id="form-room" inputmode="numeric" pattern="[0-9]*"></div>
+            <div class="form-group"><label for="form-furigana">ふりがな</label><input type="text" id="form-furigana" inputmode="kana"></div>
             <div class="form-group">
               <label for="form-circle">サークル</label>
               <select id="form-circle"></select>
@@ -1166,11 +1166,11 @@
       </div>
       <div class="form-group">
         <label for="edit-room">部屋番号</label>
-        <input type="text" id="edit-room">
+        <input type="text" id="edit-room" inputmode="numeric" pattern="[0-9]*">
       </div>
       <div class="form-group">
         <label for="edit-furigana">ふりがな</label>
-        <input type="text" id="edit-furigana">
+        <input type="text" id="edit-furigana" inputmode="kana">
       </div>
       <div class="form-group">
         <label for="edit-circle">サークル</label>
@@ -1589,6 +1589,32 @@
       return el.value;
     }
 
+    function toHalfWidthDigits(value){
+      return String(value == null ? '' : value).replace(/[０-９]/g, function(ch){
+        return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0);
+      });
+    }
+
+    function normalizeRoomNumberInput(value){
+      return toHalfWidthDigits(value).replace(/[^0-9]/g, '');
+    }
+
+    function toHiragana(value){
+      return String(value == null ? '' : value).replace(/[ァ-ヶ]/g, function(ch){
+        return String.fromCharCode(ch.charCodeAt(0) - 0x60);
+      });
+    }
+
+    function normalizeFuriganaInput(value){
+      return toHiragana(value).replace(/[^ぁ-ゖゔゝゞー]/g, '');
+    }
+
+    function sanitizeFieldValue(inputEl, normalizer){
+      if (!inputEl || typeof inputEl.value !== 'string' || typeof normalizer !== 'function') return;
+      var nextValue = normalizer(inputEl.value);
+      if (inputEl.value !== nextValue) inputEl.value = nextValue;
+    }
+
     async function promiseAllSettledCompat(promises){
       if (typeof Promise !== 'undefined' && typeof Promise.allSettled === 'function') {
         return Promise.allSettled(promises);
@@ -1622,6 +1648,21 @@
       } catch (_) {}
     }, true);
 
+    // ===== Input guard: room number = half-width digits only / furigana = hiragana only =====
+    document.addEventListener('input', function(e){
+      try{
+        const target = e.target;
+        if (!target || !target.matches) return;
+        if (target.matches('#form-room, #edit-room, .bulk-room, input[name="bulk-room[]"]')) {
+          sanitizeFieldValue(target, normalizeRoomNumberInput);
+          return;
+        }
+        if (target.matches('#form-furigana, #edit-furigana, .bulk-furigana, input[name="bulk-furigana[]"]')) {
+          sanitizeFieldValue(target, normalizeFuriganaInput);
+        }
+      }catch(_){ }
+    }, true);
+
     // ===== Add resident: ensure a working handler (prevents "no reaction" cases) =====
     (function bindAddResidentSubmit(){
       const form = document.getElementById('add-resident-form');
@@ -1638,11 +1679,18 @@
         try {
           const dorm = String(getElementValueById('form-dorm', 'shofu') || 'shofu').trim();
           const name = String(getElementValueById('form-name', '') || '').trim();
-          const room = String(getElementValueById('form-room', '') || '').trim();
-          const furigana = String(getElementValueById('form-furigana', '') || '').trim();
+          const room = normalizeRoomNumberInput(String(getElementValueById('form-room', '') || '').trim());
+          const furigana = normalizeFuriganaInput(String(getElementValueById('form-furigana', '') || '').trim());
           const circle = String(getElementValueById('form-circle', '') || '').trim();
           const luggage = Number(getElementValueById('form-luggage', 0));
           const mail = Number(getElementValueById('form-mail', 0));
+
+          try {
+            const roomInputEl = document.getElementById('form-room');
+            const furiganaInputEl = document.getElementById('form-furigana');
+            if (roomInputEl) roomInputEl.value = room;
+            if (furiganaInputEl) furiganaInputEl.value = furigana;
+          } catch(_){}
 
           if (!name) {
             alert('名前を入力してください');
@@ -1779,9 +1827,12 @@
             const circleEl = g.querySelector('[data-field="circle"], .bulk-circle, select[name="circle"], select[id^="bulk-circle"], select');
 
             const name = (nameEl && nameEl.value ? String(nameEl.value) : '').trim();
-            const room = (roomEl && roomEl.value ? String(roomEl.value) : '').trim();
-            const furigana = (furiEl && furiEl.value ? String(furiEl.value) : '').trim();
+            const room = normalizeRoomNumberInput((roomEl && roomEl.value ? String(roomEl.value) : '').trim());
+            const furigana = normalizeFuriganaInput((furiEl && furiEl.value ? String(furiEl.value) : '').trim());
             const circle = (circleEl && circleEl.value ? String(circleEl.value) : '').trim();
+
+            if (roomEl) roomEl.value = room;
+            if (furiEl) furiEl.value = furigana;
 
             if (!name) continue;
 
@@ -4469,11 +4520,11 @@ window.addEventListener('load', function(){
       </div>
       <div>
         <label>部屋番号</label>
-        <input type="text" name="bulk-room[]">
+        <input type="text" name="bulk-room[]" inputmode="numeric" pattern="[0-9]*">
       </div>
       <div>
         <label>ふりがな</label>
-        <input type="text" name="bulk-furigana[]">
+        <input type="text" name="bulk-furigana[]" inputmode="kana">
       </div>
       <div>
         <label>サークル</label>
@@ -5814,8 +5865,8 @@ async function openEditResidentModal(residentId){
         if (dormKeyInput) dormKeyInput.value = __editingResidentDorm;
         (dormLabel) && (dormLabel.value = (__editingResidentDorm === 'shofu' ? '松風寮' : '明善寮'));
         nameInput.value    = r.name || '';
-        roomInput && (roomInput.value = r.roomNumber || '');
-        furiInput && (furiInput.value = r.furigana || '');
+        roomInput && (roomInput.value = normalizeRoomNumberInput(r.roomNumber || ''));
+        furiInput && (furiInput.value = normalizeFuriganaInput(r.furigana || ''));
         if (circleSel) {
             setCircleOptions(circleSel, __editingResidentDorm, true);
             circleSel.value = r.circle || '';
@@ -5869,13 +5920,15 @@ async function openEditResidentModal(residentId){
 
         const updated = {
             name: (nameInput.value || '').trim(),
-            roomNumber: roomInput ? (roomInput.value || '').trim() : '',
-            furigana: furiInput ? (furiInput.value || '').trim() : '',
+            roomNumber: roomInput ? normalizeRoomNumberInput(roomInput.value || '') : '',
+            furigana: furiInput ? normalizeFuriganaInput(furiInput.value || '') : '',
             circle: circleSel ? (circleSel.value || '').trim() : '',
             luggage: Math.max(0, parseInt(lugInput && lugInput.value, 10) || 0),
             mail:    Math.max(0, parseInt(mailInput && mailInput.value, 10) || 0),
             note: normalizeResidentNote(noteInput ? noteInput.value : ''),
         };
+        if (roomInput) roomInput.value = updated.roomNumber;
+        if (furiInput) furiInput.value = updated.furigana;
         if (!updated.name) { alert('名前は必須です。'); return; }
 
         const dormKey = (dormKeyInput && dormKeyInput.value) || __editingResidentDorm || (currentCollectionName.split('_')[1] || 'shofu');
@@ -7494,10 +7547,14 @@ if(elements.changePasswordForm){
             event.preventDefault();
             const dorm = document.getElementById('form-dorm').value;
             const collection = `residents_${dorm}`;
+            const roomValue = normalizeRoomNumberInput(document.getElementById('form-room').value.trim() || '');
+            const furiganaValue = normalizeFuriganaInput(document.getElementById('form-furigana').value.trim() || '');
+            document.getElementById('form-room').value = roomValue;
+            document.getElementById('form-furigana').value = furiganaValue;
             const newResident = {
                 name: document.getElementById('form-name').value.trim(),
-                roomNumber: document.getElementById('form-room').value.trim() || '',
-                furigana: document.getElementById('form-furigana').value.trim() || '',
+                roomNumber: roomValue,
+                furigana: furiganaValue,
                 circle: document.getElementById('form-circle').value.trim() || '',
                 luggage: parseInt(document.getElementById('form-luggage').value) || 0,
                 mail: parseInt(document.getElementById('form-mail').value) || 0,
@@ -7514,9 +7571,9 @@ if(elements.changePasswordForm){
             const entryDiv = document.createElement('div');
             entryDiv.className = 'bulk-add-entry';
             entryDiv.innerHTML = `
-                <div class="form-group"><label>部屋番号</label><input type="text" class="bulk-room"></div>
+                <div class="form-group"><label>部屋番号</label><input type="text" class="bulk-room" inputmode="numeric" pattern="[0-9]*"></div>
                 <div class="form-group"><label>名前 (必須)</label><input type="text" class="bulk-name" required></div>
-                <div class="form-group"><label>ふりがな</label><input type="text" class="bulk-furigana"></div>
+                <div class="form-group"><label>ふりがな</label><input type="text" class="bulk-furigana" inputmode="kana"></div>
                 <div class="form-group"><label>サークル</label><select class="bulk-circle"></select></div>
             `;
             const bulkDormSel = document.getElementById('bulk-form-dorm');
@@ -7571,11 +7628,17 @@ if(elements.changePasswordForm){
             entries.forEach(entry => {
                 const name = entry.querySelector('.bulk-name').value.trim();
                 if (name) {
+                    const roomEl = entry.querySelector('.bulk-room');
+                    const furiEl = entry.querySelector('.bulk-furigana');
+                    const roomValue = normalizeRoomNumberInput(roomEl ? roomEl.value.trim() : '');
+                    const furiganaValue = normalizeFuriganaInput(furiEl ? furiEl.value.trim() : '');
+                    if (roomEl) roomEl.value = roomValue;
+                    if (furiEl) furiEl.value = furiganaValue;
                     const newResidentRef = db.collection(collection).doc();
                     batch.set(newResidentRef, { 
-                        roomNumber: entry.querySelector('.bulk-room').value.trim() || '',
+                        roomNumber: roomValue,
                         name: name,
-                        furigana: entry.querySelector('.bulk-furigana').value.trim() || '',
+                        furigana: furiganaValue,
                         circle: entry.querySelector('.bulk-circle').value.trim() || '',
                         luggage: 0, mail: 0 
                     });
