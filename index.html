@@ -207,6 +207,57 @@
         body.dark-theme .resident-note{
             color:#f5c16c;
         }
+        .resident-note-editor{
+            display:none;
+            width:100%;
+            margin-top:6px;
+        }
+        body.count-edit-mode .resident-note-editor{
+            display:flex;
+            flex-direction:column;
+            gap:6px;
+        }
+        .resident-note-input{
+            width:100%;
+            min-height:46px;
+            padding:6px 8px;
+            border:1px solid var(--border-color);
+            border-radius:6px;
+            background-color:var(--mode-label-bg);
+            color:var(--text-color);
+            font-family:inherit;
+            font-size:0.75em;
+            line-height:1.4;
+            resize:vertical;
+            box-sizing:border-box;
+        }
+        .resident-note-editor-actions{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:8px;
+        }
+        .resident-note-save-btn{
+            background:#d68910;
+            color:#fff;
+            border:none;
+            font-size:11px;
+            padding:5px 10px;
+            border-radius:5px;
+            cursor:pointer;
+            flex-shrink:0;
+        }
+        .resident-note-status{
+            min-height:1em;
+            font-size:0.7em;
+            color:#7f8c8d;
+        }
+        .resident-note-status.is-success{
+            color:#1e8449;
+        }
+        .resident-note-status.is-error{
+            color:#c0392b;
+        }
         body.show-furigana .furigana-text{
             display:block;
         }
@@ -5182,12 +5233,55 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       return String(value).replace(/\r\n?/g, '\n').trim();
     }
 
+    window.__residentNoteDrafts = window.__residentNoteDrafts || {};
+
+    function getResidentInlineNoteDraft(residentId){
+      try{
+        if (!residentId) return null;
+        if (!window.__residentNoteDrafts || typeof window.__residentNoteDrafts !== 'object') return null;
+        if (!Object.prototype.hasOwnProperty.call(window.__residentNoteDrafts, residentId)) return null;
+        return String(window.__residentNoteDrafts[residentId] || '');
+      }catch(_){
+        return null;
+      }
+    }
+
+    function updateResidentInlineNoteDraft(residentId, value){
+      try{
+        if (!residentId) return;
+        window.__residentNoteDrafts = window.__residentNoteDrafts || {};
+        window.__residentNoteDrafts[residentId] = String(value == null ? '' : value);
+      }catch(_){ }
+    }
+
+    function clearResidentInlineNoteDraft(residentId){
+      try{
+        if (!residentId || !window.__residentNoteDrafts) return;
+        delete window.__residentNoteDrafts[residentId];
+      }catch(_){ }
+    }
+
     function renderResidentNoteHtml(value){
       const note = normalizeResidentNote(value);
       if (!note) return '';
       const title = escapeHtml(note.replace(/\n/g, ' / '));
       const body = escapeHtml(note).replace(/\n/g, '<br>');
       return `<span class="resident-note" title="${title}">備考: ${body}</span>`;
+    }
+
+    function renderResidentNoteEditorHtml(residentId, value){
+      const draft = getResidentInlineNoteDraft(residentId);
+      const sourceValue = draft != null ? draft : value;
+      const body = escapeHtml(sourceValue == null ? '' : String(sourceValue));
+      return `
+        <div class="resident-note-editor">
+          <textarea class="resident-note-input" data-resident-id="${residentId}" rows="2" maxlength="120" placeholder="例: クール便 / 要冷蔵 / 不在票あり" oninput="updateResidentInlineNoteDraft('${residentId}', this.value)">${body}</textarea>
+          <div class="resident-note-editor-actions">
+            <span class="resident-note-status" data-resident-note-status="${residentId}"></span>
+            <button type="button" class="resident-note-save-btn" data-resident-id="${residentId}" onclick="saveResidentInlineNote('${residentId}')">備考を保存</button>
+          </div>
+        </div>
+      `;
     }
 
     function setCircleOptions(selectEl, dorm, includeEmpty = true){
@@ -6194,6 +6288,56 @@ function resolveResidentCollectionName(residentId) {
   return `residents_${dormKey}`;
 }
 
+function findResidentNoteEditorElement(selector, residentId) {
+  const list = document.querySelectorAll(selector);
+  for (let i = 0; i < list.length; i++) {
+    const el = list[i];
+    if (el && el.dataset && el.dataset.residentId === residentId) return el;
+    if (el && el.dataset && el.dataset.residentNoteStatus === residentId) return el;
+  }
+  return null;
+}
+
+function setResidentInlineNoteStatus(residentId, message, tone) {
+  const statusEl = findResidentNoteEditorElement('.resident-note-status', residentId);
+  if (!statusEl) return;
+  statusEl.textContent = message || '';
+  statusEl.classList.remove('is-success', 'is-error');
+  if (tone === 'success') statusEl.classList.add('is-success');
+  if (tone === 'error') statusEl.classList.add('is-error');
+}
+
+async function saveResidentInlineNote(residentId) {
+  const textarea = findResidentNoteEditorElement('.resident-note-input', residentId);
+  const saveBtn = findResidentNoteEditorElement('.resident-note-save-btn', residentId);
+  if (!textarea || !residentId) return;
+
+  const nextNote = normalizeResidentNote(textarea.value);
+  const targetCollection = resolveResidentCollectionName(residentId);
+  if (!targetCollection) {
+    setResidentInlineNoteStatus(residentId, '保存先を特定できません。', 'error');
+    return;
+  }
+
+  if (saveBtn) saveBtn.disabled = true;
+  textarea.disabled = true;
+  setResidentInlineNoteStatus(residentId, '保存中...', '');
+
+  try {
+    await db.collection(targetCollection).doc(residentId).update({ note: nextNote });
+    const resident = getResidentById(residentId);
+    if (resident) resident.note = nextNote;
+    clearResidentInlineNoteDraft(residentId);
+    setResidentInlineNoteStatus(residentId, '保存しました。', 'success');
+  } catch (e) {
+    console.error('saveResidentInlineNote failed', e);
+    setResidentInlineNoteStatus(residentId, '保存に失敗しました。', 'error');
+  } finally {
+    textarea.disabled = false;
+    if (saveBtn) saveBtn.disabled = false;
+  }
+}
+
 function formatReceiveSummary(luggage, mail) {
   return `現在: 荷物 ${luggage} 件 / 郵便 ${mail} 件`;
 }
@@ -7108,7 +7252,11 @@ if(elements.changePasswordForm){
                 filteredResidents.forEach(resident => {
                     const dorm = resident.dorm || currentCollectionName.split('_')[1];
                     const dormMarker = dorm === 'shofu' ? '松' : '明';
-                    const residentNoteHtml = renderResidentNoteHtml(resident.note || resident.memo || resident.notes || '');
+                    const isCountEditMode = document.body.classList.contains('count-edit-mode');
+                    const residentNoteValue = resident.note || resident.memo || resident.notes || '';
+                    const residentNoteHtml = isCountEditMode
+                      ? renderResidentNoteEditorHtml(resident.id, residentNoteValue)
+                      : renderResidentNoteHtml(residentNoteValue);
                     const row = document.createElement('tr');
                     if (!elements.sohmuToggle.checked) {
                         // 庶務モード OFF のときのレイアウト
