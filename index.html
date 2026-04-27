@@ -137,6 +137,12 @@
         th { background-color: var(--mode-label-checked-bg); color: var(--mode-label-checked-text); font-weight: bold; padding: 6px 10px; }
         .cell-content { min-height: 42px; display:flex; align-items:center; justify-content:center; padding: 6px 10px; }
         .name-cell { justify-content: flex-start; text-align: left; font-weight: 500; min-width: 180px; white-space: nowrap; }
+        .name-meta{
+            display:flex;
+            flex-direction:column;
+            align-items:flex-start;
+            min-width:0;
+        }
         .furigana-col .cell-content, .circle-col .cell-content { min-width: 100px; }
         .room-number { font-size: 0.9em; color: #7f8c8d; margin-right: 8px; min-width: 35px; text-align: right; }
         body.dark-theme .room-number { color: #bdc3c7; }
@@ -188,6 +194,18 @@
         }
         body.dark-theme .furigana-text{
             color:#bdc3c7;
+        }
+        .resident-note{
+            display:block;
+            margin-top:6px;
+            font-size:0.74em;
+            line-height:1.45;
+            color:#b9770e;
+            white-space:normal;
+            word-break:break-word;
+        }
+        body.dark-theme .resident-note{
+            color:#f5c16c;
         }
         body.show-furigana .furigana-text{
             display:block;
@@ -1050,6 +1068,10 @@
           <input type="number" id="edit-luggage" min="0" placeholder="荷物">
           <input type="number" id="edit-mail" min="0" placeholder="郵便">
         </div>
+      </div>
+      <div class="form-group">
+        <label for="edit-note">備考</label>
+        <textarea id="edit-note" rows="3" maxlength="120" placeholder="例: クール便 / 要冷蔵 / 不在票あり"></textarea>
       </div>
       <div class="form-actions">
         <button type="button" id="edit-cancel-btn" class="header-btn" style="background:#e74c3c;">キャンセル</button>
@@ -5155,6 +5177,19 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
         .replace(/'/g, '&#39;');
     }
 
+    function normalizeResidentNote(value){
+      if (value == null) return '';
+      return String(value).replace(/\r\n?/g, '\n').trim();
+    }
+
+    function renderResidentNoteHtml(value){
+      const note = normalizeResidentNote(value);
+      if (!note) return '';
+      const title = escapeHtml(note.replace(/\n/g, ' / '));
+      const body = escapeHtml(note).replace(/\n/g, '<br>');
+      return `<span class="resident-note" title="${title}">備考: ${body}</span>`;
+    }
+
     function setCircleOptions(selectEl, dorm, includeEmpty = true){
         if (!selectEl) return;
         const opts = CIRCLE_OPTIONS[dorm] || [];
@@ -5596,6 +5631,7 @@ async function openEditResidentModal(residentId){
         const circleSel = document.getElementById('edit-circle');
         const lugInput  = document.getElementById('edit-luggage');
         const mailInput = document.getElementById('edit-mail');
+        const noteInput = document.getElementById('edit-note');
         const confirmIn = document.getElementById('confirm-name');
         const saveBtn   = document.getElementById('edit-save-btn');
         const dormKeyInput = document.getElementById('edit-dorm-key');
@@ -5614,6 +5650,7 @@ async function openEditResidentModal(residentId){
         }
         lugInput  && (lugInput.value  = (typeof r.luggage === 'number' ? r.luggage : (parseInt(r.luggage)||0)));
         mailInput && (mailInput.value = (typeof r.mail    === 'number' ? r.mail    : (parseInt(r.mail)||0)));
+        noteInput && (noteInput.value = normalizeResidentNote(r.note || r.memo || r.notes || ''));
 
         window.editOriginalName = r.name || '';
         if (confirmIn) {
@@ -5644,6 +5681,7 @@ async function openEditResidentModal(residentId){
         const circleSel = document.getElementById('edit-circle');
         const lugInput  = document.getElementById('edit-luggage');
         const mailInput = document.getElementById('edit-mail');
+        const noteInput = document.getElementById('edit-note');
         const confirmIn = document.getElementById('confirm-name');
         const saveBtn   = document.getElementById('edit-save-btn');
         const dormKeyInput = document.getElementById('edit-dorm-key');
@@ -5664,6 +5702,7 @@ async function openEditResidentModal(residentId){
             circle: circleSel ? (circleSel.value || '').trim() : '',
             luggage: Math.max(0, parseInt(lugInput && lugInput.value, 10) || 0),
             mail:    Math.max(0, parseInt(mailInput && mailInput.value, 10) || 0),
+            note: normalizeResidentNote(noteInput ? noteInput.value : ''),
         };
         if (!updated.name) { alert('名前は必須です。'); return; }
 
@@ -5682,7 +5721,7 @@ async function openEditResidentModal(residentId){
             t.update(docRef, updated);
             try {
                 const diffParts = [];
-                const fields = ['name','roomNumber','furigana','circle','luggage','mail'];
+                const fields = ['name','roomNumber','furigana','circle','luggage','mail','note'];
                 fields.forEach(k => {
                     const before = (prev[k] != null ? String(prev[k]) : '');
                     const after  = (updated[k] != null ? String(updated[k]) : '');
@@ -7069,6 +7108,7 @@ if(elements.changePasswordForm){
                 filteredResidents.forEach(resident => {
                     const dorm = resident.dorm || currentCollectionName.split('_')[1];
                     const dormMarker = dorm === 'shofu' ? '松' : '明';
+                    const residentNoteHtml = renderResidentNoteHtml(resident.note || resident.memo || resident.notes || '');
                     const row = document.createElement('tr');
                     if (!elements.sohmuToggle.checked) {
                         // 庶務モード OFF のときのレイアウト
@@ -7105,9 +7145,12 @@ if(elements.changePasswordForm){
                               <span class="room-number">${resident.roomNumber}</span>
                               <span class="dorm-marker">${dormMarker}</span>
                               <span class="circle-badge">${resident.circle || ''}</span>
-                              <span class="name-stack">
-                                <span class="furigana-text${resident.furigana && resident.furigana.length > 6 ? ' furigana-small' : ''}">${resident.furigana || ''}</span>
-                                <span class="kanji-name">${resident.name}</span>
+                              <span class="name-meta">
+                                <span class="name-stack">
+                                  <span class="furigana-text${resident.furigana && resident.furigana.length > 6 ? ' furigana-small' : ''}">${resident.furigana || ''}</span>
+                                  <span class="kanji-name">${resident.name}</span>
+                                </span>
+                                ${residentNoteHtml}
                               </span>
                             </div>
                           </td>
