@@ -264,6 +264,9 @@
         .resident-note-status.is-error{
             color:#c0392b;
         }
+        .count-col .cell-content{
+            min-width:72px;
+        }
         .note-col .cell-content{
             min-width:180px;
             justify-content:flex-start;
@@ -757,6 +760,34 @@
         }
         /* モバイル向け微調整 */
         @media (max-width: 600px) {
+          .cell-content{
+            padding:5px 6px;
+          }
+          .name-cell{
+            min-width:116px;
+          }
+          .room-number{
+            min-width:24px;
+            margin-right:4px;
+            font-size:0.82em;
+          }
+          .circle-badge,
+          .dorm-marker{
+            margin:0 2px;
+          }
+          .count-col .cell-content{
+            min-width:78px;
+            justify-content:center;
+          }
+          .count-cell{
+            gap:5px;
+          }
+          .count-span{
+            min-width:22px;
+          }
+          .note-col .cell-content{
+            min-width:148px;
+          }
           .off-counts {
             gap: 10px;
           }
@@ -981,8 +1012,8 @@
                 <tr>
                     <th class="checkbox-col"><div class="cell-content"><input type="checkbox" id="select-all-checkbox"></div></th>
                     <th><div class="cell-content">名前</div></th>
-                    <th><div class="cell-content">荷物</div></th>
-                    <th><div class="cell-content">郵便</div></th>
+                    <th class="count-col luggage-col"><div class="cell-content">荷物</div></th>
+                    <th class="count-col mail-col"><div class="cell-content">郵便</div></th>
                     <th class="note-col"><div class="cell-content">備考</div></th>
                     <th class="edit-op-header"><div class="cell-content">操作</div></th>
                 </tr>
@@ -7350,8 +7381,8 @@ if(elements.changePasswordForm){
                               </span>
                             </div>
                           </td>
-                          <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1)">-</button><span class="count-span">${resident.luggage}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1)">+</button></div></td>
-                          <td><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', -1)">-</button><span class="count-span">${resident.mail}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', 1)">+</button></div></td>
+                          <td class="count-col luggage-col"><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1)">-</button><span class="count-span">${resident.luggage}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1)">+</button></div></td>
+                          <td class="count-col mail-col"><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', -1)">-</button><span class="count-span">${resident.mail}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', 1)">+</button></div></td>
                           <td class="note-col"><div class="cell-content">${residentNoteHtml}</div></td>
                           <td class="edit-op-cell">
                             <div class="cell-content">
