@@ -1606,7 +1606,7 @@
     }
 
     function normalizeFuriganaInput(value){
-      return toHiragana(value).replace(/[^ぁ-ゖゔゝゞー0-9０-９]/g, '');
+      return toHiragana(value).replace(/[^ぁ-ゖゔゝゞー 　]/g, '');
     }
 
     function sanitizeFieldValue(inputEl, normalizer){
