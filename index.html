@@ -3326,14 +3326,56 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       }
     }
     window.resyncFcmToken = resyncFcmToken;
-    // アプリ復帰時にトークン保存を自動再試行（許可済みなのに通知来ない問題の保険）
+
+    let __notificationEnsureInFlight = null;
+    async function ensureNotificationTokenReady(){
+      if (__notificationEnsureInFlight) return __notificationEnsureInFlight;
+      __notificationEnsureInFlight = (async () => {
+        try {
+          if (!('Notification' in window) || !('serviceWorker' in navigator)) return null;
+          if (Notification.permission !== 'granted') return null;
+          const token = await requestNotificationPermission();
+          if (token) {
+            try {
+              await saveFcmTokenDocument(token);
+              window.__fcmSaveError = null;
+            } catch (e) {
+              window.__fcmSaveError = e;
+              try { scheduleFcmResyncRetries(); } catch(_) {}
+            }
+            return token;
+          }
+          if (currentDeviceToken || localStorage.getItem('fcm_token')) {
+            await resyncFcmToken();
+            if (window.__fcmSaveError) {
+              try { scheduleFcmResyncRetries(); } catch(_) {}
+            }
+          }
+        } catch (e) {
+          window.__fcmSaveError = e;
+          try { scheduleFcmResyncRetries(); } catch(_) {}
+        } finally {
+          __notificationEnsureInFlight = null;
+        }
+        return currentDeviceToken || localStorage.getItem('fcm_token') || null;
+      })();
+      return __notificationEnsureInFlight;
+    }
+    window.ensureNotificationTokenReady = ensureNotificationTokenReady;
+
+    // アプリ復帰時にトークン再取得まで自動再試行（許可済みなのに通知来ない問題の保険）
     document.addEventListener('visibilitychange', () => {
       try {
         if (document.visibilityState === 'visible') {
-          resyncFcmToken();
-          if (window.__fcmSaveError) scheduleFcmResyncRetries();
+          ensureNotificationTokenReady();
         }
       } catch(_) {}
+    });
+    window.addEventListener('pageshow', () => {
+      try { ensureNotificationTokenReady(); } catch(_) {}
+    });
+    window.addEventListener('focus', () => {
+      try { ensureNotificationTokenReady(); } catch(_) {}
     });
 
     let __lastForegroundShown = { title:'', body:'', t:0 };
@@ -6460,8 +6502,8 @@ function applySohmuUI(){
         }
         // ページ読み込みでの自動プロンプトはQuiet UIで無視されやすい → 明示ボタンで促す
         updateNotificationUI();
-        // 既にトークンがあるなら同期だけ（無許可なら何もしない）
-        if (localStorage.getItem('fcm_token')) { try { resyncFcmToken(); } catch(_) {} }
+        // 許可済み端末では、ページ表示時にトークン取得/同期まで保険で走らせる
+        try { ensureNotificationTokenReady(); } catch(_) {}
         // 通知ボタン: 明示的に許可を促す（AndroidでQuiet UIを避ける）
         const enableNotifBtn = document.getElementById('enable-notif-btn');
         if (enableNotifBtn) {
