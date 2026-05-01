@@ -426,9 +426,22 @@
           margin:24px auto 0;
           padding:0 20px 20px;
         }
-        .footer { padding: 10px; display: flex; justify-content: center; align-items: center; gap: 10px; font-size: 14px; color: #7f8c8d; }
+        .footer { padding: 10px; display: flex; justify-content: center; align-items: center; gap: 10px 16px; flex-wrap: wrap; font-size: 14px; color: #7f8c8d; }
         body.dark-theme .footer { color: #bdc3c7; }
-        #theme-selector { background-color: var(--mode-label-bg); color: var(--text-color); border: 1px solid var(--mode-selector-border); border-radius: 6px; padding: 5px; }
+        .footer-setting-group{
+          display:inline-flex;
+          align-items:center;
+          gap:6px;
+          white-space:nowrap;
+        }
+        #theme-selector,
+        #resident-sort-selector {
+          background-color: var(--mode-label-bg);
+          color: var(--text-color);
+          border: 1px solid var(--mode-selector-border);
+          border-radius: 6px;
+          padding: 5px;
+        }
         .notification-settings-launcher{
           display:none;
           text-align:center;
@@ -1312,12 +1325,21 @@
 
 <div class="footer-settings-panel">
   <footer class="footer">
-      <span>表示テーマ:</span>
-      <select id="theme-selector">
-          <option value="system">システム</option>
-          <option value="light">昼</option>
-          <option value="dark">夜</option>
-      </select>
+      <label class="footer-setting-group" for="theme-selector">
+        <span>表示テーマ:</span>
+        <select id="theme-selector">
+            <option value="system">システム</option>
+            <option value="light">昼</option>
+            <option value="dark">夜</option>
+        </select>
+      </label>
+      <label class="footer-setting-group" for="resident-sort-selector">
+        <span>並び順:</span>
+        <select id="resident-sort-selector">
+            <option value="name">名前順</option>
+            <option value="room">部屋番号順</option>
+        </select>
+      </label>
   </footer>
 
   <div id="notification-settings-launcher" class="notification-settings-launcher">
@@ -4995,6 +5017,112 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       }
     }
 
+    const RESIDENT_SORT_STORAGE_KEY = 'resident_sort_order';
+    const RESIDENT_SORT_NAME = 'name';
+    const RESIDENT_SORT_ROOM = 'room';
+
+    function normalizeResidentSortOrder(value){
+      return value === RESIDENT_SORT_ROOM ? RESIDENT_SORT_ROOM : RESIDENT_SORT_NAME;
+    }
+
+    function getResidentSortOrder(){
+      try{
+        return normalizeResidentSortOrder(localStorage.getItem(RESIDENT_SORT_STORAGE_KEY));
+      }catch(_){
+        return RESIDENT_SORT_NAME;
+      }
+    }
+
+    function setResidentSortOrder(value){
+      const next = normalizeResidentSortOrder(value);
+      try { localStorage.setItem(RESIDENT_SORT_STORAGE_KEY, next); } catch(_){}
+      syncResidentSortSelector(next);
+      return next;
+    }
+
+    function syncResidentSortSelector(value){
+      const selector = document.getElementById('resident-sort-selector');
+      if (selector) selector.value = normalizeResidentSortOrder(value);
+    }
+
+    function getResidentDormSortWeight(resident){
+      const dorm = resident && resident.dorm ? String(resident.dorm) : '';
+      if (dorm === 'shofu') return 0;
+      if (dorm === 'meizen') return 1;
+      return 99;
+    }
+
+    function compareResidentDormOrder(a, b){
+      return getResidentDormSortWeight(a) - getResidentDormSortWeight(b);
+    }
+
+    function parseResidentRoomValue(resident){
+      const raw = resident && resident.roomNumber != null ? String(resident.roomNumber).trim() : '';
+      const num = parseInt(raw, 10);
+      return isNaN(num) ? null : num;
+    }
+
+    function compareResidentRoomOrder(a, b){
+      const numA = parseResidentRoomValue(a);
+      const numB = parseResidentRoomValue(b);
+      if (numA != null && numB != null && numA !== numB) return numA - numB;
+      if (numA != null && numB == null) return -1;
+      if (numA == null && numB != null) return 1;
+      const rawA = a && a.roomNumber != null ? String(a.roomNumber) : '';
+      const rawB = b && b.roomNumber != null ? String(b.roomNumber) : '';
+      return rawA.localeCompare(rawB, 'ja');
+    }
+
+    function getResidentNameSortKey(resident){
+      const furigana = normalizeKey(resident && resident.furigana ? resident.furigana : '');
+      const name = normalizeKey(resident && resident.name ? resident.name : '');
+      return furigana || name;
+    }
+
+    function compareResidentNameOrder(a, b){
+      const primaryA = getResidentNameSortKey(a);
+      const primaryB = getResidentNameSortKey(b);
+      const primaryCmp = primaryA.localeCompare(primaryB, 'ja');
+      if (primaryCmp) return primaryCmp;
+      const nameA = normalizeKey(a && a.name ? a.name : '');
+      const nameB = normalizeKey(b && b.name ? b.name : '');
+      return nameA.localeCompare(nameB, 'ja');
+    }
+
+    function compareResidentsByPreference(a, b, options){
+      const pinResidentId = options && options.pinResidentId ? String(options.pinResidentId) : '';
+      const idA = a && a.id ? String(a.id) : '';
+      const idB = b && b.id ? String(b.id) : '';
+      if (pinResidentId) {
+        if (idA === pinResidentId && idB !== pinResidentId) return -1;
+        if (idB === pinResidentId && idA !== pinResidentId) return 1;
+      }
+
+      const sortOrder = normalizeResidentSortOrder(options && options.sortOrder ? options.sortOrder : getResidentSortOrder());
+      let cmp = 0;
+      if (sortOrder === RESIDENT_SORT_ROOM) {
+        cmp = compareResidentRoomOrder(a, b);
+        if (cmp) return cmp;
+        cmp = compareResidentNameOrder(a, b);
+        if (cmp) return cmp;
+      } else {
+        cmp = compareResidentNameOrder(a, b);
+        if (cmp) return cmp;
+        cmp = compareResidentRoomOrder(a, b);
+        if (cmp) return cmp;
+      }
+
+      cmp = compareResidentDormOrder(a, b);
+      if (cmp) return cmp;
+      return idA.localeCompare(idB, 'ja');
+    }
+
+    function sortResidentsByPreference(residents, options){
+      const list = Array.isArray(residents) ? residents.slice() : [];
+      list.sort((a, b) => compareResidentsByPreference(a, b, options));
+      return list;
+    }
+
     // tbodyの差し替え・再描画を監視して参照行を再注入
     function ensureMorningObserver(){
       const tbody = document.querySelector('#resident-table tbody');
@@ -5573,20 +5701,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
          : (Array.isArray(allResidents) ? allResidents : []);
         const list = src.slice();
         // 寮 -> 部屋番号（数値比較）-> 名前 の順で並べる
-       list.sort((a,b)=>{  
-          const dA = a && a.dorm || '', dB = b && b.dorm || '';
-          const order = { shofu: 0, meizen: 1 };
-          if (dA !== dB) {
-            const orderA = Object.prototype.hasOwnProperty.call(order, dA) ? order[dA] : 99;
-            const orderB = Object.prototype.hasOwnProperty.call(order, dB) ? order[dB] : 99;
-            return orderA - orderB;
-          }
-          const rnA = parseInt(a && a.roomNumber, 10) || 0;
-          const rnB = parseInt(b && b.roomNumber, 10) || 0;
-          if (rnA !== rnB) return rnA - rnB;
-          const nA = (a && a.name || '').localeCompare(b && b.name || '');
-          return nA;
-        });
+        const sortedList = sortResidentsByPreference(list);
         selectEl.innerHTML = '';
         // 空行
         const empty = document.createElement('option');
@@ -5594,7 +5709,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
         empty.textContent = '（未選択）';
         selectEl.appendChild(empty);
         // 実データ
-        list.forEach(r=>{
+        sortedList.forEach(r=>{
           if (!r || !r.id) return;
           const opt = document.createElement('option');
           opt.value = r.id;
@@ -6138,8 +6253,7 @@ function applySohmuUI(){
         if (dormKey === 'all' || !dormKey) return true;
         return r.dorm === dormKey;
       });
-      filtered.sort((a,b)=> String(a.roomNumber||'').localeCompare(String(b.roomNumber||''), 'ja') || String(a.name||'').localeCompare(String(b.name||''),'ja'));
-      filtered.forEach(r => {
+      sortResidentsByPreference(filtered).forEach(r => {
         const opt = document.createElement('option');
         opt.value = r.id;
         opt.textContent = `${r.roomNumber || ''} ${r.name || ''}`.trim();
@@ -6287,6 +6401,7 @@ function applySohmuUI(){
           loginLogoutBtn: document.getElementById('login-logout-btn'),
           sohmuToggle: document.getElementById('sohmu-toggle'),
           themeSelector: document.getElementById('theme-selector'),
+          residentSortSelector: document.getElementById('resident-sort-selector'),
           toggleFurigana: document.getElementById('toggle-furigana'),
           toggleCircle: document.getElementById('toggle-circle'),
           toggleDorm  : document.getElementById('toggle-dorm'),
@@ -7168,11 +7283,7 @@ if(elements.changePasswordForm){
                      snap.docs.map(doc => mergeResidentDocData(doc, d))
                    )
                 ));
-                const combined = flattenOneLevel(lists).sort((a,b)=>{
-                    const idxA=dorms.indexOf(a.dorm), idxB=dorms.indexOf(b.dorm);
-                    if(idxA!==idxB) return idxA-idxB;
-                    return (parseInt(a.roomNumber)||0)-(parseInt(b.roomNumber)||0);
-                });
+                const combined = sortResidentsByPreference(flattenOneLevel(lists));
                 select.innerHTML = combined.map(r =>
                   `<option value="${r.id}" data-dorm="${r.dorm}">
                       ${r.dorm==='shofu'?'松風寮':'明善寮'} - ${r.roomNumber} ${r.name}
@@ -7272,11 +7383,7 @@ if(elements.changePasswordForm){
                         snap.docs.map(doc => mergeResidentDocData(doc, d))
                       )
                     ));
-                    const combined = flattenOneLevel(lists).sort((a, b) => {
-                      const idxA = dorms.indexOf(a.dorm), idxB = dorms.indexOf(b.dorm);
-                      if (idxA !== idxB) return idxA - idxB;
-                      return (parseInt(a.roomNumber) || 0) - (parseInt(b.roomNumber) || 0);
-                    });
+                    const combined = sortResidentsByPreference(flattenOneLevel(lists));
                     select.innerHTML = combined.map(r =>
                       `<option value="${r.id}" data-dorm="${r.dorm}">${r.dorm === 'shofu' ? '松風寮' : '明善寮'} - ${r.roomNumber} ${r.name}</option>`
                     ).join('');
@@ -7403,20 +7510,10 @@ if(elements.changePasswordForm){
             // Hide table header when 庶務モード is OFF
             const tableHead = document.querySelector('#resident-table thead');
             tableHead.style.display = sohmuOn ? '' : 'none';
-            const baseList = sohmuOn
+            const sourceResidents = sohmuOn
               ? allResidents
               : allResidents.filter(r => r.id === myId);
-            if (sohmuOn) {
-              // 庶務モード ON: 通常の部屋番号順
-              baseList.sort((a, b) => (parseInt(a.roomNumber) || 0) - (parseInt(b.roomNumber) || 0));
-            } else {
-              // 庶務モード OFF: 自分をトップに、以降部屋番号順
-              baseList.sort((a, b) => {
-                if (a.id === myId) return -1;
-                if (b.id === myId) return 1;
-                return (parseInt(a.roomNumber) || 0) - (parseInt(b.roomNumber) || 0);
-              });
-            }
+            const baseList = sortResidentsByPreference(sourceResidents, { pinResidentId: sohmuOn ? '' : myId });
             const filteredResidents = baseList.filter(r => 
               (r.name && r.name.toLowerCase().includes(searchTerm)) ||
               (r.roomNumber && r.roomNumber.includes(searchTerm)) ||
@@ -7883,6 +7980,11 @@ if(elements.changePasswordForm){
             elements.themeSelector.value = savedTheme;
             handleThemeChange(savedTheme);
         }
+
+        function initializeResidentSortSelector() {
+            if (!elements.residentSortSelector) return;
+            syncResidentSortSelector(getResidentSortOrder());
+        }
         
         const savedDorm = localStorage.getItem('currentDorm') ? (localStorage.getItem('currentDorm').split('_')[1]) : 'shofu';
         switchDorm(savedDorm);
@@ -8076,12 +8178,22 @@ if(elements.changePasswordForm){
             localStorage.setItem('theme', e.target.value);
             handleThemeChange(e.target.value);
         });
+        if (elements.residentSortSelector) {
+            elements.residentSortSelector.addEventListener('change', async e => {
+                setResidentSortOrder(e.target.value);
+                if (document.getElementById('self-select-modal') && document.getElementById('self-select-modal').classList.contains('active')) {
+                    try { await populateSelfSelectOptions(); } catch(_) {}
+                }
+                if (typeof renderTable === 'function') renderTable();
+            });
+        }
         prefersDark.addEventListener('change', () => {
             const savedTheme = localStorage.getItem('theme') || 'system';
             if (savedTheme === 'system') handleThemeChange('system');
         });
         // ===== iOS Safari 対策：ユーザー操作で通知許可をリクエスト =====
         initializeTheme();
+        initializeResidentSortSelector();
         // 30分ごとに lastSeen を更新
         setInterval(updateLastSeen, 30 * 60 * 1000);
         elements.addModalCloseBtn.addEventListener('click', hideAddResidentModal);
