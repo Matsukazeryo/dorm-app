@@ -1656,8 +1656,20 @@
       }));
     }
 
+    function getResidentDocRoomNumber(data) {
+      var source = data || {};
+      var roomValue = source.roomNumber;
+      if (roomValue == null || String(roomValue).trim() === '') roomValue = source.room;
+      if (roomValue == null || String(roomValue).trim() === '') roomValue = source.roomNo;
+      if (roomValue == null) return '';
+      return String(roomValue).trim();
+    }
+
     function mergeResidentDocData(doc, dorm) {
-      return Object.assign({ id: doc.id }, (doc && typeof doc.data === 'function' ? doc.data() : {}) || {}, { dorm: dorm });
+      var raw = (doc && typeof doc.data === 'function' ? doc.data() : {}) || {};
+      var merged = Object.assign({ id: doc.id }, raw, { dorm: dorm });
+      merged.roomNumber = getResidentDocRoomNumber(raw);
+      return merged;
     }
 
     function flattenOneLevel(list) {
@@ -5026,12 +5038,16 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
     const RESIDENT_SORT_STORAGE_KEY = 'resident_sort_order';
     const RESIDENT_SORT_NAME = 'name';
     const RESIDENT_SORT_ROOM = 'room';
+    window.__residentSortOrderState = window.__residentSortOrderState || RESIDENT_SORT_NAME;
 
     function normalizeResidentSortOrder(value){
       return value === RESIDENT_SORT_ROOM ? RESIDENT_SORT_ROOM : RESIDENT_SORT_NAME;
     }
 
     function getResidentSortOrder(){
+      if (window.__residentSortOrderState) {
+        return normalizeResidentSortOrder(window.__residentSortOrderState);
+      }
       const selector = document.getElementById('resident-sort-selector');
       if (selector && selector.value) {
         return normalizeResidentSortOrder(selector.value);
@@ -5045,6 +5061,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 
     function setResidentSortOrder(value){
       const next = normalizeResidentSortOrder(value);
+      window.__residentSortOrderState = next;
       try { localStorage.setItem(RESIDENT_SORT_STORAGE_KEY, next); } catch(_){}
       syncResidentSortSelector(next);
       return next;
@@ -5076,7 +5093,10 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 
     function parseResidentRoomValue(resident){
       const raw = getResidentRoomRawValue(resident);
-      const num = parseInt(raw, 10);
+      const normalized = raw ? String(raw).replace(/[０-９]/g, function(ch){
+        return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0);
+      }) : '';
+      const num = parseInt(normalized, 10);
       return isNaN(num) ? null : num;
     }
 
@@ -8001,7 +8021,13 @@ if(elements.changePasswordForm){
 
         function initializeResidentSortSelector() {
             if (!elements.residentSortSelector) return;
-            syncResidentSortSelector(getResidentSortOrder());
+            var savedSort = RESIDENT_SORT_NAME;
+            try {
+                savedSort = normalizeResidentSortOrder(localStorage.getItem(RESIDENT_SORT_STORAGE_KEY));
+            } catch(_) {
+                savedSort = RESIDENT_SORT_NAME;
+            }
+            setResidentSortOrder(savedSort);
         }
         
         const savedDorm = localStorage.getItem('currentDorm') ? (localStorage.getItem('currentDorm').split('_')[1]) : 'shofu';
@@ -8196,13 +8222,19 @@ if(elements.changePasswordForm){
             localStorage.setItem('theme', e.target.value);
             handleThemeChange(e.target.value);
         });
+        async function applyResidentSortFromControl(value) {
+            setResidentSortOrder(value);
+            if (document.getElementById('self-select-modal') && document.getElementById('self-select-modal').classList.contains('active')) {
+                try { await populateSelfSelectOptions(); } catch(_) {}
+            }
+            if (typeof renderTable === 'function') renderTable();
+        }
         if (elements.residentSortSelector) {
-            elements.residentSortSelector.addEventListener('change', async e => {
-                setResidentSortOrder(e.target.value);
-                if (document.getElementById('self-select-modal') && document.getElementById('self-select-modal').classList.contains('active')) {
-                    try { await populateSelfSelectOptions(); } catch(_) {}
-                }
-                if (typeof renderTable === 'function') renderTable();
+            elements.residentSortSelector.addEventListener('change', function(e){
+                applyResidentSortFromControl(e && e.target ? e.target.value : RESIDENT_SORT_NAME);
+            });
+            elements.residentSortSelector.addEventListener('input', function(e){
+                applyResidentSortFromControl(e && e.target ? e.target.value : RESIDENT_SORT_NAME);
             });
         }
         prefersDark.addEventListener('change', () => {
