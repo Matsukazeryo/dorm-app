@@ -106,6 +106,12 @@
             background-color: var(--controls-bg); border-radius: 8px;
         }
         .display-toggles label { margin-right: 15px; cursor: pointer; }
+        .display-toggles .display-inline-select{
+          display:inline-flex;
+          align-items:center;
+          gap:6px;
+          white-space:nowrap;
+        }
 
         .ops-container { display: none; width: 100%; gap: 10px; flex-direction: column; }
         body.count-edit-mode .ops-container,
@@ -1006,6 +1012,13 @@
             <label><input type="checkbox" id="toggle-furigana"> ふりがな</label>
             <label><input type="checkbox" id="toggle-circle"> サークル</label>
             <label><input type="checkbox" id="toggle-dorm"> 寮</label>
+            <label class="display-inline-select" for="resident-sort-selector">
+              <span>並び順</span>
+              <select id="resident-sort-selector">
+                  <option value="name">名前順</option>
+                  <option value="room">部屋番号順</option>
+              </select>
+            </label>
         </div>
     </div>
 
@@ -1331,13 +1344,6 @@
             <option value="system">システム</option>
             <option value="light">昼</option>
             <option value="dark">夜</option>
-        </select>
-      </label>
-      <label class="footer-setting-group" for="resident-sort-selector">
-        <span>並び順:</span>
-        <select id="resident-sort-selector">
-            <option value="name">名前順</option>
-            <option value="room">部屋番号順</option>
         </select>
       </label>
   </footer>
@@ -5026,6 +5032,10 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
     }
 
     function getResidentSortOrder(){
+      const selector = document.getElementById('resident-sort-selector');
+      if (selector && selector.value) {
+        return normalizeResidentSortOrder(selector.value);
+      }
       try{
         return normalizeResidentSortOrder(localStorage.getItem(RESIDENT_SORT_STORAGE_KEY));
       }catch(_){
@@ -5056,8 +5066,16 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       return getResidentDormSortWeight(a) - getResidentDormSortWeight(b);
     }
 
+    function getResidentRoomRawValue(resident){
+      if (!resident) return '';
+      if (resident.roomNumber != null && String(resident.roomNumber).trim() !== '') return String(resident.roomNumber).trim();
+      if (resident.room != null && String(resident.room).trim() !== '') return String(resident.room).trim();
+      if (resident.roomNo != null && String(resident.roomNo).trim() !== '') return String(resident.roomNo).trim();
+      return '';
+    }
+
     function parseResidentRoomValue(resident){
-      const raw = resident && resident.roomNumber != null ? String(resident.roomNumber).trim() : '';
+      const raw = getResidentRoomRawValue(resident);
       const num = parseInt(raw, 10);
       return isNaN(num) ? null : num;
     }
@@ -5068,8 +5086,8 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       if (numA != null && numB != null && numA !== numB) return numA - numB;
       if (numA != null && numB == null) return -1;
       if (numA == null && numB != null) return 1;
-      const rawA = a && a.roomNumber != null ? String(a.roomNumber) : '';
-      const rawB = b && b.roomNumber != null ? String(b.roomNumber) : '';
+      const rawA = getResidentRoomRawValue(a);
+      const rawB = getResidentRoomRawValue(b);
       return rawA.localeCompare(rawB, 'ja');
     }
 
