@@ -245,16 +245,15 @@
             display:none;
             width:100%;
             margin-top:0;
+            position:relative;
         }
         body.count-edit-mode .resident-note-editor{
-            display:flex;
-            flex-direction:column;
-            gap:6px;
+            display:block;
         }
         .resident-note-input{
             width:100%;
-            min-height:46px;
-            padding:6px 8px;
+            min-height:38px;
+            padding:6px 48px 6px 8px;
             border:1px solid var(--border-color);
             border-radius:6px;
             background-color:var(--mode-label-bg);
@@ -265,26 +264,42 @@
             resize:vertical;
             box-sizing:border-box;
         }
+        .resident-note-editor.has-status .resident-note-input{
+            padding-bottom:20px;
+        }
         .resident-note-editor-actions{
+            position:absolute;
+            top:6px;
+            right:6px;
             display:flex;
-            align-items:center;
-            justify-content:space-between;
-            gap:8px;
+            align-items:flex-start;
+            gap:0;
         }
         .resident-note-save-btn{
             background:#d68910;
             color:#fff;
             border:none;
-            font-size:11px;
-            padding:5px 10px;
-            border-radius:5px;
+            font-size:10px;
+            line-height:1;
+            width:34px;
+            height:24px;
+            padding:0;
+            border-radius:999px;
             cursor:pointer;
             flex-shrink:0;
         }
         .resident-note-status{
-            min-height:1em;
-            font-size:0.7em;
+            position:absolute;
+            left:8px;
+            bottom:6px;
+            min-height:0;
+            max-width:calc(100% - 56px);
+            font-size:0.66em;
+            line-height:1.2;
             color:#7f8c8d;
+        }
+        .resident-note-status:empty{
+            display:none;
         }
         .resident-note-status.is-success{
             color:#1e8449;
@@ -5787,11 +5802,11 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       const body = escapeHtml(sourceValue == null ? '' : String(sourceValue));
       return `
         <div class="resident-note-editor">
-          <textarea class="resident-note-input" data-resident-id="${residentId}" rows="2" maxlength="120" placeholder="備考を入力" oninput="updateResidentInlineNoteDraft('${residentId}', this.value)">${body}</textarea>
+          <textarea class="resident-note-input" data-resident-id="${residentId}" rows="1" maxlength="120" placeholder="備考を入力" oninput="updateResidentInlineNoteDraft('${residentId}', this.value)">${body}</textarea>
           <div class="resident-note-editor-actions">
-            <span class="resident-note-status" data-resident-note-status="${residentId}"></span>
-            <button type="button" class="resident-note-save-btn" data-resident-id="${residentId}" onclick="saveResidentInlineNote('${residentId}')">備考を保存</button>
+            <button type="button" class="resident-note-save-btn" data-resident-id="${residentId}" onclick="saveResidentInlineNote('${residentId}')" aria-label="備考を保存" title="備考を保存">保存</button>
           </div>
+          <span class="resident-note-status" data-resident-note-status="${residentId}" aria-live="polite"></span>
         </div>
       `;
     }
@@ -6802,10 +6817,14 @@ function findResidentNoteEditorElement(selector, residentId) {
 function setResidentInlineNoteStatus(residentId, message, tone) {
   const statusEl = findResidentNoteEditorElement('.resident-note-status', residentId);
   if (!statusEl) return;
+  const editorEl = statusEl.closest('.resident-note-editor');
   statusEl.textContent = message || '';
   statusEl.classList.remove('is-success', 'is-error');
   if (tone === 'success') statusEl.classList.add('is-success');
   if (tone === 'error') statusEl.classList.add('is-error');
+  if (editorEl) {
+    editorEl.classList.toggle('has-status', !!message);
+  }
 }
 
 async function saveResidentInlineNote(residentId) {
