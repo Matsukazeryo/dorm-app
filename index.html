@@ -1052,7 +1052,7 @@
             <label><input type="checkbox" id="toggle-dorm"> 寮</label>
             <label class="display-inline-select" for="resident-sort-selector">
               <span>並び順</span>
-              <select id="resident-sort-selector">
+              <select id="resident-sort-selector" onchange="window.applyResidentSortPreference && window.applyResidentSortPreference(this.value)" oninput="window.applyResidentSortPreference && window.applyResidentSortPreference(this.value)">
                   <option value="name">名前順</option>
                   <option value="room">部屋番号順</option>
               </select>
@@ -5199,6 +5199,25 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       return list;
     }
 
+    window.applyResidentSortPreference = async function(value){
+      const next = setResidentSortOrder(value);
+      try {
+        if (Array.isArray(allResidents) && allResidents.length) {
+          allResidents = sortResidentsByPreference(allResidents, { sortOrder: next });
+        }
+      } catch(_) {}
+      try {
+        const modal = document.getElementById('self-select-modal');
+        if (modal && modal.classList.contains('active') && typeof window.populateSelfSelectOptions === 'function') {
+          await window.populateSelfSelectOptions();
+        }
+      } catch(_) {}
+      try {
+        if (typeof window.renderTable === 'function') window.renderTable();
+      } catch(_) {}
+      return next;
+    };
+
     // tbodyの差し替え・再描画を監視して参照行を再注入
     function ensureMorningObserver(){
       const tbody = document.querySelector('#resident-table tbody');
@@ -7370,6 +7389,7 @@ if(elements.changePasswordForm){
                 select.innerHTML='<option value="">読み込み失敗</option>';
             }
         }
+        window.populateSelfSelectOptions = populateSelfSelectOptions;
 
         // ======= Inserted Self-Select Modal Functions =======
         function openSelfSelectModal(){
@@ -7589,7 +7609,8 @@ if(elements.changePasswordForm){
             const sourceResidents = sohmuOn
               ? allResidents
               : allResidents.filter(r => r.id === myId);
-            const baseList = sortResidentsByPreference(sourceResidents, { pinResidentId: sohmuOn ? '' : myId });
+            const currentSortOrder = normalizeResidentSortOrder(window.__residentSortOrderState || getResidentSortOrder());
+            const baseList = sortResidentsByPreference(sourceResidents, { pinResidentId: sohmuOn ? '' : myId, sortOrder: currentSortOrder });
             const filteredResidents = baseList.filter(r => 
               (r.name && r.name.toLowerCase().includes(searchTerm)) ||
               (r.roomNumber && r.roomNumber.includes(searchTerm)) ||
@@ -8065,7 +8086,7 @@ if(elements.changePasswordForm){
             } catch(_) {
                 savedSort = RESIDENT_SORT_NAME;
             }
-            setResidentSortOrder(savedSort);
+            window.applyResidentSortPreference(savedSort);
         }
         
         const savedDorm = localStorage.getItem('currentDorm') ? (localStorage.getItem('currentDorm').split('_')[1]) : 'shofu';
@@ -8260,19 +8281,12 @@ if(elements.changePasswordForm){
             localStorage.setItem('theme', e.target.value);
             handleThemeChange(e.target.value);
         });
-        async function applyResidentSortFromControl(value) {
-            setResidentSortOrder(value);
-            if (document.getElementById('self-select-modal') && document.getElementById('self-select-modal').classList.contains('active')) {
-                try { await populateSelfSelectOptions(); } catch(_) {}
-            }
-            if (typeof renderTable === 'function') renderTable();
-        }
         if (elements.residentSortSelector) {
             elements.residentSortSelector.addEventListener('change', function(e){
-                applyResidentSortFromControl(e && e.target ? e.target.value : RESIDENT_SORT_NAME);
+                window.applyResidentSortPreference(e && e.target ? e.target.value : RESIDENT_SORT_NAME);
             });
             elements.residentSortSelector.addEventListener('input', function(e){
-                applyResidentSortFromControl(e && e.target ? e.target.value : RESIDENT_SORT_NAME);
+                window.applyResidentSortPreference(e && e.target ? e.target.value : RESIDENT_SORT_NAME);
             });
         }
         prefersDark.addEventListener('change', () => {
