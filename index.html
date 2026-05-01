@@ -105,7 +105,27 @@
             display: flex; gap: 20px; font-size: 14px; padding: 10px; margin-top: 10px;
             background-color: var(--controls-bg); border-radius: 8px;
         }
-        .display-toggles label { margin-right: 15px; cursor: pointer; }
+        .display-toggles {
+          display:flex;
+          align-items:center;
+          flex-wrap:wrap;
+          gap:8px 12px;
+          width:100%;
+        }
+        .display-toggles > span{
+          font-size:13px;
+          font-weight:600;
+          white-space:nowrap;
+        }
+        .display-toggles label {
+          margin-right: 0;
+          cursor: pointer;
+          display:inline-flex;
+          align-items:center;
+          gap:4px;
+          font-size:13px;
+          white-space:nowrap;
+        }
         .display-toggles .display-inline-select{
           display:inline-flex;
           align-items:center;
@@ -458,6 +478,26 @@
         }
         /* ===== スマホ用の省スペース調整 ===== */
         @media (max-width:600px){
+            .middle-controls{
+              gap:10px;
+              font-size:12px;
+              padding:8px 10px;
+            }
+            .display-toggles{
+              gap:6px 10px;
+            }
+            .display-toggles > span,
+            .display-toggles label{
+              font-size:12px;
+            }
+            .display-toggles .display-inline-select{
+              flex-basis:100%;
+              margin-top:2px;
+            }
+            #resident-sort-selector{
+              font-size:12px;
+              padding:4px 5px;
+            }
             /* テーブル全体を少し小さく */
             th, td{
               padding: 0;          /* パディングをゼロに */
