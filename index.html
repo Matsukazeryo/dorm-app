@@ -2045,6 +2045,7 @@ let notificationPrefsState = null;
 let notificationPrefsStatus = '';
 let notificationPrefsStatusTone = '';
 let notificationSettingsPanelOpen = false;
+let notificationPermissionQueryState = '';
 let notificationDebugState = {
   lastSyncOkAt: null,
   lastSyncError: '',
@@ -2103,13 +2104,59 @@ function setNotificationSettingsStatus(message, tone){
   try { updateNotificationSettingsUI(); } catch(_){}
 }
 
+function normalizeNotificationPermissionState(state){
+  if (state === 'granted') return 'granted';
+  if (state === 'denied') return 'denied';
+  if (state === 'prompt') return 'default';
+  if (state === 'default') return 'default';
+  return 'unsupported';
+}
+
+function getBrowserNotificationPermissionState(){
+  try {
+    if (!('Notification' in window)) return 'unsupported';
+    return normalizeNotificationPermissionState(Notification.permission);
+  } catch(_) {
+    return 'unsupported';
+  }
+}
+
+function getEffectiveNotificationPermissionState(){
+  const browserState = getBrowserNotificationPermissionState();
+  const queryState = normalizeNotificationPermissionState(notificationPermissionQueryState);
+  const tokenReady = !!(currentDeviceToken || localStorage.getItem('fcm_token'));
+  if (browserState === 'unsupported') return 'unsupported';
+  if (browserState === 'granted' || queryState === 'granted') return 'granted';
+  if (browserState === 'denied' && queryState === 'denied') return 'denied';
+  if (tokenReady && (browserState === 'denied' || queryState === 'denied')) return 'granted';
+  if (browserState === 'default' || queryState === 'default') return 'default';
+  if (browserState === 'denied' || queryState === 'denied') return 'default';
+  return browserState;
+}
+
+async function refreshNotificationPermissionState(){
+  try {
+    if (navigator.permissions && navigator.permissions.query) {
+      const permissionStatus = await navigator.permissions.query({ name: 'notifications' });
+      notificationPermissionQueryState = normalizeNotificationPermissionState(permissionStatus && permissionStatus.state);
+      try { permissionStatus.onchange = function(){ refreshNotificationPermissionState().then(updateNotificationUI).catch(function(){}); }; } catch(_) {}
+    }
+  } catch(_) {}
+  return getEffectiveNotificationPermissionState();
+}
+
 function getNotificationDiagnosticSummary(){
-  const permission = (typeof Notification !== 'undefined') ? Notification.permission : 'unsupported';
+  const permission = getEffectiveNotificationPermissionState();
+  const browserPermission = getBrowserNotificationPermissionState();
+  const queryPermission = normalizeNotificationPermissionState(notificationPermissionQueryState);
   const tokenReady = !!(currentDeviceToken || localStorage.getItem('fcm_token'));
   const parts = [
     `許可:${permission}`,
     `トークン:${tokenReady ? 'あり' : 'なし'}`
   ];
+  if (browserPermission !== permission || (queryPermission !== 'unsupported' && queryPermission !== permission)) {
+    parts.push(`判定:${browserPermission}${queryPermission !== 'unsupported' ? '/' + queryPermission : ''}`);
+  }
   if (notificationDebugState.lastSyncOkAt) {
     parts.push(`保存:${new Date(notificationDebugState.lastSyncOkAt).toLocaleString('ja-JP')}`);
   } else if (notificationDebugState.lastSyncError) {
@@ -3068,10 +3115,14 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       const myResidentId = localStorage.getItem('myResidentId');
       const isSohmuOn = !!(sohmuToggle && sohmuToggle.checked);
       const supported = ('Notification' in window) && ('serviceWorker' in navigator);
-      const permission = supported ? Notification.permission : 'unsupported';
+      const permission = supported ? getEffectiveNotificationPermissionState() : 'unsupported';
       const tokenReady = !!(currentDeviceToken || localStorage.getItem('fcm_token'));
       const prefs = getNotificationPrefs();
       const shouldShow = !isAdmin && !!myResidentId && !isSohmuOn;
+
+      if (!notificationPermissionQueryState && supported) {
+        try { refreshNotificationPermissionState().then(updateNotificationUI).catch(function(){}); } catch(_) {}
+      }
 
       if (launcher) launcher.style.display = shouldShow ? 'block' : 'none';
       if (toggleBtn) toggleBtn.textContent = notificationSettingsPanelOpen ? '通知設定を閉じる' : '通知設定を開く';
@@ -3106,6 +3157,12 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       if (statusEl) {
         let message = notificationPrefsStatus;
         let tone = notificationPrefsStatusTone;
+        if (permission === 'granted' && /ブロック/.test(String(message || ''))) {
+          message = '';
+          tone = '';
+          notificationPrefsStatus = '';
+          notificationPrefsStatusTone = '';
+        }
         const diag = getNotificationDiagnosticSummary();
         if (!message) {
           if (!supported) {
@@ -3152,9 +3209,10 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
     }
 
     let __notifInFlight = null;
-    async function requestNotificationPermission(){
+    async function requestNotificationPermission(options){
       // make idempotent & safe in unsupported environments
       if (__notifInFlight) return __notifInFlight;
+      const opts = Object.assign({ allowPrompt: true }, options || {});
       __notifInFlight = (async () => {
         if (!('Notification' in window) || !('serviceWorker' in navigator)) return null;
         // Guard for browsers / iOS versions where Firebase Messaging isn't supported
@@ -3168,19 +3226,28 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
         } catch(_) {}
 
         try {
+          let effectivePermission = await refreshNotificationPermissionState();
           // iOS/Safari requires a user gesture; Androidは自動呼出しだとQuiet UIで無視されることがある
           // 既に拒否済みなら即案内
-          if (Notification.permission === 'denied') {
+          if (effectivePermission === 'denied') {
             showNotificationUnblockHelp();
             updateNotificationUI();
             return null;
           }
 
-          const permission = await Notification.requestPermission();
-          if (permission !== 'granted') {
-            if (permission === 'denied') showNotificationUnblockHelp();
-            updateNotificationUI();
-            return null;
+          if (effectivePermission !== 'granted') {
+            if (!opts.allowPrompt) {
+              updateNotificationUI();
+              return null;
+            }
+            const permission = await Notification.requestPermission();
+            notificationPermissionQueryState = normalizeNotificationPermissionState(permission);
+            effectivePermission = await refreshNotificationPermissionState();
+            if (effectivePermission !== 'granted') {
+              if (permission === 'denied' || effectivePermission === 'denied') showNotificationUnblockHelp();
+              updateNotificationUI();
+              return null;
+            }
           }
           updateNotificationUI();
 
@@ -3263,8 +3330,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       // 通知・Service Worker が使えない環境では何もしない
       if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
 
-      let perm = 'default';
-      try { perm = Notification.permission; } catch(_) {}
+      let perm = getEffectiveNotificationPermissionState();
 
       // すでに許可済みなら何もしない
       if (perm === 'granted') return;
@@ -3307,7 +3373,12 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
     if (navigator.permissions && navigator.permissions.query) {
       try {
         navigator.permissions.query({ name: 'notifications' }).then(p => {
-          try { p.onchange = updateNotificationUI; } catch(_){}
+          notificationPermissionQueryState = normalizeNotificationPermissionState(p && p.state);
+          try {
+            p.onchange = function(){
+              refreshNotificationPermissionState().then(updateNotificationUI).catch(function(){});
+            };
+          } catch(_){}
         });
       } catch(_) {}
     }
@@ -3333,8 +3404,9 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       __notificationEnsureInFlight = (async () => {
         try {
           if (!('Notification' in window) || !('serviceWorker' in navigator)) return null;
-          if (Notification.permission !== 'granted') return null;
-          const token = await requestNotificationPermission();
+          const effectivePermission = await refreshNotificationPermissionState();
+          if (effectivePermission !== 'granted') return null;
+          const token = await requestNotificationPermission({ allowPrompt: false });
           if (token) {
             try {
               await saveFcmTokenDocument(token);
