@@ -131,6 +131,8 @@
           align-items:center;
           gap:6px;
           white-space:nowrap;
+          flex-basis:100%;
+          margin-top:2px;
         }
 
         .ops-container { display: none; width: 100%; gap: 10px; flex-direction: column; }
@@ -489,10 +491,6 @@
             .display-toggles > span,
             .display-toggles label{
               font-size:12px;
-            }
-            .display-toggles .display-inline-select{
-              flex-basis:100%;
-              margin-top:2px;
             }
             #resident-sort-selector{
               font-size:12px;
@@ -5085,12 +5083,12 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
     }
 
     function getResidentSortOrder(){
-      if (window.__residentSortOrderState) {
-        return normalizeResidentSortOrder(window.__residentSortOrderState);
-      }
       const selector = document.getElementById('resident-sort-selector');
       if (selector && selector.value) {
         return normalizeResidentSortOrder(selector.value);
+      }
+      if (window.__residentSortOrderState) {
+        return normalizeResidentSortOrder(window.__residentSortOrderState);
       }
       try{
         return normalizeResidentSortOrder(localStorage.getItem(RESIDENT_SORT_STORAGE_KEY));
