@@ -7657,6 +7657,87 @@ function readFileAsDataUrl(file) {
   });
 }
 
+function loadImageForOcr(source) {
+  return new Promise(function(resolve, reject){
+    const img = new Image();
+    img.onload = function(){ resolve(img); };
+    img.onerror = function(){ reject(new Error('OCR用画像を読み込めませんでした')); };
+    img.src = source;
+  });
+}
+
+async function measureOcrImageSignal(imageSource) {
+  const img = await loadImageForOcr(imageSource);
+  const sourceWidth = img.naturalWidth || img.width || 0;
+  const sourceHeight = img.naturalHeight || img.height || 0;
+  if (!sourceWidth || !sourceHeight) return null;
+
+  const maxEdge = 360;
+  const scale = Math.min(1, maxEdge / Math.max(sourceWidth, sourceHeight));
+  const width = Math.max(1, Math.round(sourceWidth * scale));
+  const height = Math.max(1, Math.round(sourceHeight * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.drawImage(img, 0, 0, width, height);
+
+  const data = ctx.getImageData(0, 0, width, height).data;
+  const luminance = new Float32Array(width * height);
+  let total = 0;
+  let min = 255;
+  let max = 0;
+  let darkPixels = 0;
+  for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+    const value = (data[i] * 0.299) + (data[i + 1] * 0.587) + (data[i + 2] * 0.114);
+    luminance[p] = value;
+    total += value;
+    if (value < min) min = value;
+    if (value > max) max = value;
+  }
+
+  const pixels = Math.max(1, luminance.length);
+  const average = total / pixels;
+  let variance = 0;
+  for (let i = 0; i < luminance.length; i++) {
+    const delta = luminance[i] - average;
+    variance += delta * delta;
+    if (luminance[i] < average - 42 || luminance[i] < 95) darkPixels++;
+  }
+
+  let edgeTotal = 0;
+  let edgeCount = 0;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x;
+      if (x + 1 < width) {
+        edgeTotal += Math.abs(luminance[idx] - luminance[idx + 1]);
+        edgeCount++;
+      }
+      if (y + 1 < height) {
+        edgeTotal += Math.abs(luminance[idx] - luminance[idx + width]);
+        edgeCount++;
+      }
+    }
+  }
+
+  return {
+    contrast: max - min,
+    edgeAverage: edgeCount ? edgeTotal / edgeCount : 0,
+    darkRatio: darkPixels / pixels,
+    stdDev: Math.sqrt(variance / pixels)
+  };
+}
+
+function isLikelyBlankOcrImage(signal) {
+  if (!signal) return false;
+  if (signal.contrast < 28 && signal.edgeAverage < 3.2) return true;
+  if (signal.stdDev < 10 && signal.edgeAverage < 4.2) return true;
+  if (signal.edgeAverage < 2.4 && signal.darkRatio < 0.025) return true;
+  return false;
+}
+
 function normalizeOcrRawText(text) {
   let normalized = String(text || '');
   if (typeof normalized.normalize === 'function') {
@@ -7710,6 +7791,29 @@ function extractOcrRecognizedText(data) {
   return cleanupOcrRecognizedText(rawText);
 }
 
+function getOcrTextSignal(text) {
+  const compact = normalizeOcrRawText(text).replace(/[ \t\r\n　]/g, '');
+  return {
+    compactLength: compact.length,
+    japaneseCount: (compact.match(/[ぁ-ゖァ-ヺ一-龯々〆ヵヶ]/g) || []).length,
+    digitCount: (compact.match(/[0-9]/g) || []).length,
+    lineCount: String(text || '').split(/\r?\n/).filter(function(line){ return cleanOcrLine(line); }).length
+  };
+}
+
+function shouldSuppressOcrNoise(text, confidence, analysis) {
+  if (!text) return true;
+  const bestScore = analysis && Number.isFinite(Number(analysis.bestScore)) ? Number(analysis.bestScore) : 0;
+  if (bestScore >= 40) return false;
+  const signal = getOcrTextSignal(text);
+  if (signal.compactLength <= 3) return true;
+  if (signal.japaneseCount < 2 && signal.digitCount < 2) return true;
+  const numericConfidence = Number(confidence);
+  if (Number.isFinite(numericConfidence) && numericConfidence > 0 && numericConfidence < 28 && bestScore < 45) return true;
+  if (bestScore <= 0 && signal.digitCount < 2 && signal.japaneseCount < 4) return true;
+  return false;
+}
+
 async function recognizeOcrImage(Tesseract, imageSource, label, progressBase, progressSpan) {
   const result = await Tesseract.recognize(imageSource, 'jpn+eng', {
     tessedit_pageseg_mode: '6',
@@ -7740,6 +7844,16 @@ async function runOcrOnImage(imageSource) {
   setOcrBusy(true);
   try {
     setOcrStatus('OCRエンジンを読み込んでいます...', '');
+    const signal = await measureOcrImageSignal(imageSource).catch(function(){ return null; });
+    if (isLikelyBlankOcrImage(signal)) {
+      const textArea = getOcrElement('ocr-text');
+      if (textArea) textArea.value = '';
+      ocrState.candidates = [];
+      ocrState.selectedResidentId = '';
+      renderOcrCandidates();
+      setOcrStatus('文字が写っていなさそうです。伝票や名簿を画面いっぱいに入れて撮り直してください。', 'error');
+      return;
+    }
     const Tesseract = await loadOcrEngine();
     setOcrStatus('文字を読み取っています... 0%', '');
     const result = await recognizeOcrImage(Tesseract, imageSource, '文字を読み取っています...', 0, 100);
@@ -7747,8 +7861,16 @@ async function runOcrOnImage(imageSource) {
 
     const textArea = getOcrElement('ocr-text');
     if (textArea) textArea.value = text;
-    await analyzeOcrText();
-    setOcrStatus(text ? '読み取りました。候補を確認してください。' : '文字を読み取れませんでした。', text ? 'success' : 'error');
+    const analysis = await analyzeOcrText();
+    if (shouldSuppressOcrNoise(text, result.confidence, analysis)) {
+      if (textArea) textArea.value = '';
+      ocrState.candidates = [];
+      ocrState.selectedResidentId = '';
+      renderOcrCandidates();
+      setOcrStatus('登録に使えそうな文字を検出できませんでした。文字が大きく写るように撮り直してください。', 'error');
+      return;
+    }
+    setOcrStatus(analysis && analysis.candidateCount ? '読み取りました。候補を確認してください。' : '候補に結びつく文字が見つかりませんでした。必要ならOCR結果欄を修正してください。', analysis && analysis.candidateCount ? 'success' : 'error');
   } catch (e) {
     console.error('runOcrOnImage failed', e);
     setOcrStatus('OCRに失敗しました。画像を変えるか、OCR結果欄に文字を入力して候補を更新してください。', 'error');
@@ -7909,7 +8031,7 @@ async function analyzeOcrText() {
     ocrState.selectedResidentId = '';
     renderOcrCandidates();
     setOcrStatus('OCR結果欄に文字がありません。', 'error');
-    return;
+    return { candidateCount: 0, bestScore: 0 };
   }
   setOcrStatus('候補を探しています...', '');
   const residents = await getOcrCandidateResidents();
@@ -7917,7 +8039,7 @@ async function analyzeOcrText() {
   ocrState.candidates = residents.map(function(resident){
       return scoreOcrResident(resident, rawText, normalizedText, digitTokens);
     })
-    .filter(function(candidate){ return candidate.score >= 25; })
+    .filter(function(candidate){ return candidate.score >= 35; })
     .sort(function(a, b){
       if (b.score !== a.score) return b.score - a.score;
       const roomA = parseResidentRoomValue(a.resident);
@@ -7929,6 +8051,10 @@ async function analyzeOcrText() {
   ocrState.selectedResidentId = ocrState.candidates[0] && ocrState.candidates[0].resident ? ocrState.candidates[0].resident.id : '';
   renderOcrCandidates();
   setOcrStatus(ocrState.candidates.length ? '候補を表示しました。' : '候補が見つかりませんでした。', ocrState.candidates.length ? 'success' : 'error');
+  return {
+    candidateCount: ocrState.candidates.length,
+    bestScore: ocrState.candidates[0] ? ocrState.candidates[0].score : 0
+  };
 }
 
 function openOcrModal() {
