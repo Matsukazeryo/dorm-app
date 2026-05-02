@@ -7682,6 +7682,7 @@ function isUsefulOcrLine(line) {
   const latinCount = (compact.match(/[A-Za-z]/g) || []).length;
   const usefulCount = japaneseCount + digitCount + latinCount;
   if (!usefulCount) return false;
+  if (latinCount && !japaneseCount && !digitCount) return false;
   if (digitCount >= 2 && digitCount <= 4 && usefulCount === compact.length) return true;
   if (japaneseCount >= 2) return true;
   if (japaneseCount >= 1 && digitCount >= 1) return true;
@@ -7706,25 +7707,13 @@ function cleanupOcrRecognizedText(text) {
 
 function extractOcrRecognizedText(data) {
   const rawText = data && data.text ? String(data.text) : '';
-  const lineItems = data && Array.isArray(data.lines) ? data.lines : [];
-  const lineText = lineItems
-    .map(function(line){
-      const text = line && line.text ? String(line.text) : '';
-      const confidence = Number(line && line.confidence);
-      if (Number.isFinite(confidence) && confidence > 0 && confidence < 18) return '';
-      return text;
-    })
-    .filter(Boolean)
-    .join('\n');
-  return cleanupOcrRecognizedText(lineText) || cleanupOcrRecognizedText(rawText);
+  return cleanupOcrRecognizedText(rawText);
 }
 
 async function recognizeOcrImage(Tesseract, imageSource, label, progressBase, progressSpan) {
   const result = await Tesseract.recognize(imageSource, 'jpn+eng', {
-    tessedit_pageseg_mode: '11',
+    tessedit_pageseg_mode: '6',
     preserve_interword_spaces: '1',
-    user_defined_dpi: '300',
-    tessedit_char_blacklist: "!\\\"#$%&'()*+,./:;<=>?@[\\\\]^_`{|}~…‘’“”♯♪●■□◆◇▲△▼▽★☆※〒→←↑↓",
     logger: function(message){
       if (!message || !message.status) return;
       if (typeof message.progress === 'number') {
