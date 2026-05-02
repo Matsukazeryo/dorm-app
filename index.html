@@ -7506,6 +7506,7 @@ const OCR_SCRIPT_URLS = [
   'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js',
   'https://unpkg.com/tesseract.js@5/dist/tesseract.min.js'
 ];
+const OCR_MAX_IMAGE_EDGE = 1600;
 let ocrEngineLoadPromise = null;
 const ocrState = {
   candidates: [],
@@ -7666,23 +7667,8 @@ function loadImageForOcr(source) {
   });
 }
 
-async function measureOcrImageSignal(imageSource) {
-  const img = await loadImageForOcr(imageSource);
-  const sourceWidth = img.naturalWidth || img.width || 0;
-  const sourceHeight = img.naturalHeight || img.height || 0;
-  if (!sourceWidth || !sourceHeight) return null;
-
-  const maxEdge = 360;
-  const scale = Math.min(1, maxEdge / Math.max(sourceWidth, sourceHeight));
-  const width = Math.max(1, Math.round(sourceWidth * scale));
-  const height = Math.max(1, Math.round(sourceHeight * scale));
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) return null;
-  ctx.drawImage(img, 0, 0, width, height);
-
+function measureOcrCanvasSignal(ctx, width, height) {
+  if (!ctx || !width || !height) return null;
   const data = ctx.getImageData(0, 0, width, height).data;
   const luminance = new Float32Array(width * height);
   let total = 0;
@@ -7727,6 +7713,38 @@ async function measureOcrImageSignal(imageSource) {
     edgeAverage: edgeCount ? edgeTotal / edgeCount : 0,
     darkRatio: darkPixels / pixels,
     stdDev: Math.sqrt(variance / pixels)
+  };
+}
+
+async function prepareOcrImageForFastRecognition(imageSource) {
+  const img = await loadImageForOcr(imageSource);
+  const sourceWidth = img.naturalWidth || img.width || 0;
+  const sourceHeight = img.naturalHeight || img.height || 0;
+  if (!sourceWidth || !sourceHeight) return null;
+
+  const scale = Math.min(1, OCR_MAX_IMAGE_EDGE / Math.max(sourceWidth, sourceHeight));
+  const width = Math.max(1, Math.round(sourceWidth * scale));
+  const height = Math.max(1, Math.round(sourceHeight * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.save();
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, width, height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, 0, width, height);
+  ctx.restore();
+
+  return {
+    source: canvas.toDataURL('image/jpeg', 0.9),
+    signal: measureOcrCanvasSignal(ctx, width, height),
+    width,
+    height,
+    originalWidth: sourceWidth,
+    originalHeight: sourceHeight
   };
 }
 
@@ -7835,17 +7853,18 @@ async function recognizeOcrImage(Tesseract, imageSource, label, progressBase, pr
 
 async function runOcrOnImage(imageSource) {
   if (!imageSource) return;
-  ocrState.lastImageSource = imageSource;
   ocrState.registeredResidentId = '';
   ocrState.registeredType = '';
   setOcrRegistrationLocked(false);
-  setOcrPreview(imageSource);
   scrollOcrResultsIntoView();
   setOcrBusy(true);
   try {
-    setOcrStatus('OCRエンジンを読み込んでいます...', '');
-    const signal = await measureOcrImageSignal(imageSource).catch(function(){ return null; });
-    if (isLikelyBlankOcrImage(signal)) {
+    setOcrStatus('画像をOCR用に軽くしています...', '');
+    const prepared = await prepareOcrImageForFastRecognition(imageSource);
+    const ocrSource = prepared && prepared.source ? prepared.source : imageSource;
+    ocrState.lastImageSource = ocrSource;
+    setOcrPreview(ocrSource);
+    if (prepared && isLikelyBlankOcrImage(prepared.signal)) {
       const textArea = getOcrElement('ocr-text');
       if (textArea) textArea.value = '';
       ocrState.candidates = [];
@@ -7854,9 +7873,10 @@ async function runOcrOnImage(imageSource) {
       setOcrStatus('文字が写っていなさそうです。伝票や名簿を画面いっぱいに入れて撮り直してください。', 'error');
       return;
     }
+    setOcrStatus(prepared ? `OCRエンジンを読み込んでいます...（${prepared.width}×${prepared.height}）` : 'OCRエンジンを読み込んでいます...', '');
     const Tesseract = await loadOcrEngine();
     setOcrStatus('文字を読み取っています... 0%', '');
-    const result = await recognizeOcrImage(Tesseract, imageSource, '文字を読み取っています...', 0, 100);
+    const result = await recognizeOcrImage(Tesseract, ocrSource, '文字を読み取っています...', 0, 100);
     const text = result.text || '';
 
     const textArea = getOcrElement('ocr-text');
