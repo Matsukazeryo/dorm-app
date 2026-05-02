@@ -757,12 +757,11 @@
           color: #c0392b;
         }
         .ocr-modal-content {
-          width:min(96vw, 1040px);
-          max-width:1040px;
+          width:min(96vw, 820px);
+          max-width:820px;
           max-height:92vh;
         }
         .ocr-actions,
-        .ocr-type-selector,
         .ocr-confirm-actions {
           display:flex;
           flex-wrap:wrap;
@@ -774,12 +773,6 @@
         }
         .ocr-primary-actions {
           margin-bottom:10px;
-        }
-        .ocr-secondary-actions {
-          display:grid;
-          grid-template-columns:repeat(3, minmax(0, 1fr));
-          gap:8px;
-          margin-bottom:12px;
         }
         .ocr-action-btn,
         .ocr-file-label {
@@ -818,66 +811,20 @@
           background:#bdc3c7;
           cursor:not-allowed;
         }
-        .ocr-zoom-panel {
-          display:flex;
-          gap:10px;
-          align-items:center;
-          justify-content:space-between;
-          margin:-2px 0 12px;
-          padding:10px 12px;
-          border:1px solid var(--border-color);
-          border-radius:10px;
-          background:var(--controls-bg);
-        }
-        .ocr-zoom-panel[hidden] {
-          display:none;
-        }
-        .ocr-zoom-hint {
-          color:var(--header-text);
-          font-weight:700;
-        }
-        .ocr-zoom-value {
-          min-width:3.2em;
-          color:#7f8c8d;
-          font-size:0.86rem;
-          text-align:right;
-        }
         .ocr-media-grid {
           display:grid;
-          grid-template-columns:minmax(0, 1.15fr) minmax(260px, 0.85fr);
-          gap:12px;
-          align-items:start;
+          grid-template-columns:1fr;
           margin-bottom:12px;
         }
-        .ocr-media-grid.single-media {
-          grid-template-columns:1fr;
-        }
-        .ocr-video,
         .ocr-preview {
           width:100%;
-          min-height:320px;
-          max-height:62vh;
+          min-height:120px;
+          max-height:180px;
           object-fit:contain;
           border:1px solid var(--border-color);
           border-radius:8px;
           background:#111;
-          touch-action:none;
-          user-select:none;
         }
-        .ocr-media-grid.single-media .ocr-video,
-        .ocr-media-grid.single-media .ocr-preview {
-          min-height:min(56vh, 560px);
-        }
-        .ocr-modal-content.is-after-capture .ocr-media-grid {
-          margin-bottom:8px;
-        }
-        .ocr-modal-content.is-after-capture .ocr-preview,
-        .ocr-modal-content.is-after-capture .ocr-media-grid.single-media .ocr-preview {
-          min-height:96px;
-          max-height:150px;
-          object-fit:contain;
-        }
-        .ocr-video.is-hidden,
         .ocr-preview.is-hidden {
           display:none;
         }
@@ -917,18 +864,6 @@
         .ocr-status.is-success {
           color:#1e8449;
         }
-        .ocr-type-selector label {
-          display:inline-flex;
-          align-items:center;
-          gap:5px;
-          padding:7px 10px;
-          border:1px solid var(--border-color);
-          border-radius:999px;
-          background:var(--controls-bg);
-          cursor:pointer;
-          font-size:0.88rem;
-          font-weight:700;
-        }
         .ocr-candidate-list {
           list-style:none;
           padding:0;
@@ -941,17 +876,40 @@
         }
         .ocr-candidate-card {
           display:grid;
-          grid-template-columns:auto 1fr;
-          gap:8px;
+          grid-template-columns:minmax(0, 1fr) auto;
+          gap:10px;
           align-items:flex-start;
           padding:10px 12px;
           border:1px solid var(--border-color);
           border-radius:8px;
           background:var(--controls-bg);
-          cursor:pointer;
         }
-        .ocr-candidate-card input {
-          margin-top:3px;
+        .ocr-candidate-actions {
+          display:flex;
+          flex-wrap:wrap;
+          justify-content:flex-end;
+          gap:6px;
+        }
+        .ocr-candidate-action-btn {
+          min-height:34px;
+          padding:7px 10px;
+          border:none;
+          border-radius:8px;
+          color:#fff;
+          font-size:0.84rem;
+          font-weight:800;
+          cursor:pointer;
+          white-space:nowrap;
+        }
+        .ocr-candidate-action-btn.luggage {
+          background:#27ae60;
+        }
+        .ocr-candidate-action-btn.mail {
+          background:#3498db;
+        }
+        .ocr-candidate-action-btn:disabled {
+          background:#bdc3c7;
+          cursor:not-allowed;
         }
         .ocr-candidate-name {
           display:block;
@@ -1229,23 +1187,18 @@
           .notification-settings-enable-btn{
             width:100%;
           }
-          .ocr-secondary-actions {
-            grid-template-columns:1fr;
-          }
-          .ocr-zoom-panel {
-            grid-template-columns:1fr;
-          }
-          .ocr-media-grid {
-            grid-template-columns:1fr;
-          }
-          .ocr-video,
-          .ocr-preview {
-            min-height:260px;
-            max-height:52vh;
-          }
           .ocr-action-btn,
           .ocr-file-label {
             flex:1 1 140px;
+          }
+          .ocr-candidate-card {
+            grid-template-columns:1fr;
+          }
+          .ocr-candidate-actions {
+            justify-content:stretch;
+          }
+          .ocr-candidate-action-btn {
+            flex:1 1 120px;
           }
         }
         /* === 庶務モードOFF: 上部のコントロールを非表示にする === */
@@ -1571,39 +1524,23 @@
       <button id="ocr-modal-close-btn" class="modal-close-btn">&times;</button>
     </div>
     <div class="ocr-primary-actions">
-      <button id="ocr-capture-btn" type="button" class="ocr-action-btn primary ocr-capture-main" disabled>撮影して読み取り</button>
-    </div>
-    <div class="ocr-secondary-actions">
-      <button id="ocr-start-camera-btn" type="button" class="ocr-action-btn secondary">カメラ開始</button>
-      <label for="ocr-file-input" class="ocr-file-label secondary">画像から読み取り</label>
+      <button id="ocr-capture-btn" type="button" class="ocr-action-btn primary ocr-capture-main">撮影して読み取り</button>
       <input id="ocr-file-input" type="file" accept="image/*" capture="environment" style="display:none;">
-      <button id="ocr-stop-camera-btn" type="button" class="ocr-action-btn secondary" disabled>カメラ停止</button>
-    </div>
-    <div id="ocr-zoom-panel" class="ocr-zoom-panel" hidden>
-      <span class="ocr-zoom-hint">二本指でズーム</span>
-      <span id="ocr-zoom-value" class="ocr-zoom-value">1.0x</span>
     </div>
     <div class="ocr-media-grid">
-      <video id="ocr-video" class="ocr-video is-hidden" playsinline autoplay muted></video>
       <img id="ocr-preview" class="ocr-preview is-hidden" alt="OCR対象画像">
     </div>
-    <canvas id="ocr-canvas" style="display:none;"></canvas>
     <div id="ocr-status" class="ocr-status"></div>
     <label class="ocr-field-label" for="ocr-text">OCR結果</label>
     <textarea id="ocr-text" class="ocr-textarea" placeholder="読み取った文字がここに入ります。必要なら修正できます。"></textarea>
     <div class="ocr-actions" style="margin-top:8px;">
       <button id="ocr-analyze-text-btn" type="button" class="ocr-action-btn secondary">候補を更新</button>
     </div>
-    <div class="ocr-type-selector" aria-label="登録する種類">
-      <label><input type="radio" name="ocr-item-type" value="luggage" checked> 荷物 +1</label>
-      <label><input type="radio" name="ocr-item-type" value="mail"> 郵便 +1</label>
-    </div>
     <label class="ocr-field-label">候補</label>
     <ul id="ocr-candidate-list" class="ocr-candidate-list">
       <li class="ocr-empty">候補はまだありません。</li>
     </ul>
     <div class="ocr-confirm-actions" style="margin-top:14px;">
-      <button id="ocr-confirm-btn" type="button" class="ocr-action-btn primary" disabled>選択した寮生に登録</button>
       <button id="ocr-cancel-btn" type="button" class="ocr-action-btn secondary">閉じる</button>
     </div>
   </div>
@@ -7570,21 +7507,14 @@ const OCR_SCRIPT_URLS = [
   'https://unpkg.com/tesseract.js@5/dist/tesseract.min.js'
 ];
 let ocrEngineLoadPromise = null;
-let ocrZoomApplyTimer = null;
 const ocrState = {
-  stream: null,
   candidates: [],
   selectedResidentId: '',
   busy: false,
   lastImageSource: '',
   registrationLocked: false,
-  zoomSupported: false,
-  zoomMin: 1,
-  zoomMax: 1,
-  zoomCurrent: 1,
-  pinchActive: false,
-  pinchStartDistance: 0,
-  pinchStartZoom: 1
+  registeredResidentId: '',
+  registeredType: ''
 };
 
 function getOcrElement(id) {
@@ -7608,19 +7538,6 @@ function setOcrRegistrationLocked(locked) {
 function getOcrModalContent() {
   const modal = getOcrElement('ocr-modal');
   return modal ? modal.querySelector('.ocr-modal-content') : document.querySelector('.ocr-modal-content');
-}
-
-function setOcrAfterCaptureMode(on) {
-  const content = getOcrModalContent();
-  if (content) content.classList.toggle('is-after-capture', !!on);
-}
-
-function updateOcrCameraActionLabels() {
-  const startBtn = getOcrElement('ocr-start-camera-btn');
-  if (!startBtn) return;
-  if (ocrState.stream) startBtn.textContent = 'カメラ再起動';
-  else if (ocrState.lastImageSource) startBtn.textContent = 'もう一度撮る';
-  else startBtn.textContent = 'カメラ開始';
 }
 
 function resetOcrResultState() {
@@ -7648,160 +7565,31 @@ function scrollOcrResultsIntoView() {
   }, 80);
 }
 
-function getOcrVideoTrack() {
-  if (!ocrState.stream || typeof ocrState.stream.getVideoTracks !== 'function') return null;
-  const tracks = ocrState.stream.getVideoTracks();
-  return tracks && tracks[0] ? tracks[0] : null;
-}
-
-function formatOcrZoomValue(value) {
-  const num = Number(value);
-  if (!Number.isFinite(num)) return '1.0x';
-  return `${num.toFixed(num >= 10 ? 0 : 1)}x`;
-}
-
-function updateOcrZoomLabel(value) {
-  const valueEl = getOcrElement('ocr-zoom-value');
-  if (valueEl) valueEl.textContent = formatOcrZoomValue(value);
-}
-
-function hideOcrZoomControl() {
-  const panel = getOcrElement('ocr-zoom-panel');
-  if (panel) panel.hidden = true;
-  ocrState.zoomSupported = false;
-  ocrState.zoomMin = 1;
-  ocrState.zoomMax = 1;
-  ocrState.zoomCurrent = 1;
-  ocrState.pinchActive = false;
-  updateOcrZoomLabel(1);
-}
-
-function setupOcrZoomControl() {
-  const panel = getOcrElement('ocr-zoom-panel');
-  const track = getOcrVideoTrack();
-  if (!panel || !track || typeof track.getCapabilities !== 'function') {
-    hideOcrZoomControl();
-    return;
-  }
-
-  let capabilities = {};
-  let settings = {};
-  try { capabilities = track.getCapabilities() || {}; } catch (_) { capabilities = {}; }
-  try { settings = (typeof track.getSettings === 'function' ? track.getSettings() : {}) || {}; } catch (_) { settings = {}; }
-
-  if (!capabilities.zoom || typeof capabilities.zoom.min !== 'number' || typeof capabilities.zoom.max !== 'number' || capabilities.zoom.max <= capabilities.zoom.min) {
-    hideOcrZoomControl();
-    return;
-  }
-
-  const min = capabilities.zoom.min;
-  const max = capabilities.zoom.max;
-  const current = Number.isFinite(Number(settings.zoom)) ? Number(settings.zoom) : min;
-
-  ocrState.zoomSupported = true;
-  ocrState.zoomMin = min;
-  ocrState.zoomMax = max;
-  ocrState.zoomCurrent = Math.max(min, Math.min(max, current));
-  panel.hidden = false;
-  updateOcrZoomLabel(ocrState.zoomCurrent);
-}
-
-async function applyOcrZoom(value) {
-  const track = getOcrVideoTrack();
-  if (!ocrState.zoomSupported || !track || typeof track.applyConstraints !== 'function') return;
-  const raw = Number(value);
-  if (!Number.isFinite(raw)) return;
-  const min = ocrState.zoomMin;
-  const max = ocrState.zoomMax;
-  const zoom = Math.max(min, Math.min(max, raw));
-  ocrState.zoomCurrent = zoom;
-  updateOcrZoomLabel(zoom);
-  try {
-    await track.applyConstraints({ advanced: [{ zoom }] });
-  } catch (e) {
-    console.warn('applyOcrZoom failed', e);
-    setOcrStatus('この端末ではズームを変更できませんでした。', 'error');
-  }
-}
-
-function scheduleOcrZoomApply(value) {
-  ocrState.zoomCurrent = Math.max(ocrState.zoomMin, Math.min(ocrState.zoomMax, Number(value) || ocrState.zoomMin));
-  updateOcrZoomLabel(ocrState.zoomCurrent);
-  clearTimeout(ocrZoomApplyTimer);
-  ocrZoomApplyTimer = setTimeout(function(){
-    applyOcrZoom(ocrState.zoomCurrent);
-  }, 80);
-}
-
-function getOcrTouchDistance(touches) {
-  if (!touches || touches.length < 2) return 0;
-  const a = touches[0];
-  const b = touches[1];
-  const dx = a.clientX - b.clientX;
-  const dy = a.clientY - b.clientY;
-  return Math.sqrt((dx * dx) + (dy * dy));
-}
-
-function handleOcrPinchStart(ev) {
-  if (!ocrState.stream || !ocrState.zoomSupported || !ev.touches || ev.touches.length < 2) return;
-  const distance = getOcrTouchDistance(ev.touches);
-  if (!distance) return;
-  ocrState.pinchActive = true;
-  ocrState.pinchStartDistance = distance;
-  ocrState.pinchStartZoom = ocrState.zoomCurrent || ocrState.zoomMin || 1;
-  try { ev.preventDefault(); } catch (_) {}
-}
-
-function handleOcrPinchMove(ev) {
-  if (!ocrState.pinchActive || !ocrState.zoomSupported || !ev.touches || ev.touches.length < 2) return;
-  const distance = getOcrTouchDistance(ev.touches);
-  if (!distance || !ocrState.pinchStartDistance) return;
-  const ratio = distance / ocrState.pinchStartDistance;
-  const nextZoom = Math.max(ocrState.zoomMin, Math.min(ocrState.zoomMax, ocrState.pinchStartZoom * ratio));
-  scheduleOcrZoomApply(nextZoom);
-  try { ev.preventDefault(); } catch (_) {}
-}
-
-function handleOcrPinchEnd(ev) {
-  if (ev && ev.touches && ev.touches.length >= 2) return;
-  ocrState.pinchActive = false;
-  ocrState.pinchStartDistance = 0;
-}
-
 function syncOcrMediaLayout() {
   const grid = document.querySelector('.ocr-media-grid');
-  const video = getOcrElement('ocr-video');
   const preview = getOcrElement('ocr-preview');
   if (!grid) return;
-  const hasVideo = !!(video && !video.classList.contains('is-hidden'));
   const hasPreview = !!(preview && !preview.classList.contains('is-hidden'));
-  grid.classList.toggle('has-video', hasVideo);
   grid.classList.toggle('has-preview', hasPreview);
-  grid.classList.toggle('single-media', (hasVideo ? 1 : 0) + (hasPreview ? 1 : 0) <= 1);
+  grid.classList.toggle('single-media', true);
 }
 
 function setOcrBusy(busy) {
   ocrState.busy = !!busy;
-  ['ocr-start-camera-btn', 'ocr-file-input', 'ocr-analyze-text-btn', 'ocr-confirm-btn'].forEach(function(id){
+  ['ocr-file-input', 'ocr-analyze-text-btn'].forEach(function(id){
     const el = getOcrElement(id);
     if (!el) return;
-    if (id === 'ocr-confirm-btn') {
-      el.disabled = busy || !ocrState.selectedResidentId || ocrState.registrationLocked;
-    } else {
-      el.disabled = !!busy;
-    }
+    el.disabled = !!busy;
   });
   const captureBtn = getOcrElement('ocr-capture-btn');
-  if (captureBtn) captureBtn.disabled = busy || !ocrState.stream;
-  const stopBtn = getOcrElement('ocr-stop-camera-btn');
-  if (stopBtn) stopBtn.disabled = busy || !ocrState.stream;
+  if (captureBtn) captureBtn.disabled = !!busy;
+  setOcrConfirmEnabled();
 }
 
 function setOcrConfirmEnabled() {
-  const btn = getOcrElement('ocr-confirm-btn');
-  if (!btn) return;
-  btn.disabled = ocrState.busy || !ocrState.selectedResidentId || ocrState.registrationLocked;
-  btn.textContent = ocrState.registrationLocked ? '登録済み' : '選択した寮生に登録';
+  document.querySelectorAll('.ocr-candidate-action-btn').forEach(function(actionBtn){
+    actionBtn.disabled = ocrState.busy || ocrState.registrationLocked;
+  });
 }
 
 function loadScriptOnce(url) {
@@ -7846,100 +7634,6 @@ async function loadOcrEngine() {
   return ocrEngineLoadPromise;
 }
 
-function stopOcrCamera() {
-  clearTimeout(ocrZoomApplyTimer);
-  if (ocrState.stream) {
-    try {
-      ocrState.stream.getTracks().forEach(function(track){ track.stop(); });
-    } catch (_) {}
-  }
-  ocrState.stream = null;
-  const video = getOcrElement('ocr-video');
-  if (video) {
-    try { video.pause(); } catch (_) {}
-    video.srcObject = null;
-    video.classList.add('is-hidden');
-  }
-  hideOcrZoomControl();
-  syncOcrMediaLayout();
-  updateOcrCameraActionLabels();
-  setOcrBusy(false);
-}
-
-async function requestOcrCameraStream() {
-  const attempts = [
-    {
-      video: {
-        facingMode: { ideal: 'environment' },
-        width: { ideal: 1920 },
-        height: { ideal: 1080 },
-        aspectRatio: { ideal: 1.7777778 },
-        advanced: [
-          { focusMode: 'continuous' },
-          { exposureMode: 'continuous' }
-        ]
-      },
-      audio: false
-    },
-    {
-      video: {
-        facingMode: { ideal: 'environment' },
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
-      },
-      audio: false
-    },
-    {
-      video: { facingMode: { ideal: 'environment' } },
-      audio: false
-    }
-  ];
-
-  let lastError = null;
-  for (const constraints of attempts) {
-    try {
-      return await navigator.mediaDevices.getUserMedia(constraints);
-    } catch (e) {
-      lastError = e;
-    }
-  }
-  throw lastError || new Error('カメラを起動できませんでした');
-}
-
-async function startOcrCamera() {
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    setOcrStatus('このブラウザではカメラを利用できません。画像から読み取りを使ってください。', 'error');
-    return;
-  }
-  const video = getOcrElement('ocr-video');
-  if (!video) return;
-  try {
-    setOcrBusy(true);
-    setOcrStatus('カメラを起動しています...', '');
-    stopOcrCamera();
-    const stream = await requestOcrCameraStream();
-    ocrState.stream = stream;
-    video.srcObject = stream;
-    video.classList.remove('is-hidden');
-    await video.play();
-    ocrState.lastImageSource = '';
-    resetOcrResultState();
-    setOcrAfterCaptureMode(false);
-    setOcrPreview('');
-    syncOcrMediaLayout();
-    setupOcrZoomControl();
-    updateOcrCameraActionLabels();
-    const width = video.videoWidth || 0;
-    const height = video.videoHeight || 0;
-    setOcrStatus(width && height ? `カメラ準備完了（${width}×${height}）` : 'カメラ準備完了', 'success');
-  } catch (e) {
-    console.error('startOcrCamera failed', e);
-    setOcrStatus('カメラを起動できませんでした。ブラウザのカメラ許可を確認してください。', 'error');
-  } finally {
-    setOcrBusy(false);
-  }
-}
-
 function setOcrPreview(dataUrl) {
   const preview = getOcrElement('ocr-preview');
   if (!preview) return;
@@ -7963,126 +7657,6 @@ function readFileAsDataUrl(file) {
   });
 }
 
-function captureOcrFrame() {
-  const video = getOcrElement('ocr-video');
-  const canvas = getOcrElement('ocr-canvas');
-  if (!video || !canvas || !ocrState.stream) {
-    setOcrStatus('カメラ映像がありません。', 'error');
-    return null;
-  }
-  const width = video.videoWidth || 1280;
-  const height = video.videoHeight || 720;
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(video, 0, 0, width, height);
-  return canvas.toDataURL('image/png');
-}
-
-async function captureAndRunOcrFromCamera() {
-  const imageData = captureOcrFrame();
-  if (!imageData) return;
-  stopOcrCamera();
-  await runOcrOnImage(imageData);
-}
-
-function loadImageForOcr(source) {
-  return new Promise(function(resolve, reject){
-    const img = new Image();
-    img.onload = function(){ resolve(img); };
-    img.onerror = function(){ reject(new Error('OCR用画像を読み込めませんでした')); };
-    img.src = source;
-  });
-}
-
-function clampOcrByte(value) {
-  return Math.max(0, Math.min(255, Math.round(value)));
-}
-
-async function prepareOcrImageForRecognition(imageSource) {
-  try {
-    const img = await loadImageForOcr(imageSource);
-    const srcWidth = img.naturalWidth || img.width || 0;
-    const srcHeight = img.naturalHeight || img.height || 0;
-    if (!srcWidth || !srcHeight) return imageSource;
-
-    const longEdge = Math.max(srcWidth, srcHeight);
-    let scale = 1;
-    if (longEdge < 1800) scale = Math.min(3, 1800 / longEdge);
-    if (longEdge > 2600) scale = 2600 / longEdge;
-
-    const width = Math.max(1, Math.round(srcWidth * scale));
-    const height = Math.max(1, Math.round(srcHeight * scale));
-    const canvas = getOcrElement('ocr-canvas') || document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return imageSource;
-
-    ctx.save();
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, width, height);
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(img, 0, 0, width, height);
-    ctx.restore();
-
-    const imageData = ctx.getImageData(0, 0, width, height);
-    const data = imageData.data;
-    let total = 0;
-    const pixels = Math.max(1, data.length / 4);
-    for (let i = 0; i < data.length; i += 4) {
-      total += (data[i] * 0.299) + (data[i + 1] * 0.587) + (data[i + 2] * 0.114);
-    }
-    const avg = total / pixels;
-    const contrast = avg > 185 ? 1.75 : 1.55;
-    const lift = avg > 185 ? 4 : 14;
-
-    for (let i = 0; i < data.length; i += 4) {
-      const gray = (data[i] * 0.299) + (data[i + 1] * 0.587) + (data[i + 2] * 0.114);
-      let next = (gray - 128) * contrast + 128 + lift;
-      if (next > 225) next = 255;
-      if (next < 72) next = 0;
-      next = clampOcrByte(next);
-      data[i] = next;
-      data[i + 1] = next;
-      data[i + 2] = next;
-      data[i + 3] = 255;
-    }
-    ctx.putImageData(imageData, 0, 0);
-    return canvas.toDataURL('image/png');
-  } catch (e) {
-    console.warn('prepareOcrImageForRecognition failed; using original image', e);
-    return imageSource;
-  }
-}
-
-function getOcrUsefulTextLength(text) {
-  return normalizeSearchText(text).length;
-}
-
-function mergeOcrTexts(primaryText, fallbackText) {
-  const seen = new Set();
-  const lines = [];
-  [primaryText, fallbackText].forEach(function(text){
-    String(text || '').split(/\r?\n/).forEach(function(line){
-      const trimmed = line.trim();
-      const key = normalizeSearchText(trimmed);
-      if (!trimmed || !key || seen.has(key)) return;
-      seen.add(key);
-      lines.push(trimmed);
-    });
-  });
-  return lines.join('\n').trim();
-}
-
-function shouldRetryOcrWithOriginal(result) {
-  const text = result && result.text ? String(result.text) : '';
-  const confidence = Number(result && result.confidence);
-  if (getOcrUsefulTextLength(text) < 6) return true;
-  return Number.isFinite(confidence) && confidence > 0 && confidence < 45;
-}
-
 async function recognizeOcrImage(Tesseract, imageSource, label, progressBase, progressSpan) {
   const result = await Tesseract.recognize(imageSource, 'jpn+eng', {
     tessedit_pageseg_mode: '6',
@@ -8102,50 +7676,24 @@ async function recognizeOcrImage(Tesseract, imageSource, label, progressBase, pr
   };
 }
 
-function getOcrSelectedItemType() {
-  const checked = document.querySelector('input[name="ocr-item-type"]:checked');
-  return checked && checked.value === 'mail' ? 'mail' : 'luggage';
-}
-
-function setOcrSelectedItemType(type) {
-  const normalized = type === 'mail' ? 'mail' : 'luggage';
-  const input = document.querySelector(`input[name="ocr-item-type"][value="${normalized}"]`);
-  if (input) input.checked = true;
-}
-
-function inferOcrItemType(text) {
-  const raw = String(text || '').toLowerCase();
-  if (/(郵便|郵送|封書|葉書|はがき|手紙|letter|mail|post)/i.test(raw)) return 'mail';
-  if (/(荷物|宅配|宅急便|ゆうパック|佐川|ヤマト|amazon|parcel|package|配達)/i.test(raw)) return 'luggage';
-  return getOcrSelectedItemType();
-}
-
 async function runOcrOnImage(imageSource) {
   if (!imageSource) return;
   ocrState.lastImageSource = imageSource;
+  ocrState.registeredResidentId = '';
+  ocrState.registeredType = '';
   setOcrRegistrationLocked(false);
-  setOcrAfterCaptureMode(true);
   setOcrPreview(imageSource);
   scrollOcrResultsIntoView();
   setOcrBusy(true);
   try {
     setOcrStatus('OCRエンジンを読み込んでいます...', '');
     const Tesseract = await loadOcrEngine();
-    setOcrStatus('画像を読み取りやすく補正しています...', '');
-    const enhancedSource = await prepareOcrImageForRecognition(imageSource);
-    setOcrStatus('補正した画像で文字を読み取っています... 0%', '');
-    const enhancedResult = await recognizeOcrImage(Tesseract, enhancedSource, '補正した画像で文字を読み取っています...', 0, 100);
-    let text = enhancedResult.text || '';
-
-    if (enhancedSource !== imageSource && shouldRetryOcrWithOriginal(enhancedResult)) {
-      setOcrStatus('元画像でも読み取り直しています... 0%', '');
-      const originalResult = await recognizeOcrImage(Tesseract, imageSource, '元画像でも読み取り直しています...', 0, 100);
-      text = mergeOcrTexts(enhancedResult.text, originalResult.text);
-    }
+    setOcrStatus('文字を読み取っています... 0%', '');
+    const result = await recognizeOcrImage(Tesseract, imageSource, '文字を読み取っています...', 0, 100);
+    const text = result.text || '';
 
     const textArea = getOcrElement('ocr-text');
     if (textArea) textArea.value = text;
-    setOcrSelectedItemType(inferOcrItemType(text));
     await analyzeOcrText();
     setOcrStatus(text ? '読み取りました。候補を確認してください。' : '文字を読み取れませんでした。', text ? 'success' : 'error');
   } catch (e) {
@@ -8274,18 +7822,22 @@ function renderOcrCandidates() {
     const dormLabel = getItemHistoryDormLabel(resident.dorm || '');
     const room = resident.roomNumber ? `${escapeHtml(resident.roomNumber)}号室` : '部屋番号なし';
     const reasons = candidate.reasons && candidate.reasons.length ? candidate.reasons.join(' / ') : 'OCR候補';
-    const checked = candidate.resident.id === ocrState.selectedResidentId || (!ocrState.selectedResidentId && index === 0);
-    if (checked) ocrState.selectedResidentId = candidate.resident.id;
+    const luggageRegistered = ocrState.registrationLocked && ocrState.registeredResidentId === resident.id && ocrState.registeredType === 'luggage';
+    const mailRegistered = ocrState.registrationLocked && ocrState.registeredResidentId === resident.id && ocrState.registeredType === 'mail';
+    const disabledAttr = (ocrState.busy || ocrState.registrationLocked) ? 'disabled' : '';
     return `
       <li>
-        <label class="ocr-candidate-card">
-          <input type="radio" name="ocr-candidate" value="${escapeHtml(resident.id || '')}" ${checked ? 'checked' : ''}>
-          <span>
+        <div class="ocr-candidate-card">
+          <span class="ocr-candidate-info">
             <span class="ocr-candidate-name">${escapeHtml(resident.name || '名前なし')}</span>
             <span class="ocr-candidate-meta">${escapeHtml([dormLabel, room, resident.furigana || ''].filter(Boolean).join(' / '))}</span>
             <span class="ocr-candidate-reason">${escapeHtml(reasons)}・一致度 ${candidate.score}</span>
           </span>
-        </label>
+          <span class="ocr-candidate-actions">
+            <button type="button" class="ocr-candidate-action-btn luggage" data-resident-id="${escapeHtml(resident.id || '')}" data-item-type="luggage" ${disabledAttr}>${luggageRegistered ? '登録済み' : '荷物+1'}</button>
+            <button type="button" class="ocr-candidate-action-btn mail" data-resident-id="${escapeHtml(resident.id || '')}" data-item-type="mail" ${disabledAttr}>${mailRegistered ? '登録済み' : '郵便+1'}</button>
+          </span>
+        </div>
       </li>
     `;
   }).join('');
@@ -8293,6 +7845,8 @@ function renderOcrCandidates() {
 }
 
 async function analyzeOcrText() {
+  ocrState.registeredResidentId = '';
+  ocrState.registeredType = '';
   setOcrRegistrationLocked(false);
   const textArea = getOcrElement('ocr-text');
   const rawText = textArea ? textArea.value : '';
@@ -8330,26 +7884,24 @@ function openOcrModal() {
   ocrState.candidates = [];
   ocrState.selectedResidentId = '';
   ocrState.registrationLocked = false;
+  ocrState.registeredResidentId = '';
+  ocrState.registeredType = '';
   ocrState.lastImageSource = '';
   const textArea = getOcrElement('ocr-text');
   if (textArea) textArea.value = '';
-  hideOcrZoomControl();
-  setOcrAfterCaptureMode(false);
   setOcrPreview('');
   renderOcrCandidates();
   setOcrStatus((typeof isAdmin === 'function' && !isAdmin()) ? '撮影と候補確認はできます。登録には管理者ログインが必要です。' : '', '');
-  updateOcrCameraActionLabels();
   setOcrBusy(false);
   modal.classList.add('active');
 }
 
 function closeOcrModal() {
-  stopOcrCamera();
   const modal = getOcrElement('ocr-modal');
   if (modal) modal.classList.remove('active');
 }
 
-async function applyOcrRegistration() {
+async function applyOcrRegistration(residentId, itemType) {
   if (ocrState.busy) return;
   if (ocrState.registrationLocked) {
     setOcrStatus('登録済みです。もう一度登録する場合は再撮影するか、候補を更新してください。', 'success');
@@ -8360,14 +7912,14 @@ async function applyOcrRegistration() {
     return;
   }
   const selected = ocrState.candidates.find(function(candidate){
-    return candidate && candidate.resident && candidate.resident.id === ocrState.selectedResidentId;
+    return candidate && candidate.resident && candidate.resident.id === residentId;
   });
   if (!selected || !selected.resident) {
-    setOcrStatus('登録する寮生を選択してください。', 'error');
+    setOcrStatus('登録する寮生を特定できませんでした。候補を更新してください。', 'error');
     return;
   }
   const resident = selected.resident;
-  const type = getOcrSelectedItemType();
+  const type = itemType === 'mail' ? 'mail' : 'luggage';
   const dormKey = resident.dorm === 'meizen' ? 'meizen' : 'shofu';
   const collectionName = `residents_${dormKey}`;
   const previousValue = Math.max(0, parseInt(resident[type], 10) || 0);
@@ -8386,7 +7938,10 @@ async function applyOcrRegistration() {
     await addLog('個数変更', `[${dormKey}] ${resident.name || ''} の${typeJa}を +1（OCR登録）`,
       buildItemHistoryLogMeta(resident.id, resident.name || '', collectionName, type, 1, previousValue, nextValue, 'ocr'));
     try { if (typeof window.renderTable === 'function') window.renderTable(); } catch (_) {}
+    ocrState.registeredResidentId = resident.id;
+    ocrState.registeredType = type;
     setOcrRegistrationLocked(true);
+    renderOcrCandidates();
     setOcrStatus(`${resident.name || '選択した寮生'}に${typeJa}を1件登録しました。`, 'success');
   } catch (e) {
     console.error('applyOcrRegistration failed', e);
@@ -8719,15 +8274,10 @@ if (ocrScanBtn) {
 const ocrModal = document.getElementById('ocr-modal');
 const ocrCloseBtn = document.getElementById('ocr-modal-close-btn');
 const ocrCancelBtn = document.getElementById('ocr-cancel-btn');
-const ocrStartCameraBtn = document.getElementById('ocr-start-camera-btn');
-const ocrStopCameraBtn = document.getElementById('ocr-stop-camera-btn');
 const ocrCaptureBtn = document.getElementById('ocr-capture-btn');
 const ocrFileInput = document.getElementById('ocr-file-input');
 const ocrAnalyzeTextBtn = document.getElementById('ocr-analyze-text-btn');
 const ocrCandidateList = document.getElementById('ocr-candidate-list');
-const ocrConfirmBtn = document.getElementById('ocr-confirm-btn');
-const ocrVideoEl = document.getElementById('ocr-video');
-const ocrMediaGrid = document.querySelector('.ocr-media-grid');
 if (ocrCloseBtn) ocrCloseBtn.addEventListener('click', closeOcrModal);
 if (ocrCancelBtn) ocrCancelBtn.addEventListener('click', closeOcrModal);
 if (ocrModal) {
@@ -8735,14 +8285,10 @@ if (ocrModal) {
     if (ev.target === ocrModal) closeOcrModal();
   });
 }
-if (ocrStartCameraBtn) ocrStartCameraBtn.addEventListener('click', startOcrCamera);
-if (ocrStopCameraBtn) ocrStopCameraBtn.addEventListener('click', stopOcrCamera);
 if (ocrCaptureBtn) {
   ocrCaptureBtn.addEventListener('click', () => {
-    captureAndRunOcrFromCamera().catch(function(e){
-      console.error('captureAndRunOcrFromCamera failed', e);
-      setOcrStatus('撮影した画像の読み取りに失敗しました。', 'error');
-    });
+    if (ocrState.busy) return;
+    if (ocrFileInput) ocrFileInput.click();
   });
 }
 if (ocrFileInput) {
@@ -8769,26 +8315,12 @@ if (ocrAnalyzeTextBtn) {
   });
 }
 if (ocrCandidateList) {
-  ocrCandidateList.addEventListener('change', (ev) => {
-    const input = ev.target && ev.target.closest && ev.target.closest('input[name="ocr-candidate"]');
-    if (!input) return;
-    ocrState.selectedResidentId = input.value || '';
-    setOcrConfirmEnabled();
-  });
-}
-[
-  ocrVideoEl,
-  ocrMediaGrid
-].forEach((el) => {
-  if (!el) return;
-  el.addEventListener('touchstart', handleOcrPinchStart, { passive: false });
-  el.addEventListener('touchmove', handleOcrPinchMove, { passive: false });
-  el.addEventListener('touchend', handleOcrPinchEnd, { passive: false });
-  el.addEventListener('touchcancel', handleOcrPinchEnd, { passive: false });
-});
-if (ocrConfirmBtn) {
-  ocrConfirmBtn.addEventListener('click', () => {
-    applyOcrRegistration();
+  ocrCandidateList.addEventListener('click', (ev) => {
+    const btn = ev.target && ev.target.closest && ev.target.closest('.ocr-candidate-action-btn');
+    if (!btn || btn.disabled) return;
+    const residentId = btn.dataset.residentId || '';
+    const itemType = btn.dataset.itemType === 'mail' ? 'mail' : 'luggage';
+    applyOcrRegistration(residentId, itemType);
   });
 }
 document.addEventListener('click', (ev) => {
