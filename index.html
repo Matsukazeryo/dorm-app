@@ -819,10 +819,10 @@
           cursor:not-allowed;
         }
         .ocr-zoom-panel {
-          display:grid;
-          grid-template-columns:auto 1fr;
+          display:flex;
           gap:10px;
           align-items:center;
+          justify-content:space-between;
           margin:-2px 0 12px;
           padding:10px 12px;
           border:1px solid var(--border-color);
@@ -832,17 +832,9 @@
         .ocr-zoom-panel[hidden] {
           display:none;
         }
-        .ocr-zoom-panel label {
-          display:flex;
-          align-items:center;
-          gap:6px;
+        .ocr-zoom-hint {
           color:var(--header-text);
           font-weight:700;
-          white-space:nowrap;
-        }
-        .ocr-zoom-panel input[type="range"] {
-          width:100%;
-          accent-color:#3498db;
         }
         .ocr-zoom-value {
           min-width:3.2em;
@@ -869,10 +861,21 @@
           border:1px solid var(--border-color);
           border-radius:8px;
           background:#111;
+          touch-action:none;
+          user-select:none;
         }
         .ocr-media-grid.single-media .ocr-video,
         .ocr-media-grid.single-media .ocr-preview {
           min-height:min(56vh, 560px);
+        }
+        .ocr-modal-content.is-after-capture .ocr-media-grid {
+          margin-bottom:8px;
+        }
+        .ocr-modal-content.is-after-capture .ocr-preview,
+        .ocr-modal-content.is-after-capture .ocr-media-grid.single-media .ocr-preview {
+          min-height:96px;
+          max-height:150px;
+          object-fit:contain;
         }
         .ocr-video.is-hidden,
         .ocr-preview.is-hidden {
@@ -1577,8 +1580,8 @@
       <button id="ocr-stop-camera-btn" type="button" class="ocr-action-btn secondary" disabled>カメラ停止</button>
     </div>
     <div id="ocr-zoom-panel" class="ocr-zoom-panel" hidden>
-      <label for="ocr-zoom-range">ズーム <span id="ocr-zoom-value" class="ocr-zoom-value">1.0x</span></label>
-      <input id="ocr-zoom-range" type="range" min="1" max="1" step="0.1" value="1" disabled>
+      <span class="ocr-zoom-hint">二本指でズーム</span>
+      <span id="ocr-zoom-value" class="ocr-zoom-value">1.0x</span>
     </div>
     <div class="ocr-media-grid">
       <video id="ocr-video" class="ocr-video is-hidden" playsinline autoplay muted></video>
@@ -7574,7 +7577,14 @@ const ocrState = {
   selectedResidentId: '',
   busy: false,
   lastImageSource: '',
-  registrationLocked: false
+  registrationLocked: false,
+  zoomSupported: false,
+  zoomMin: 1,
+  zoomMax: 1,
+  zoomCurrent: 1,
+  pinchActive: false,
+  pinchStartDistance: 0,
+  pinchStartZoom: 1
 };
 
 function getOcrElement(id) {
@@ -7593,6 +7603,49 @@ function setOcrStatus(message, tone) {
 function setOcrRegistrationLocked(locked) {
   ocrState.registrationLocked = !!locked;
   setOcrConfirmEnabled();
+}
+
+function getOcrModalContent() {
+  const modal = getOcrElement('ocr-modal');
+  return modal ? modal.querySelector('.ocr-modal-content') : document.querySelector('.ocr-modal-content');
+}
+
+function setOcrAfterCaptureMode(on) {
+  const content = getOcrModalContent();
+  if (content) content.classList.toggle('is-after-capture', !!on);
+}
+
+function updateOcrCameraActionLabels() {
+  const startBtn = getOcrElement('ocr-start-camera-btn');
+  if (!startBtn) return;
+  if (ocrState.stream) startBtn.textContent = 'カメラ再起動';
+  else if (ocrState.lastImageSource) startBtn.textContent = 'もう一度撮る';
+  else startBtn.textContent = 'カメラ開始';
+}
+
+function resetOcrResultState() {
+  ocrState.candidates = [];
+  ocrState.selectedResidentId = '';
+  setOcrRegistrationLocked(false);
+  const textArea = getOcrElement('ocr-text');
+  if (textArea) textArea.value = '';
+  renderOcrCandidates();
+}
+
+function scrollOcrResultsIntoView() {
+  const content = getOcrModalContent();
+  const target = getOcrElement('ocr-status') || getOcrElement('ocr-text');
+  if (!content || !target) return;
+  setTimeout(function(){
+    try {
+      content.scrollTo({
+        top: Math.max(0, target.offsetTop - 10),
+        behavior: 'smooth'
+      });
+    } catch (_) {
+      try { target.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (_) {}
+    }
+  }, 80);
 }
 
 function getOcrVideoTrack() {
@@ -7614,23 +7667,19 @@ function updateOcrZoomLabel(value) {
 
 function hideOcrZoomControl() {
   const panel = getOcrElement('ocr-zoom-panel');
-  const range = getOcrElement('ocr-zoom-range');
   if (panel) panel.hidden = true;
-  if (range) {
-    range.disabled = true;
-    range.min = '1';
-    range.max = '1';
-    range.step = '0.1';
-    range.value = '1';
-  }
+  ocrState.zoomSupported = false;
+  ocrState.zoomMin = 1;
+  ocrState.zoomMax = 1;
+  ocrState.zoomCurrent = 1;
+  ocrState.pinchActive = false;
   updateOcrZoomLabel(1);
 }
 
 function setupOcrZoomControl() {
   const panel = getOcrElement('ocr-zoom-panel');
-  const range = getOcrElement('ocr-zoom-range');
   const track = getOcrVideoTrack();
-  if (!panel || !range || !track || typeof track.getCapabilities !== 'function') {
+  if (!panel || !track || typeof track.getCapabilities !== 'function') {
     hideOcrZoomControl();
     return;
   }
@@ -7647,27 +7696,25 @@ function setupOcrZoomControl() {
 
   const min = capabilities.zoom.min;
   const max = capabilities.zoom.max;
-  const step = capabilities.zoom.step || 0.1;
   const current = Number.isFinite(Number(settings.zoom)) ? Number(settings.zoom) : min;
 
-  range.min = String(min);
-  range.max = String(max);
-  range.step = String(step);
-  range.value = String(Math.max(min, Math.min(max, current)));
-  range.disabled = false;
+  ocrState.zoomSupported = true;
+  ocrState.zoomMin = min;
+  ocrState.zoomMax = max;
+  ocrState.zoomCurrent = Math.max(min, Math.min(max, current));
   panel.hidden = false;
-  updateOcrZoomLabel(range.value);
+  updateOcrZoomLabel(ocrState.zoomCurrent);
 }
 
 async function applyOcrZoom(value) {
   const track = getOcrVideoTrack();
-  if (!track || typeof track.applyConstraints !== 'function') return;
-  const range = getOcrElement('ocr-zoom-range');
+  if (!ocrState.zoomSupported || !track || typeof track.applyConstraints !== 'function') return;
   const raw = Number(value);
   if (!Number.isFinite(raw)) return;
-  const min = Number(range && range.min) || raw;
-  const max = Number(range && range.max) || raw;
+  const min = ocrState.zoomMin;
+  const max = ocrState.zoomMax;
   const zoom = Math.max(min, Math.min(max, raw));
+  ocrState.zoomCurrent = zoom;
   updateOcrZoomLabel(zoom);
   try {
     await track.applyConstraints({ advanced: [{ zoom }] });
@@ -7678,11 +7725,47 @@ async function applyOcrZoom(value) {
 }
 
 function scheduleOcrZoomApply(value) {
-  updateOcrZoomLabel(value);
+  ocrState.zoomCurrent = Math.max(ocrState.zoomMin, Math.min(ocrState.zoomMax, Number(value) || ocrState.zoomMin));
+  updateOcrZoomLabel(ocrState.zoomCurrent);
   clearTimeout(ocrZoomApplyTimer);
   ocrZoomApplyTimer = setTimeout(function(){
-    applyOcrZoom(value);
+    applyOcrZoom(ocrState.zoomCurrent);
   }, 80);
+}
+
+function getOcrTouchDistance(touches) {
+  if (!touches || touches.length < 2) return 0;
+  const a = touches[0];
+  const b = touches[1];
+  const dx = a.clientX - b.clientX;
+  const dy = a.clientY - b.clientY;
+  return Math.sqrt((dx * dx) + (dy * dy));
+}
+
+function handleOcrPinchStart(ev) {
+  if (!ocrState.stream || !ocrState.zoomSupported || !ev.touches || ev.touches.length < 2) return;
+  const distance = getOcrTouchDistance(ev.touches);
+  if (!distance) return;
+  ocrState.pinchActive = true;
+  ocrState.pinchStartDistance = distance;
+  ocrState.pinchStartZoom = ocrState.zoomCurrent || ocrState.zoomMin || 1;
+  try { ev.preventDefault(); } catch (_) {}
+}
+
+function handleOcrPinchMove(ev) {
+  if (!ocrState.pinchActive || !ocrState.zoomSupported || !ev.touches || ev.touches.length < 2) return;
+  const distance = getOcrTouchDistance(ev.touches);
+  if (!distance || !ocrState.pinchStartDistance) return;
+  const ratio = distance / ocrState.pinchStartDistance;
+  const nextZoom = Math.max(ocrState.zoomMin, Math.min(ocrState.zoomMax, ocrState.pinchStartZoom * ratio));
+  scheduleOcrZoomApply(nextZoom);
+  try { ev.preventDefault(); } catch (_) {}
+}
+
+function handleOcrPinchEnd(ev) {
+  if (ev && ev.touches && ev.touches.length >= 2) return;
+  ocrState.pinchActive = false;
+  ocrState.pinchStartDistance = 0;
 }
 
 function syncOcrMediaLayout() {
@@ -7764,6 +7847,7 @@ async function loadOcrEngine() {
 }
 
 function stopOcrCamera() {
+  clearTimeout(ocrZoomApplyTimer);
   if (ocrState.stream) {
     try {
       ocrState.stream.getTracks().forEach(function(track){ track.stop(); });
@@ -7778,6 +7862,7 @@ function stopOcrCamera() {
   }
   hideOcrZoomControl();
   syncOcrMediaLayout();
+  updateOcrCameraActionLabels();
   setOcrBusy(false);
 }
 
@@ -7837,8 +7922,13 @@ async function startOcrCamera() {
     video.srcObject = stream;
     video.classList.remove('is-hidden');
     await video.play();
+    ocrState.lastImageSource = '';
+    resetOcrResultState();
+    setOcrAfterCaptureMode(false);
+    setOcrPreview('');
     syncOcrMediaLayout();
     setupOcrZoomControl();
+    updateOcrCameraActionLabels();
     const width = video.videoWidth || 0;
     const height = video.videoHeight || 0;
     setOcrStatus(width && height ? `カメラ準備完了（${width}×${height}）` : 'カメラ準備完了', 'success');
@@ -7887,6 +7977,13 @@ function captureOcrFrame() {
   const ctx = canvas.getContext('2d');
   ctx.drawImage(video, 0, 0, width, height);
   return canvas.toDataURL('image/png');
+}
+
+async function captureAndRunOcrFromCamera() {
+  const imageData = captureOcrFrame();
+  if (!imageData) return;
+  stopOcrCamera();
+  await runOcrOnImage(imageData);
 }
 
 function loadImageForOcr(source) {
@@ -8027,7 +8124,9 @@ async function runOcrOnImage(imageSource) {
   if (!imageSource) return;
   ocrState.lastImageSource = imageSource;
   setOcrRegistrationLocked(false);
+  setOcrAfterCaptureMode(true);
   setOcrPreview(imageSource);
+  scrollOcrResultsIntoView();
   setOcrBusy(true);
   try {
     setOcrStatus('OCRエンジンを読み込んでいます...', '');
@@ -8231,12 +8330,15 @@ function openOcrModal() {
   ocrState.candidates = [];
   ocrState.selectedResidentId = '';
   ocrState.registrationLocked = false;
+  ocrState.lastImageSource = '';
   const textArea = getOcrElement('ocr-text');
   if (textArea) textArea.value = '';
   hideOcrZoomControl();
+  setOcrAfterCaptureMode(false);
   setOcrPreview('');
   renderOcrCandidates();
   setOcrStatus((typeof isAdmin === 'function' && !isAdmin()) ? '撮影と候補確認はできます。登録には管理者ログインが必要です。' : '', '');
+  updateOcrCameraActionLabels();
   setOcrBusy(false);
   modal.classList.add('active');
 }
@@ -8624,7 +8726,8 @@ const ocrFileInput = document.getElementById('ocr-file-input');
 const ocrAnalyzeTextBtn = document.getElementById('ocr-analyze-text-btn');
 const ocrCandidateList = document.getElementById('ocr-candidate-list');
 const ocrConfirmBtn = document.getElementById('ocr-confirm-btn');
-const ocrZoomRange = document.getElementById('ocr-zoom-range');
+const ocrVideoEl = document.getElementById('ocr-video');
+const ocrMediaGrid = document.querySelector('.ocr-media-grid');
 if (ocrCloseBtn) ocrCloseBtn.addEventListener('click', closeOcrModal);
 if (ocrCancelBtn) ocrCancelBtn.addEventListener('click', closeOcrModal);
 if (ocrModal) {
@@ -8636,8 +8739,10 @@ if (ocrStartCameraBtn) ocrStartCameraBtn.addEventListener('click', startOcrCamer
 if (ocrStopCameraBtn) ocrStopCameraBtn.addEventListener('click', stopOcrCamera);
 if (ocrCaptureBtn) {
   ocrCaptureBtn.addEventListener('click', () => {
-    const imageData = captureOcrFrame();
-    if (imageData) runOcrOnImage(imageData);
+    captureAndRunOcrFromCamera().catch(function(e){
+      console.error('captureAndRunOcrFromCamera failed', e);
+      setOcrStatus('撮影した画像の読み取りに失敗しました。', 'error');
+    });
   });
 }
 if (ocrFileInput) {
@@ -8671,14 +8776,16 @@ if (ocrCandidateList) {
     setOcrConfirmEnabled();
   });
 }
-if (ocrZoomRange) {
-  ocrZoomRange.addEventListener('input', () => {
-    scheduleOcrZoomApply(ocrZoomRange.value);
-  });
-  ocrZoomRange.addEventListener('change', () => {
-    applyOcrZoom(ocrZoomRange.value);
-  });
-}
+[
+  ocrVideoEl,
+  ocrMediaGrid
+].forEach((el) => {
+  if (!el) return;
+  el.addEventListener('touchstart', handleOcrPinchStart, { passive: false });
+  el.addEventListener('touchmove', handleOcrPinchMove, { passive: false });
+  el.addEventListener('touchend', handleOcrPinchEnd, { passive: false });
+  el.addEventListener('touchcancel', handleOcrPinchEnd, { passive: false });
+});
 if (ocrConfirmBtn) {
   ocrConfirmBtn.addEventListener('click', () => {
     applyOcrRegistration();
