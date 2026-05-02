@@ -146,6 +146,14 @@
         #add-resident-btn { background-color: #27ae60; flex-grow: 1; }
         #add-bulk-btn { background-color: #2ecc71; flex-grow: 1; }
         #delete-selected-btn { background-color: #e74c3c; flex-grow: 1; }
+        #ocr-scan-btn {
+          display:none;
+          width:100%;
+          background:#34495e;
+        }
+        body.admin-logged-in #ocr-scan-btn {
+          display:block;
+        }
         
         .table-container { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
         table { width: 100%; border-collapse: collapse; }
@@ -376,11 +384,46 @@
             visibility: hidden;
         }
         body.count-edit-mode .count-cell button { visibility: visible; }
+        .count-box{
+            position:relative;
+            min-width:72px;
+            min-height:42px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            padding:6px 4px 19px;
+            box-sizing:border-box;
+        }
+        .count-history-btn{
+            position:absolute;
+            right:4px;
+            bottom:3px;
+            border:none;
+            border-radius:999px;
+            background:rgba(52, 152, 219, 0.14);
+            color:var(--header-text);
+            font-size:10px;
+            font-weight:700;
+            line-height:1;
+            padding:4px 7px;
+            cursor:pointer;
+            white-space:nowrap;
+        }
+        .count-history-btn:hover,
+        .count-history-btn:focus{
+            background:var(--mode-label-checked-bg);
+            color:var(--mode-label-checked-text);
+            outline:none;
+        }
+        body.dark-theme .count-history-btn{
+            background:rgba(93, 173, 226, 0.18);
+            color:#ecf0f1;
+        }
         .delete-btn { background-color: #c0392b; color: white; border: none; font-size: 12px; padding: 4px 8px; border-radius: 5px; cursor: pointer; }
         .edit-btn{
-          background-color:#2980b9;
-          color:#fff;
-          border:none;
+            background-color:#2980b9;
+            color:#fff;
+            border:none;
           font-size:12px;
           padding:4px 8px;
           border-radius:5px;
@@ -565,11 +608,16 @@
           color: var(--text-color);
         }
         .off-count-card {
+          position: relative;
           min-width: 150px;
-          padding: 16px 18px;
+          padding: 16px 18px 34px;
           border-radius: 16px;
           background: var(--controls-bg);
           border: 1px solid var(--border-color);
+        }
+        .off-count-card .count-history-btn{
+          right:10px;
+          bottom:9px;
         }
         .off-count-label {
           display: block;
@@ -632,6 +680,236 @@
           cursor: pointer;
           font-size: 0.98rem;
           font-weight: 700;
+        }
+        .item-history-modal-content {
+          max-width: 560px;
+        }
+        .item-history-subtitle {
+          margin: 0 0 12px 0;
+          font-size: 0.9rem;
+          color: #7f8c8d;
+        }
+        body.dark-theme .item-history-subtitle {
+          color: #bdc3c7;
+        }
+        .item-history-list {
+          list-style: none;
+          padding: 0;
+          margin: 0;
+          display: grid;
+          gap: 8px;
+        }
+        .item-history-list li {
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          padding: 10px 12px;
+          background: var(--controls-bg);
+          text-align: left;
+        }
+        .item-history-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+        }
+        .item-history-badge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 44px;
+          padding: 4px 8px;
+          border-radius: 999px;
+          font-size: 0.78rem;
+          font-weight: 700;
+          color: #fff;
+        }
+        .item-history-badge.is-plus {
+          background: #27ae60;
+        }
+        .item-history-badge.is-minus {
+          background: #c0392b;
+        }
+        .item-history-count {
+          font-weight: 800;
+          white-space: nowrap;
+        }
+        .item-history-time {
+          display: block;
+          margin-top: 5px;
+          font-size: 0.78rem;
+          color: #7f8c8d;
+        }
+        body.dark-theme .item-history-time {
+          color: #bdc3c7;
+        }
+        .item-history-empty,
+        .item-history-error {
+          padding: 14px;
+          border: 1px dashed var(--border-color);
+          border-radius: 8px;
+          color: #7f8c8d;
+          text-align: center;
+        }
+        .item-history-error {
+          color: #c0392b;
+        }
+        .ocr-modal-content {
+          max-width: 720px;
+        }
+        .ocr-actions,
+        .ocr-type-selector,
+        .ocr-confirm-actions {
+          display:flex;
+          flex-wrap:wrap;
+          gap:8px;
+          align-items:center;
+        }
+        .ocr-actions {
+          margin-bottom:12px;
+        }
+        .ocr-action-btn,
+        .ocr-file-label {
+          display:inline-flex;
+          align-items:center;
+          justify-content:center;
+          min-height:36px;
+          padding:8px 12px;
+          border:none;
+          border-radius:8px;
+          color:#fff;
+          background:#3498db;
+          font-size:0.9rem;
+          font-weight:700;
+          cursor:pointer;
+          box-sizing:border-box;
+        }
+        .ocr-action-btn.secondary,
+        .ocr-file-label.secondary {
+          background:#7f8c8d;
+        }
+        .ocr-action-btn.primary {
+          background:#27ae60;
+        }
+        .ocr-action-btn.danger {
+          background:#c0392b;
+        }
+        .ocr-action-btn:disabled {
+          background:#bdc3c7;
+          cursor:not-allowed;
+        }
+        .ocr-media-grid {
+          display:grid;
+          grid-template-columns:minmax(0, 1fr) minmax(0, 1fr);
+          gap:12px;
+          margin-bottom:12px;
+        }
+        .ocr-video,
+        .ocr-preview {
+          width:100%;
+          max-height:260px;
+          object-fit:contain;
+          border:1px solid var(--border-color);
+          border-radius:8px;
+          background:#111;
+        }
+        .ocr-video.is-hidden,
+        .ocr-preview.is-hidden {
+          display:none;
+        }
+        .ocr-field-label {
+          display:block;
+          margin:10px 0 5px;
+          font-size:0.84rem;
+          font-weight:700;
+          color:var(--header-text);
+        }
+        .ocr-textarea {
+          width:100%;
+          min-height:96px;
+          padding:10px;
+          border:1px solid var(--border-color);
+          border-radius:8px;
+          background:var(--mode-label-bg);
+          color:var(--text-color);
+          font-family:inherit;
+          font-size:0.9rem;
+          line-height:1.45;
+          box-sizing:border-box;
+          resize:vertical;
+        }
+        .ocr-status {
+          min-height:1.4em;
+          margin:8px 0 10px;
+          font-size:0.85rem;
+          color:#7f8c8d;
+        }
+        body.dark-theme .ocr-status {
+          color:#bdc3c7;
+        }
+        .ocr-status.is-error {
+          color:#c0392b;
+        }
+        .ocr-status.is-success {
+          color:#1e8449;
+        }
+        .ocr-type-selector label {
+          display:inline-flex;
+          align-items:center;
+          gap:5px;
+          padding:7px 10px;
+          border:1px solid var(--border-color);
+          border-radius:999px;
+          background:var(--controls-bg);
+          cursor:pointer;
+          font-size:0.88rem;
+          font-weight:700;
+        }
+        .ocr-candidate-list {
+          list-style:none;
+          padding:0;
+          margin:8px 0 0;
+          display:grid;
+          gap:8px;
+        }
+        .ocr-candidate-list li {
+          margin:0;
+        }
+        .ocr-candidate-card {
+          display:grid;
+          grid-template-columns:auto 1fr;
+          gap:8px;
+          align-items:flex-start;
+          padding:10px 12px;
+          border:1px solid var(--border-color);
+          border-radius:8px;
+          background:var(--controls-bg);
+          cursor:pointer;
+        }
+        .ocr-candidate-card input {
+          margin-top:3px;
+        }
+        .ocr-candidate-name {
+          display:block;
+          font-weight:800;
+          color:var(--text-color);
+        }
+        .ocr-candidate-meta,
+        .ocr-candidate-reason {
+          display:block;
+          margin-top:3px;
+          font-size:0.78rem;
+          color:#7f8c8d;
+        }
+        body.dark-theme .ocr-candidate-meta,
+        body.dark-theme .ocr-candidate-reason {
+          color:#bdc3c7;
+        }
+        .ocr-empty {
+          padding:12px;
+          border:1px dashed var(--border-color);
+          border-radius:8px;
+          color:#7f8c8d;
+          text-align:center;
         }
         .receive-action-btn.primary {
           background: #27ae60;
@@ -886,6 +1164,13 @@
           .notification-settings-enable-btn{
             width:100%;
           }
+          .ocr-media-grid {
+            grid-template-columns:1fr;
+          }
+          .ocr-action-btn,
+          .ocr-file-label {
+            flex:1 1 140px;
+          }
         }
         /* === 庶務モードOFF: 上部のコントロールを非表示にする === */
         body.sohmu-off .controls-container,
@@ -1040,7 +1325,7 @@
             <button data-dorm="all" class="active">両方</button>
         </div>
         <div class="top-controls">
-            <input type="search" id="search-input" placeholder="部屋番号, 名前, ふりがなで検索...">
+            <input type="search" id="search-input" placeholder="部屋番号, 名前, ふりがなで曖昧検索...">
             <div class="mode-selector">
                 <input type="radio" id="view-mode" name="mode" checked>
                 <label for="view-mode">閲覧</label>
@@ -1051,6 +1336,7 @@
             </div>
         </div>
         <div class="ops-container">
+            <button id="ocr-scan-btn" type="button">カメラ/OCRで自動登録</button>
              <div class="bulk-ops-container">
                 <button id="add-resident-btn">新しい寮生を追加</button>
                 <button id="add-bulk-btn">寮生を一括追加</button>
@@ -1185,6 +1471,60 @@
   </div>
 </div>
 <!-- ==== 寮生受け取りモーダル ここまで ==== -->
+
+<!-- ==== 荷物・郵便 個別履歴モーダル ==== -->
+<div id="item-history-modal" class="modal-overlay">
+  <div class="modal-content item-history-modal-content">
+    <div class="modal-header">
+      <h2 id="item-history-title">履歴</h2>
+      <button id="item-history-close-btn" class="modal-close-btn">&times;</button>
+    </div>
+    <p id="item-history-subtitle" class="item-history-subtitle"></p>
+    <ul id="item-history-list" class="item-history-list"></ul>
+  </div>
+</div>
+<!-- ==== 荷物・郵便 個別履歴モーダル ここまで ==== -->
+
+<!-- ==== カメラ/OCR 自動登録モーダル ==== -->
+<div id="ocr-modal" class="modal-overlay">
+  <div class="modal-content ocr-modal-content">
+    <div class="modal-header">
+      <h2>カメラ/OCRで自動登録</h2>
+      <button id="ocr-modal-close-btn" class="modal-close-btn">&times;</button>
+    </div>
+    <div class="ocr-actions">
+      <button id="ocr-start-camera-btn" type="button" class="ocr-action-btn">カメラ開始</button>
+      <button id="ocr-capture-btn" type="button" class="ocr-action-btn primary" disabled>撮影して読み取り</button>
+      <label for="ocr-file-input" class="ocr-file-label secondary">画像から読み取り</label>
+      <input id="ocr-file-input" type="file" accept="image/*" capture="environment" style="display:none;">
+      <button id="ocr-stop-camera-btn" type="button" class="ocr-action-btn secondary" disabled>カメラ停止</button>
+    </div>
+    <div class="ocr-media-grid">
+      <video id="ocr-video" class="ocr-video is-hidden" playsinline autoplay muted></video>
+      <img id="ocr-preview" class="ocr-preview is-hidden" alt="OCR対象画像">
+    </div>
+    <canvas id="ocr-canvas" style="display:none;"></canvas>
+    <div id="ocr-status" class="ocr-status"></div>
+    <label class="ocr-field-label" for="ocr-text">OCR結果</label>
+    <textarea id="ocr-text" class="ocr-textarea" placeholder="読み取った文字がここに入ります。必要なら修正できます。"></textarea>
+    <div class="ocr-actions" style="margin-top:8px;">
+      <button id="ocr-analyze-text-btn" type="button" class="ocr-action-btn secondary">候補を更新</button>
+    </div>
+    <div class="ocr-type-selector" aria-label="登録する種類">
+      <label><input type="radio" name="ocr-item-type" value="luggage" checked> 荷物 +1</label>
+      <label><input type="radio" name="ocr-item-type" value="mail"> 郵便 +1</label>
+    </div>
+    <label class="ocr-field-label">候補</label>
+    <ul id="ocr-candidate-list" class="ocr-candidate-list">
+      <li class="ocr-empty">候補はまだありません。</li>
+    </ul>
+    <div class="ocr-confirm-actions" style="margin-top:14px;">
+      <button id="ocr-confirm-btn" type="button" class="ocr-action-btn primary" disabled>選択した寮生に登録</button>
+      <button id="ocr-cancel-btn" type="button" class="ocr-action-btn secondary">閉じる</button>
+    </div>
+  </div>
+</div>
+<!-- ==== カメラ/OCR 自動登録モーダル ここまで ==== -->
 
 <!-- ==== 操作履歴モーダル ==== -->
 <div id="log-modal" class="modal-overlay">
@@ -1688,6 +2028,113 @@
 
     function normalizeFuriganaInput(value){
       return toHiragana(value).replace(/[^ぁ-ゖゔゝゞー 　]/g, '');
+    }
+
+    function normalizeSearchText(value){
+      var text = String(value == null ? '' : value);
+      if (typeof text.normalize === 'function') {
+        try { text = text.normalize('NFKC'); } catch (_) {}
+      }
+      return toHiragana(toHalfWidthDigits(text))
+        .toLowerCase()
+        .replace(/[ \t\r\n　・･,，、。.\-ー_＿\/／\\()（）\[\]［］【】「」『』:：;]/g, '');
+    }
+
+    function normalizeSearchTerms(value){
+      var raw = String(value == null ? '' : value).trim();
+      if (!raw) return [];
+      return raw.split(/[ \t\r\n　]+/)
+        .map(normalizeSearchText)
+        .filter(Boolean);
+    }
+
+    function boundedEditDistance(a, b, maxDistance){
+      a = String(a || '');
+      b = String(b || '');
+      if (a === b) return 0;
+      var lenA = a.length;
+      var lenB = b.length;
+      if (Math.abs(lenA - lenB) > maxDistance) return maxDistance + 1;
+
+      var prev = [];
+      var curr = [];
+      for (var j = 0; j <= lenB; j++) prev[j] = j;
+
+      for (var i = 1; i <= lenA; i++) {
+        curr[0] = i;
+        var rowMin = curr[0];
+        for (var k = 1; k <= lenB; k++) {
+          var cost = a.charAt(i - 1) === b.charAt(k - 1) ? 0 : 1;
+          var next = Math.min(
+            prev[k] + 1,
+            curr[k - 1] + 1,
+            prev[k - 1] + cost
+          );
+          curr[k] = next;
+          if (next < rowMin) rowMin = next;
+        }
+        if (rowMin > maxDistance) return maxDistance + 1;
+        var tmp = prev; prev = curr; curr = tmp;
+      }
+      return prev[lenB];
+    }
+
+    function getSearchFuzzyLimit(term){
+      var len = String(term || '').length;
+      if (len >= 7) return 2;
+      if (len >= 3) return 1;
+      return 0;
+    }
+
+    function fuzzyIncludesSearchText(text, term){
+      text = String(text || '');
+      term = String(term || '');
+      if (!term) return true;
+      if (!text) return false;
+      if (text.indexOf(term) !== -1) return true;
+      if (/^[0-9]+$/.test(term)) return false;
+
+      var limit = getSearchFuzzyLimit(term);
+      if (!limit) return false;
+      var termLen = term.length;
+      var textLen = text.length;
+      var minLen = Math.max(1, termLen - limit);
+      var maxLen = Math.min(textLen, termLen + limit);
+
+      for (var size = minLen; size <= maxLen; size++) {
+        for (var start = 0; start <= textLen - size; start++) {
+          var piece = text.slice(start, start + size);
+          if (boundedEditDistance(piece, term, limit) <= limit) return true;
+        }
+      }
+      return false;
+    }
+
+    function getResidentSearchFields(resident){
+      var r = resident || {};
+      var dormLabel = r.dorm === 'shofu' ? '松風寮' : (r.dorm === 'meizen' ? '明善寮' : '');
+      var fields = [
+        r.name,
+        r.furigana,
+        r.roomNumber,
+        r.circle,
+        dormLabel,
+        [r.roomNumber, r.name].join(' '),
+        [r.roomNumber, r.furigana].join(' '),
+        [r.name, r.furigana].join(' ')
+      ];
+      return fields.map(normalizeSearchText).filter(Boolean);
+    }
+
+    function residentMatchesSearch(resident, searchValue){
+      var terms = normalizeSearchTerms(searchValue);
+      if (terms.length === 0) return true;
+      var fields = getResidentSearchFields(resident);
+      return terms.every(function(term){
+        return fields.some(function(field){
+          return fuzzyIncludesSearchText(field, term);
+        });
+      });
     }
 
     function sanitizeFieldValue(inputEl, normalizer){
@@ -5700,14 +6147,31 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
     })();
 
     // 全ての関数をグローバルスコープに配置
-    async function addLog(action, details){
+    function cleanLogPayload(payload){
+        const out = {};
+        Object.keys(payload || {}).forEach(function(key){
+            const value = payload[key];
+            if (value === undefined) return;
+            if (value && typeof value === 'object' && !Array.isArray(value) && !(value && typeof value.toDate === 'function')) {
+                const nested = cleanLogPayload(value);
+                if (Object.keys(nested).length) out[key] = nested;
+                return;
+            }
+            out[key] = value;
+        });
+        return out;
+    }
+
+    async function addLog(action, details, extra){
         if (!isTrackedHistoryAction(action)) return;
         try{
-            await db.collection("logs").add({
+            const payload = cleanLogPayload(Object.assign({
                 action, details,
                 isAdmin: sessionStorage.getItem('isAdminLoggedIn')==='true',
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
-            });
+            }, (extra && typeof extra === 'object') ? extra : {}));
+            payload.timestamp = firebase.firestore.FieldValue.serverTimestamp();
+            await db.collection("logs").add(payload);
         }catch(e){
             console.error('addLog error',e);
         }
@@ -5717,6 +6181,206 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 
     function isTrackedHistoryAction(action){
       return TRACKED_HISTORY_ACTIONS.has(String(action || ''));
+    }
+
+    function getItemHistoryTypeLabel(type){
+      return type === 'mail' ? '郵便' : '荷物';
+    }
+
+    function getItemHistoryDormLabel(dorm){
+      if (dorm === 'shofu') return '松風寮';
+      if (dorm === 'meizen') return '明善寮';
+      return '';
+    }
+
+    function buildItemHistoryLogMeta(residentId, residentName, collectionName, type, delta, previousValue, nextValue, source){
+      const dorm = collectionName === 'all' ? '' : (String(collectionName || '').split('_')[1] || '');
+      return {
+        residentId,
+        residentName: residentName || '',
+        dorm,
+        itemType: type,
+        delta,
+        previousValue,
+        nextValue,
+        changeType: delta > 0 ? 'increase' : 'decrease',
+        historySource: source || 'manual'
+      };
+    }
+
+    function renderCountHistoryButton(resident, type){
+      if (!resident || !resident.id) return '';
+      const label = getItemHistoryTypeLabel(type);
+      const residentId = escapeHtml(resident.id);
+      const residentName = escapeHtml(resident.name || '');
+      return `<button type="button" class="count-history-btn" data-resident-id="${residentId}" data-item-type="${type}" aria-label="${residentName}の${label}履歴">履歴</button>`;
+    }
+
+    function getHistoryTimestampDate(value){
+      if (!value) return null;
+      if (typeof value.toDate === 'function') {
+        try { return value.toDate(); } catch (_) {}
+      }
+      if (value instanceof Date) return value;
+      const parsed = new Date(value);
+      return isNaN(parsed.getTime()) ? null : parsed;
+    }
+
+    function formatHistoryTimestamp(value){
+      const date = getHistoryTimestampDate(value);
+      if (!date) return '日時不明';
+      return date.toLocaleString('ja-JP', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    function historyTimestampMillis(entry){
+      const date = getHistoryTimestampDate(entry && entry.timestamp);
+      return date ? date.getTime() : 0;
+    }
+
+    function normalizeStructuredHistoryEntry(log, itemType){
+      const d = log || {};
+      const entries = [];
+      if (d.action === '個数変更' && d.itemType === itemType) {
+        const delta = Number(d.delta || 0);
+        if (delta) {
+          entries.push({
+            delta,
+            reason: delta > 0 ? '増えました' : '減りました',
+            note: d.historySource === 'morning' ? '朝の庶務で変更' : '個数変更ボタンで変更',
+            timestamp: d.timestamp
+          });
+        }
+      }
+      if (d.action === '受け取り') {
+        const items = d.items || {};
+        const count = Math.max(0, parseInt(items[itemType], 10) || 0);
+        if (count) {
+          entries.push({
+            delta: -count,
+            reason: '受け取り',
+            note: '受け取り操作で減りました',
+            timestamp: d.timestamp
+          });
+        }
+      }
+      return entries;
+    }
+
+    function normalizeLegacyHistoryEntry(log, resident, itemType){
+      const d = log || {};
+      const residentName = resident && resident.name ? String(resident.name) : '';
+      const details = String(d.details || '');
+      const label = getItemHistoryTypeLabel(itemType);
+      if (!residentName || details.indexOf(residentName) === -1 || details.indexOf(label) === -1) return [];
+
+      if (d.action === '個数変更') {
+        const delta = details.indexOf('+1') !== -1 ? 1 : (details.indexOf('-1') !== -1 ? -1 : 0);
+        if (!delta) return [];
+        return [{
+          delta,
+          reason: delta > 0 ? '増えました' : '減りました',
+          note: '以前の操作履歴から復元',
+          timestamp: d.timestamp
+        }];
+      }
+
+      if (d.action === '受け取り' && details.indexOf('受け取り') !== -1) {
+        const re = new RegExp(label + '(\\d+)件');
+        const match = details.match(re);
+        const count = match ? Math.max(0, parseInt(match[1], 10) || 0) : 1;
+        if (!count) return [];
+        return [{
+          delta: -count,
+          reason: '受け取り',
+          note: '以前の操作履歴から復元',
+          timestamp: d.timestamp
+        }];
+      }
+
+      return [];
+    }
+
+    function renderItemHistoryEntries(entries, itemType){
+      const list = document.getElementById('item-history-list');
+      if (!list) return;
+      if (!entries || !entries.length) {
+        list.innerHTML = `<li class="item-history-empty">${getItemHistoryTypeLabel(itemType)}の増減履歴はまだありません。</li>`;
+        return;
+      }
+      list.innerHTML = entries.map(function(entry){
+        const delta = Number(entry.delta || 0);
+        const plus = delta > 0;
+        const badgeText = plus ? '増加' : (entry.reason === '受け取り' ? '受取' : '減少');
+        const countText = `${plus ? '+' : ''}${delta}件`;
+        return `
+          <li>
+            <div class="item-history-row">
+              <span class="item-history-badge ${plus ? 'is-plus' : 'is-minus'}">${badgeText}</span>
+              <span class="item-history-count">${countText}</span>
+            </div>
+            <span class="item-history-time">${escapeHtml(formatHistoryTimestamp(entry.timestamp))}</span>
+            <span class="item-history-time">${escapeHtml(entry.note || entry.reason || '')}</span>
+          </li>
+        `;
+      }).join('');
+    }
+
+    async function fetchStructuredItemHistory(residentId, itemType){
+      const snap = await db.collection('logs').where('residentId', '==', residentId).limit(200).get();
+      const entries = [];
+      snap.forEach(function(doc){
+        entries.push.apply(entries, normalizeStructuredHistoryEntry(doc.data() || {}, itemType));
+      });
+      return entries;
+    }
+
+    async function fetchLegacyItemHistory(resident, itemType){
+      if (!resident || !resident.name) return [];
+      const snap = await db.collection('logs').orderBy('timestamp', 'desc').limit(200).get();
+      const entries = [];
+      snap.forEach(function(doc){
+        entries.push.apply(entries, normalizeLegacyHistoryEntry(doc.data() || {}, resident, itemType));
+      });
+      return entries;
+    }
+
+    async function openItemHistoryModal(residentId, itemType){
+      const type = itemType === 'mail' ? 'mail' : 'luggage';
+      const resident = getResidentById(residentId) || { id: residentId, name: '' };
+      const modal = document.getElementById('item-history-modal');
+      const title = document.getElementById('item-history-title');
+      const subtitle = document.getElementById('item-history-subtitle');
+      const list = document.getElementById('item-history-list');
+      if (!modal || !list) return;
+
+      const dormLabel = getItemHistoryDormLabel(resident.dorm || '');
+      if (title) title.textContent = `${resident.name || '寮生'}の${getItemHistoryTypeLabel(type)}履歴`;
+      if (subtitle) subtitle.textContent = [dormLabel, resident.roomNumber ? `${resident.roomNumber}号室` : ''].filter(Boolean).join(' / ');
+      list.innerHTML = '<li class="item-history-empty">読み込み中...</li>';
+      modal.classList.add('active');
+
+      try {
+        let entries = await fetchStructuredItemHistory(residentId, type);
+        if (!entries.length) {
+          entries = await fetchLegacyItemHistory(resident, type);
+        }
+        entries.sort(function(a, b){ return historyTimestampMillis(b) - historyTimestampMillis(a); });
+        renderItemHistoryEntries(entries, type);
+      } catch (e) {
+        console.error('openItemHistoryModal failed', e);
+        list.innerHTML = '<li class="item-history-error">履歴を読み込めませんでした。通信状態や権限をご確認ください。</li>';
+      }
+    }
+
+    function closeItemHistoryModal(){
+      const modal = document.getElementById('item-history-modal');
+      if (modal) modal.classList.remove('active');
     }
 
     // 安全なカラーコード (#RGB / #RRGGBB) のみ許可
@@ -6072,6 +6736,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
     // 荷物/郵便の個数を ±1（即時にUI反映し、バックグラウンドで保存）
     function updateCount(residentId, residentName, type, value) {
       let nextValue = null;
+      let previousValue = null;
       // 1) 楽観的にメモリ上のデータとUIを即反映
       try {
         const idx = Array.isArray(allResidents) ? allResidents.findIndex(r => r.id === residentId) : -1;
@@ -6081,6 +6746,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
             : (parseInt(allResidents[idx][type]) || 0);
           const next = Math.max(0, cur + value);
           if (next !== cur) {
+            previousValue = cur;
             allResidents[idx][type] = next;
             nextValue = next;
             if (typeof window.renderTable === 'function') {
@@ -6112,7 +6778,8 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
           __stageResidentWrite(targetCollection, residentId, { [type]: nextValue });
           const typeJa = (type === 'luggage') ? '荷物' : '郵便';
           const dormKey = (targetCollection.split('_')[1] || '');
-          addLog('個数変更', `[${dormKey}] ${residentName} の${typeJa}を ${value > 0 ? '+1' : '-1'}`);
+          addLog('個数変更', `[${dormKey}] ${residentName} の${typeJa}を ${value > 0 ? '+1' : '-1'}`,
+            buildItemHistoryLogMeta(residentId, residentName, targetCollection, type, value, previousValue, nextValue, 'morning'));
         } catch (e) {
           console.warn('morning staged updateCount failed', e);
         }
@@ -6125,7 +6792,8 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
           try {
             const typeJa = (type === 'luggage') ? '荷物' : '郵便';
             const dormKey = (targetCollection.split('_')[1] || '');
-            addLog('個数変更', `[${dormKey}] ${residentName} の${typeJa}を ${value > 0 ? '+1' : '-1'}`);
+            addLog('個数変更', `[${dormKey}] ${residentName} の${typeJa}を ${value > 0 ? '+1' : '-1'}`,
+              buildItemHistoryLogMeta(residentId, residentName, targetCollection, type, value, previousValue, nextValue, 'manual'));
           } catch (_) {}
         })
         .catch((e) => {
@@ -6137,13 +6805,16 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
             const current = (snap.data()[type] != null) ? snap.data()[type] : 0;
             let next = current + value;
             if (next < 0) next = 0;
-            if (next === current) return;
+            if (next === current) return { changed: false, previousValue: current, nextValue: next };
             t.update(docRef, { [type]: next });
-          }).then(() => {
+            return { changed: true, previousValue: current, nextValue: next };
+          }).then((result) => {
+            if (!result || !result.changed) return;
             try {
               const typeJa = (type === 'luggage') ? '荷物' : '郵便';
               const dormKey = (targetCollection.split('_')[1] || '');
-              addLog('個数変更', `[${dormKey}] ${residentName} の${typeJa}を ${value > 0 ? '+1' : '-1'}`);
+              addLog('個数変更', `[${dormKey}] ${residentName} の${typeJa}を ${value > 0 ? '+1' : '-1'}`,
+                buildItemHistoryLogMeta(residentId, residentName, targetCollection, type, value, result.previousValue, result.nextValue, 'manual'));
             } catch (_) {}
           }).catch(err => console.error('updateCount フォールバック失敗', err));
         });
@@ -6804,6 +7475,421 @@ function resolveResidentCollectionName(residentId) {
   return `residents_${dormKey}`;
 }
 
+const OCR_SCRIPT_URLS = [
+  'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js',
+  'https://unpkg.com/tesseract.js@5/dist/tesseract.min.js'
+];
+let ocrEngineLoadPromise = null;
+const ocrState = {
+  stream: null,
+  candidates: [],
+  selectedResidentId: '',
+  busy: false
+};
+
+function getOcrElement(id) {
+  return document.getElementById(id);
+}
+
+function setOcrStatus(message, tone) {
+  const el = getOcrElement('ocr-status');
+  if (!el) return;
+  el.textContent = message || '';
+  el.classList.remove('is-error', 'is-success');
+  if (tone === 'error') el.classList.add('is-error');
+  if (tone === 'success') el.classList.add('is-success');
+}
+
+function setOcrBusy(busy) {
+  ocrState.busy = !!busy;
+  ['ocr-start-camera-btn', 'ocr-file-input', 'ocr-analyze-text-btn', 'ocr-confirm-btn'].forEach(function(id){
+    const el = getOcrElement(id);
+    if (!el) return;
+    if (id === 'ocr-confirm-btn') {
+      el.disabled = busy || !ocrState.selectedResidentId;
+    } else {
+      el.disabled = !!busy;
+    }
+  });
+  const captureBtn = getOcrElement('ocr-capture-btn');
+  if (captureBtn) captureBtn.disabled = busy || !ocrState.stream;
+  const stopBtn = getOcrElement('ocr-stop-camera-btn');
+  if (stopBtn) stopBtn.disabled = busy || !ocrState.stream;
+}
+
+function setOcrConfirmEnabled() {
+  const btn = getOcrElement('ocr-confirm-btn');
+  if (btn) btn.disabled = ocrState.busy || !ocrState.selectedResidentId;
+}
+
+function loadScriptOnce(url) {
+  return new Promise(function(resolve, reject){
+    const existing = document.querySelector(`script[data-ocr-src="${url}"]`);
+    if (existing && existing.dataset.loaded === '1') {
+      resolve();
+      return;
+    }
+    const script = existing || document.createElement('script');
+    script.src = url;
+    script.async = true;
+    script.dataset.ocrSrc = url;
+    script.onload = function(){
+      script.dataset.loaded = '1';
+      resolve();
+    };
+    script.onerror = function(){
+      try { script.remove(); } catch (_) {}
+      reject(new Error('OCRエンジンを読み込めませんでした'));
+    };
+    if (!existing) document.head.appendChild(script);
+  });
+}
+
+async function loadOcrEngine() {
+  if (window.Tesseract) return window.Tesseract;
+  if (!ocrEngineLoadPromise) {
+    ocrEngineLoadPromise = (async function(){
+      let lastError = null;
+      for (const url of OCR_SCRIPT_URLS) {
+        try {
+          await loadScriptOnce(url);
+          if (window.Tesseract) return window.Tesseract;
+        } catch (e) {
+          lastError = e;
+        }
+      }
+      throw lastError || new Error('OCRエンジンを読み込めませんでした');
+    })();
+  }
+  return ocrEngineLoadPromise;
+}
+
+function stopOcrCamera() {
+  if (ocrState.stream) {
+    try {
+      ocrState.stream.getTracks().forEach(function(track){ track.stop(); });
+    } catch (_) {}
+  }
+  ocrState.stream = null;
+  const video = getOcrElement('ocr-video');
+  if (video) {
+    try { video.pause(); } catch (_) {}
+    video.srcObject = null;
+    video.classList.add('is-hidden');
+  }
+  setOcrBusy(false);
+}
+
+async function startOcrCamera() {
+  if (typeof isAdmin === 'function' && !isAdmin()) {
+    alert('管理者ログインが必要です。');
+    return;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    setOcrStatus('このブラウザではカメラを利用できません。画像から読み取りを使ってください。', 'error');
+    return;
+  }
+  const video = getOcrElement('ocr-video');
+  if (!video) return;
+  try {
+    setOcrBusy(true);
+    setOcrStatus('カメラを起動しています...', '');
+    stopOcrCamera();
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' } },
+      audio: false
+    });
+    ocrState.stream = stream;
+    video.srcObject = stream;
+    video.classList.remove('is-hidden');
+    await video.play();
+    setOcrStatus('カメラ準備完了', 'success');
+  } catch (e) {
+    console.error('startOcrCamera failed', e);
+    setOcrStatus('カメラを起動できませんでした。ブラウザのカメラ許可を確認してください。', 'error');
+  } finally {
+    setOcrBusy(false);
+  }
+}
+
+function setOcrPreview(dataUrl) {
+  const preview = getOcrElement('ocr-preview');
+  if (!preview) return;
+  if (!dataUrl) {
+    preview.removeAttribute('src');
+    preview.classList.add('is-hidden');
+    return;
+  }
+  preview.src = dataUrl;
+  preview.classList.remove('is-hidden');
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise(function(resolve, reject){
+    const reader = new FileReader();
+    reader.onload = function(){ resolve(String(reader.result || '')); };
+    reader.onerror = function(){ reject(reader.error || new Error('画像を読み込めませんでした')); };
+    reader.readAsDataURL(file);
+  });
+}
+
+function captureOcrFrame() {
+  const video = getOcrElement('ocr-video');
+  const canvas = getOcrElement('ocr-canvas');
+  if (!video || !canvas || !ocrState.stream) {
+    setOcrStatus('カメラ映像がありません。', 'error');
+    return null;
+  }
+  const width = video.videoWidth || 1280;
+  const height = video.videoHeight || 720;
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, width, height);
+  return canvas.toDataURL('image/jpeg', 0.92);
+}
+
+function getOcrSelectedItemType() {
+  const checked = document.querySelector('input[name="ocr-item-type"]:checked');
+  return checked && checked.value === 'mail' ? 'mail' : 'luggage';
+}
+
+function setOcrSelectedItemType(type) {
+  const normalized = type === 'mail' ? 'mail' : 'luggage';
+  const input = document.querySelector(`input[name="ocr-item-type"][value="${normalized}"]`);
+  if (input) input.checked = true;
+}
+
+function inferOcrItemType(text) {
+  const raw = String(text || '').toLowerCase();
+  if (/(郵便|郵送|封書|葉書|はがき|手紙|letter|mail|post)/i.test(raw)) return 'mail';
+  if (/(荷物|宅配|宅急便|ゆうパック|佐川|ヤマト|amazon|parcel|package|配達)/i.test(raw)) return 'luggage';
+  return getOcrSelectedItemType();
+}
+
+async function runOcrOnImage(imageSource) {
+  if (!imageSource) return;
+  setOcrPreview(imageSource);
+  setOcrBusy(true);
+  try {
+    setOcrStatus('OCRエンジンを読み込んでいます...', '');
+    const Tesseract = await loadOcrEngine();
+    setOcrStatus('文字を読み取っています...', '');
+    const result = await Tesseract.recognize(imageSource, 'jpn+eng', {
+      logger: function(message){
+        if (!message || !message.status) return;
+        if (typeof message.progress === 'number') {
+          const pct = Math.round(message.progress * 100);
+          setOcrStatus(`文字を読み取っています... ${pct}%`, '');
+        }
+      }
+    });
+    const text = (result && result.data && result.data.text) ? String(result.data.text).trim() : '';
+    const textArea = getOcrElement('ocr-text');
+    if (textArea) textArea.value = text;
+    setOcrSelectedItemType(inferOcrItemType(text));
+    await analyzeOcrText();
+    setOcrStatus(text ? '読み取りました。候補を確認してください。' : '文字を読み取れませんでした。', text ? 'success' : 'error');
+  } catch (e) {
+    console.error('runOcrOnImage failed', e);
+    setOcrStatus('OCRに失敗しました。画像を変えるか、OCR結果欄に文字を入力して候補を更新してください。', 'error');
+  } finally {
+    setOcrBusy(false);
+  }
+}
+
+async function getOcrCandidateResidents() {
+  const local = Array.isArray(allResidents) ? allResidents.filter(function(r){ return r && r.id; }) : [];
+  if (currentCollectionName === 'all' && local.length) return local;
+  try {
+    const snaps = await Promise.all([
+      db.collection('residents_shofu').get(),
+      db.collection('residents_meizen').get()
+    ]);
+    return snaps[0].docs.map(function(doc){ return mergeResidentDocData(doc, 'shofu'); })
+      .concat(snaps[1].docs.map(function(doc){ return mergeResidentDocData(doc, 'meizen'); }));
+  } catch (e) {
+    console.warn('getOcrCandidateResidents fallback to local list', e);
+    return local;
+  }
+}
+
+function getOcrDigitTokens(text) {
+  const normalized = toHalfWidthDigits(String(text || ''));
+  const matches = normalized.match(/[0-9]{2,4}/g);
+  return matches ? Array.from(new Set(matches)) : [];
+}
+
+function scoreOcrResident(resident, rawText, normalizedText, digitTokens) {
+  const r = resident || {};
+  const name = normalizeSearchText(r.name || '');
+  const furigana = normalizeSearchText(r.furigana || '');
+  const room = normalizeRoomNumberInput(r.roomNumber || '');
+  const dormLabel = r.dorm === 'shofu' ? '松風寮' : (r.dorm === 'meizen' ? '明善寮' : '');
+  const normalizedDorm = normalizeSearchText(dormLabel);
+  let score = 0;
+  const reasons = [];
+
+  if (name && normalizedText.indexOf(name) !== -1) {
+    score += 90;
+    reasons.push('名前一致');
+  } else if (name && fuzzyIncludesSearchText(normalizedText, name)) {
+    score += 55;
+    reasons.push('名前が近い');
+  }
+
+  if (furigana && normalizedText.indexOf(furigana) !== -1) {
+    score += 55;
+    reasons.push('ふりがな一致');
+  } else if (furigana && fuzzyIncludesSearchText(normalizedText, furigana)) {
+    score += 30;
+    reasons.push('ふりがなが近い');
+  }
+
+  if (room && digitTokens.indexOf(room) !== -1) {
+    score += 58;
+    reasons.push(`${room}号室`);
+  } else if (room && normalizedText.indexOf(room) !== -1) {
+    score += 35;
+    reasons.push(`${room}を検出`);
+  }
+
+  if (normalizedDorm && normalizedText.indexOf(normalizedDorm) !== -1) {
+    score += 15;
+    reasons.push(dormLabel);
+  }
+
+  return { resident: r, score, reasons };
+}
+
+function renderOcrCandidates() {
+  const list = getOcrElement('ocr-candidate-list');
+  if (!list) return;
+  if (!ocrState.candidates.length) {
+    list.innerHTML = '<li class="ocr-empty">一致しそうな寮生が見つかりません。</li>';
+    ocrState.selectedResidentId = '';
+    setOcrConfirmEnabled();
+    return;
+  }
+  list.innerHTML = ocrState.candidates.map(function(candidate, index){
+    const resident = candidate.resident || {};
+    const dormLabel = getItemHistoryDormLabel(resident.dorm || '');
+    const room = resident.roomNumber ? `${escapeHtml(resident.roomNumber)}号室` : '部屋番号なし';
+    const reasons = candidate.reasons && candidate.reasons.length ? candidate.reasons.join(' / ') : 'OCR候補';
+    const checked = candidate.resident.id === ocrState.selectedResidentId || (!ocrState.selectedResidentId && index === 0);
+    if (checked) ocrState.selectedResidentId = candidate.resident.id;
+    return `
+      <li>
+        <label class="ocr-candidate-card">
+          <input type="radio" name="ocr-candidate" value="${escapeHtml(resident.id || '')}" ${checked ? 'checked' : ''}>
+          <span>
+            <span class="ocr-candidate-name">${escapeHtml(resident.name || '名前なし')}</span>
+            <span class="ocr-candidate-meta">${escapeHtml([dormLabel, room, resident.furigana || ''].filter(Boolean).join(' / '))}</span>
+            <span class="ocr-candidate-reason">${escapeHtml(reasons)}・一致度 ${candidate.score}</span>
+          </span>
+        </label>
+      </li>
+    `;
+  }).join('');
+  setOcrConfirmEnabled();
+}
+
+async function analyzeOcrText() {
+  const textArea = getOcrElement('ocr-text');
+  const rawText = textArea ? textArea.value : '';
+  const normalizedText = normalizeSearchText(rawText);
+  if (!normalizedText) {
+    ocrState.candidates = [];
+    ocrState.selectedResidentId = '';
+    renderOcrCandidates();
+    setOcrStatus('OCR結果欄に文字がありません。', 'error');
+    return;
+  }
+  setOcrStatus('候補を探しています...', '');
+  const residents = await getOcrCandidateResidents();
+  const digitTokens = getOcrDigitTokens(rawText);
+  ocrState.candidates = residents.map(function(resident){
+      return scoreOcrResident(resident, rawText, normalizedText, digitTokens);
+    })
+    .filter(function(candidate){ return candidate.score >= 35; })
+    .sort(function(a, b){
+      if (b.score !== a.score) return b.score - a.score;
+      const roomA = parseResidentRoomValue(a.resident);
+      const roomB = parseResidentRoomValue(b.resident);
+      if (roomA != null && roomB != null && roomA !== roomB) return roomA - roomB;
+      return String(a.resident.name || '').localeCompare(String(b.resident.name || ''), 'ja');
+    })
+    .slice(0, 8);
+  ocrState.selectedResidentId = ocrState.candidates[0] && ocrState.candidates[0].resident ? ocrState.candidates[0].resident.id : '';
+  renderOcrCandidates();
+  setOcrStatus(ocrState.candidates.length ? '候補を表示しました。' : '候補が見つかりませんでした。', ocrState.candidates.length ? 'success' : 'error');
+}
+
+function openOcrModal() {
+  if (typeof isAdmin === 'function' && !isAdmin()) {
+    alert('管理者ログインが必要です。');
+    return;
+  }
+  const modal = getOcrElement('ocr-modal');
+  if (!modal) return;
+  ocrState.candidates = [];
+  ocrState.selectedResidentId = '';
+  const textArea = getOcrElement('ocr-text');
+  if (textArea) textArea.value = '';
+  setOcrPreview('');
+  renderOcrCandidates();
+  setOcrStatus('', '');
+  setOcrBusy(false);
+  modal.classList.add('active');
+}
+
+function closeOcrModal() {
+  stopOcrCamera();
+  const modal = getOcrElement('ocr-modal');
+  if (modal) modal.classList.remove('active');
+}
+
+async function applyOcrRegistration() {
+  if (typeof isAdmin === 'function' && !isAdmin()) {
+    alert('管理者ログインが必要です。');
+    return;
+  }
+  const selected = ocrState.candidates.find(function(candidate){
+    return candidate && candidate.resident && candidate.resident.id === ocrState.selectedResidentId;
+  });
+  if (!selected || !selected.resident) {
+    setOcrStatus('登録する寮生を選択してください。', 'error');
+    return;
+  }
+  const resident = selected.resident;
+  const type = getOcrSelectedItemType();
+  const dormKey = resident.dorm === 'meizen' ? 'meizen' : 'shofu';
+  const collectionName = `residents_${dormKey}`;
+  const previousValue = Math.max(0, parseInt(resident[type], 10) || 0);
+  const nextValue = previousValue + 1;
+
+  setOcrBusy(true);
+  setOcrStatus('登録しています...', '');
+  try {
+    await db.collection(collectionName).doc(resident.id).update({
+      [type]: firebase.firestore.FieldValue.increment(1)
+    });
+    const localResident = getResidentById(resident.id);
+    if (localResident) localResident[type] = Math.max(0, parseInt(localResident[type], 10) || 0) + 1;
+    resident[type] = nextValue;
+    const typeJa = getItemHistoryTypeLabel(type);
+    await addLog('個数変更', `[${dormKey}] ${resident.name || ''} の${typeJa}を +1（OCR登録）`,
+      buildItemHistoryLogMeta(resident.id, resident.name || '', collectionName, type, 1, previousValue, nextValue, 'ocr'));
+    try { if (typeof window.renderTable === 'function') window.renderTable(); } catch (_) {}
+    setOcrStatus(`${resident.name || '選択した寮生'}に${typeJa}を1件登録しました。`, 'success');
+  } catch (e) {
+    console.error('applyOcrRegistration failed', e);
+    setOcrStatus('登録に失敗しました。通信状態や権限をご確認ください。', 'error');
+  } finally {
+    setOcrBusy(false);
+  }
+}
+
 function findResidentNoteEditorElement(selector, residentId) {
   const list = document.querySelectorAll(selector);
   for (let i = 0; i < list.length; i++) {
@@ -7004,7 +8090,24 @@ async function receiveResidentItems(residentId, requestedLuggage, requestedMail)
     try { if (typeof window.renderTable === 'function') window.renderTable(); } catch (_) {}
 
     if (result.appliedLuggage || result.appliedMail) {
-      addLog('受け取り', `[${dormKey}] ${resident.name} ${formatReceiveLogDetails(result.appliedLuggage, result.appliedMail)}`);
+      addLog('受け取り', `[${dormKey}] ${resident.name} ${formatReceiveLogDetails(result.appliedLuggage, result.appliedMail)}`, {
+        residentId,
+        residentName: resident.name || '',
+        dorm: dormKey,
+        historySource: 'receive',
+        items: {
+          luggage: result.appliedLuggage || 0,
+          mail: result.appliedMail || 0
+        },
+        previousValues: {
+          luggage: originalLuggage,
+          mail: originalMail
+        },
+        nextValues: {
+          luggage: result.nextLuggage,
+          mail: result.nextMail
+        }
+      });
     } else {
       alert('受け取れる荷物・郵便がありませんでした。');
     }
@@ -7103,12 +8206,94 @@ if (elements.receiveCustomConfirmBtn) {
     confirmReceiveAction(receiveModalState.customLuggage, receiveModalState.customMail);
   });
 }
+const ocrScanBtn = document.getElementById('ocr-scan-btn');
+if (ocrScanBtn) {
+  ocrScanBtn.addEventListener('click', openOcrModal);
+}
+const ocrModal = document.getElementById('ocr-modal');
+const ocrCloseBtn = document.getElementById('ocr-modal-close-btn');
+const ocrCancelBtn = document.getElementById('ocr-cancel-btn');
+const ocrStartCameraBtn = document.getElementById('ocr-start-camera-btn');
+const ocrStopCameraBtn = document.getElementById('ocr-stop-camera-btn');
+const ocrCaptureBtn = document.getElementById('ocr-capture-btn');
+const ocrFileInput = document.getElementById('ocr-file-input');
+const ocrAnalyzeTextBtn = document.getElementById('ocr-analyze-text-btn');
+const ocrCandidateList = document.getElementById('ocr-candidate-list');
+const ocrConfirmBtn = document.getElementById('ocr-confirm-btn');
+if (ocrCloseBtn) ocrCloseBtn.addEventListener('click', closeOcrModal);
+if (ocrCancelBtn) ocrCancelBtn.addEventListener('click', closeOcrModal);
+if (ocrModal) {
+  ocrModal.addEventListener('click', (ev) => {
+    if (ev.target === ocrModal) closeOcrModal();
+  });
+}
+if (ocrStartCameraBtn) ocrStartCameraBtn.addEventListener('click', startOcrCamera);
+if (ocrStopCameraBtn) ocrStopCameraBtn.addEventListener('click', stopOcrCamera);
+if (ocrCaptureBtn) {
+  ocrCaptureBtn.addEventListener('click', () => {
+    const imageData = captureOcrFrame();
+    if (imageData) runOcrOnImage(imageData);
+  });
+}
+if (ocrFileInput) {
+  ocrFileInput.addEventListener('change', async () => {
+    const file = ocrFileInput.files && ocrFileInput.files[0];
+    if (!file) return;
+    try {
+      const imageData = await readFileAsDataUrl(file);
+      await runOcrOnImage(imageData);
+    } catch (e) {
+      console.error('ocr file read failed', e);
+      setOcrStatus('画像を読み込めませんでした。', 'error');
+    } finally {
+      ocrFileInput.value = '';
+    }
+  });
+}
+if (ocrAnalyzeTextBtn) {
+  ocrAnalyzeTextBtn.addEventListener('click', () => {
+    analyzeOcrText().catch(function(e){
+      console.error('analyzeOcrText failed', e);
+      setOcrStatus('候補の更新に失敗しました。', 'error');
+    });
+  });
+}
+if (ocrCandidateList) {
+  ocrCandidateList.addEventListener('change', (ev) => {
+    const input = ev.target && ev.target.closest && ev.target.closest('input[name="ocr-candidate"]');
+    if (!input) return;
+    ocrState.selectedResidentId = input.value || '';
+    setOcrConfirmEnabled();
+  });
+}
+if (ocrConfirmBtn) {
+  ocrConfirmBtn.addEventListener('click', () => {
+    applyOcrRegistration();
+  });
+}
 document.addEventListener('click', (ev) => {
   const receiveBtn = ev.target && ev.target.closest && ev.target.closest('.off-receive-btn');
   if (!receiveBtn) return;
   ev.preventDefault();
   openReceiveModal(receiveBtn.dataset.residentId);
 }, true);
+document.addEventListener('click', (ev) => {
+  const historyBtn = ev.target && ev.target.closest && ev.target.closest('.count-history-btn');
+  if (!historyBtn) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  openItemHistoryModal(historyBtn.dataset.residentId, historyBtn.dataset.itemType);
+}, true);
+const itemHistoryCloseBtn = document.getElementById('item-history-close-btn');
+const itemHistoryModal = document.getElementById('item-history-modal');
+if (itemHistoryCloseBtn) {
+  itemHistoryCloseBtn.addEventListener('click', closeItemHistoryModal);
+}
+if (itemHistoryModal) {
+  itemHistoryModal.addEventListener('click', (ev) => {
+    if (ev.target === itemHistoryModal) closeItemHistoryModal();
+  });
+}
 if (elements.morningRunBtn) {
   elements.morningRunBtn.addEventListener('click', async (ev) => {
     ev.preventDefault();
@@ -7733,7 +8918,7 @@ if(elements.changePasswordForm){
         }
 
         window.renderTable = async () => {
-            const searchTerm = elements.searchInput.value.toLowerCase();
+            const searchTerm = elements.searchInput.value;
             const sohmuOn = elements.sohmuToggle.checked;
             const myId = localStorage.getItem('myResidentId');
             // Hide table header when 庶務モード is OFF
@@ -7744,11 +8929,7 @@ if(elements.changePasswordForm){
               : allResidents.filter(r => r.id === myId);
             const currentSortOrder = normalizeResidentSortOrder(window.__residentSortOrderState || getResidentSortOrder());
             const baseList = sortResidentsByPreference(sourceResidents, { pinResidentId: sohmuOn ? '' : myId, sortOrder: currentSortOrder });
-            const filteredResidents = baseList.filter(r => 
-              (r.name && r.name.toLowerCase().includes(searchTerm)) ||
-              (r.roomNumber && r.roomNumber.includes(searchTerm)) ||
-              (r.furigana && r.furigana.toLowerCase().includes(searchTerm))
-            );
+            const filteredResidents = baseList.filter(r => residentMatchesSearch(r, searchTerm));
             elements.tableBody.innerHTML = ''; 
             if (filteredResidents.length === 0) {
                 elements.tableBody.innerHTML = '<tr><td colspan="6">該当する寮生が見つかりません。</td></tr>';
@@ -7762,6 +8943,8 @@ if(elements.changePasswordForm){
                       ? renderResidentNoteEditorHtml(resident.id, residentNoteValue)
                       : renderResidentNoteHtml(residentNoteValue, 'なし');
                     const residentOffNoteHtml = renderResidentOffNoteHtml(residentNoteValue);
+                    const luggageHistoryButton = renderCountHistoryButton(resident, 'luggage');
+                    const mailHistoryButton = renderCountHistoryButton(resident, 'mail');
                     const row = document.createElement('tr');
                     if (!elements.sohmuToggle.checked) {
                         // 庶務モード OFF のときのレイアウト
@@ -7777,10 +8960,12 @@ if(elements.changePasswordForm){
                                 <div class="off-count-card">
                                   <span class="off-count-label">荷物</span>
                                   <span class="off-count-number">${luggageCount}</span>
+                                  ${luggageHistoryButton}
                                 </div>
                                 <div class="off-count-card">
                                   <span class="off-count-label">郵便</span>
                                   <span class="off-count-number">${mailCount}</span>
+                                  ${mailHistoryButton}
                                 </div>
                               </div>
                               ${residentOffNoteHtml}
@@ -7807,8 +8992,8 @@ if(elements.changePasswordForm){
                               </span>
                             </div>
                           </td>
-                          <td class="count-col luggage-col"><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1)">-</button><span class="count-span">${resident.luggage}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1)">+</button></div></td>
-                          <td class="count-col mail-col"><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', -1)">-</button><span class="count-span">${resident.mail}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', 1)">+</button></div></td>
+                          <td class="count-col luggage-col"><div class="count-box"><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1)">-</button><span class="count-span">${resident.luggage}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1)">+</button></div>${luggageHistoryButton}</div></td>
+                          <td class="count-col mail-col"><div class="count-box"><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', -1)">-</button><span class="count-span">${resident.mail}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', 1)">+</button></div>${mailHistoryButton}</div></td>
                           <td class="note-col"><div class="cell-content">${residentNoteHtml}</div></td>
                           <td class="edit-op-cell">
                             <div class="cell-content">
@@ -8243,7 +9428,9 @@ if(elements.changePasswordForm){
         elements.addBulkBtn.addEventListener('click', showBulkAddModal);
         elements.deleteSelectedBtn.addEventListener('click', deleteSelectedResidents);
         // 全リセットボタンのイベント登録
-        elements.resetAllBtn.addEventListener('click', resetAllCounts);
+        if (elements.resetAllBtn) {
+            elements.resetAllBtn.addEventListener('click', resetAllCounts);
+        }
         // 庶務モードに応じてコントロール表示を切り替え
         elements.sohmuToggle.addEventListener('change', () => {
             // Hide dorm selector when 庶務モード is OFF
