@@ -757,7 +757,9 @@
           color: #c0392b;
         }
         .ocr-modal-content {
-          max-width: 720px;
+          width:min(96vw, 1040px);
+          max-width:1040px;
+          max-height:92vh;
         }
         .ocr-actions,
         .ocr-type-selector,
@@ -802,18 +804,27 @@
         }
         .ocr-media-grid {
           display:grid;
-          grid-template-columns:minmax(0, 1fr) minmax(0, 1fr);
+          grid-template-columns:minmax(0, 1.15fr) minmax(260px, 0.85fr);
           gap:12px;
+          align-items:start;
           margin-bottom:12px;
+        }
+        .ocr-media-grid.single-media {
+          grid-template-columns:1fr;
         }
         .ocr-video,
         .ocr-preview {
           width:100%;
-          max-height:260px;
+          min-height:320px;
+          max-height:62vh;
           object-fit:contain;
           border:1px solid var(--border-color);
           border-radius:8px;
           background:#111;
+        }
+        .ocr-media-grid.single-media .ocr-video,
+        .ocr-media-grid.single-media .ocr-preview {
+          min-height:min(56vh, 560px);
         }
         .ocr-video.is-hidden,
         .ocr-preview.is-hidden {
@@ -1169,6 +1180,11 @@
           }
           .ocr-media-grid {
             grid-template-columns:1fr;
+          }
+          .ocr-video,
+          .ocr-preview {
+            min-height:260px;
+            max-height:52vh;
           }
           .ocr-action-btn,
           .ocr-file-label {
@@ -7495,7 +7511,8 @@ const ocrState = {
   stream: null,
   candidates: [],
   selectedResidentId: '',
-  busy: false
+  busy: false,
+  lastImageSource: ''
 };
 
 function getOcrElement(id) {
@@ -7509,6 +7526,18 @@ function setOcrStatus(message, tone) {
   el.classList.remove('is-error', 'is-success');
   if (tone === 'error') el.classList.add('is-error');
   if (tone === 'success') el.classList.add('is-success');
+}
+
+function syncOcrMediaLayout() {
+  const grid = document.querySelector('.ocr-media-grid');
+  const video = getOcrElement('ocr-video');
+  const preview = getOcrElement('ocr-preview');
+  if (!grid) return;
+  const hasVideo = !!(video && !video.classList.contains('is-hidden'));
+  const hasPreview = !!(preview && !preview.classList.contains('is-hidden'));
+  grid.classList.toggle('has-video', hasVideo);
+  grid.classList.toggle('has-preview', hasPreview);
+  grid.classList.toggle('single-media', (hasVideo ? 1 : 0) + (hasPreview ? 1 : 0) <= 1);
 }
 
 function setOcrBusy(busy) {
@@ -7588,7 +7617,48 @@ function stopOcrCamera() {
     video.srcObject = null;
     video.classList.add('is-hidden');
   }
+  syncOcrMediaLayout();
   setOcrBusy(false);
+}
+
+async function requestOcrCameraStream() {
+  const attempts = [
+    {
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+        aspectRatio: { ideal: 1.7777778 },
+        advanced: [
+          { focusMode: 'continuous' },
+          { exposureMode: 'continuous' }
+        ]
+      },
+      audio: false
+    },
+    {
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      },
+      audio: false
+    },
+    {
+      video: { facingMode: { ideal: 'environment' } },
+      audio: false
+    }
+  ];
+
+  let lastError = null;
+  for (const constraints of attempts) {
+    try {
+      return await navigator.mediaDevices.getUserMedia(constraints);
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw lastError || new Error('カメラを起動できませんでした');
 }
 
 async function startOcrCamera() {
@@ -7602,15 +7672,15 @@ async function startOcrCamera() {
     setOcrBusy(true);
     setOcrStatus('カメラを起動しています...', '');
     stopOcrCamera();
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' } },
-      audio: false
-    });
+    const stream = await requestOcrCameraStream();
     ocrState.stream = stream;
     video.srcObject = stream;
     video.classList.remove('is-hidden');
     await video.play();
-    setOcrStatus('カメラ準備完了', 'success');
+    syncOcrMediaLayout();
+    const width = video.videoWidth || 0;
+    const height = video.videoHeight || 0;
+    setOcrStatus(width && height ? `カメラ準備完了（${width}×${height}）` : 'カメラ準備完了', 'success');
   } catch (e) {
     console.error('startOcrCamera failed', e);
     setOcrStatus('カメラを起動できませんでした。ブラウザのカメラ許可を確認してください。', 'error');
@@ -7625,10 +7695,12 @@ function setOcrPreview(dataUrl) {
   if (!dataUrl) {
     preview.removeAttribute('src');
     preview.classList.add('is-hidden');
+    syncOcrMediaLayout();
     return;
   }
   preview.src = dataUrl;
   preview.classList.remove('is-hidden');
+  syncOcrMediaLayout();
 }
 
 function readFileAsDataUrl(file) {
@@ -7653,7 +7725,123 @@ function captureOcrFrame() {
   canvas.height = height;
   const ctx = canvas.getContext('2d');
   ctx.drawImage(video, 0, 0, width, height);
-  return canvas.toDataURL('image/jpeg', 0.92);
+  return canvas.toDataURL('image/png');
+}
+
+function loadImageForOcr(source) {
+  return new Promise(function(resolve, reject){
+    const img = new Image();
+    img.onload = function(){ resolve(img); };
+    img.onerror = function(){ reject(new Error('OCR用画像を読み込めませんでした')); };
+    img.src = source;
+  });
+}
+
+function clampOcrByte(value) {
+  return Math.max(0, Math.min(255, Math.round(value)));
+}
+
+async function prepareOcrImageForRecognition(imageSource) {
+  try {
+    const img = await loadImageForOcr(imageSource);
+    const srcWidth = img.naturalWidth || img.width || 0;
+    const srcHeight = img.naturalHeight || img.height || 0;
+    if (!srcWidth || !srcHeight) return imageSource;
+
+    const longEdge = Math.max(srcWidth, srcHeight);
+    let scale = 1;
+    if (longEdge < 1800) scale = Math.min(3, 1800 / longEdge);
+    if (longEdge > 2600) scale = 2600 / longEdge;
+
+    const width = Math.max(1, Math.round(srcWidth * scale));
+    const height = Math.max(1, Math.round(srcHeight * scale));
+    const canvas = getOcrElement('ocr-canvas') || document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return imageSource;
+
+    ctx.save();
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, width, height);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, width, height);
+    ctx.restore();
+
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const data = imageData.data;
+    let total = 0;
+    const pixels = Math.max(1, data.length / 4);
+    for (let i = 0; i < data.length; i += 4) {
+      total += (data[i] * 0.299) + (data[i + 1] * 0.587) + (data[i + 2] * 0.114);
+    }
+    const avg = total / pixels;
+    const contrast = avg > 185 ? 1.75 : 1.55;
+    const lift = avg > 185 ? 4 : 14;
+
+    for (let i = 0; i < data.length; i += 4) {
+      const gray = (data[i] * 0.299) + (data[i + 1] * 0.587) + (data[i + 2] * 0.114);
+      let next = (gray - 128) * contrast + 128 + lift;
+      if (next > 225) next = 255;
+      if (next < 72) next = 0;
+      next = clampOcrByte(next);
+      data[i] = next;
+      data[i + 1] = next;
+      data[i + 2] = next;
+      data[i + 3] = 255;
+    }
+    ctx.putImageData(imageData, 0, 0);
+    return canvas.toDataURL('image/png');
+  } catch (e) {
+    console.warn('prepareOcrImageForRecognition failed; using original image', e);
+    return imageSource;
+  }
+}
+
+function getOcrUsefulTextLength(text) {
+  return normalizeSearchText(text).length;
+}
+
+function mergeOcrTexts(primaryText, fallbackText) {
+  const seen = new Set();
+  const lines = [];
+  [primaryText, fallbackText].forEach(function(text){
+    String(text || '').split(/\r?\n/).forEach(function(line){
+      const trimmed = line.trim();
+      const key = normalizeSearchText(trimmed);
+      if (!trimmed || !key || seen.has(key)) return;
+      seen.add(key);
+      lines.push(trimmed);
+    });
+  });
+  return lines.join('\n').trim();
+}
+
+function shouldRetryOcrWithOriginal(result) {
+  const text = result && result.text ? String(result.text) : '';
+  const confidence = Number(result && result.confidence);
+  if (getOcrUsefulTextLength(text) < 6) return true;
+  return Number.isFinite(confidence) && confidence > 0 && confidence < 45;
+}
+
+async function recognizeOcrImage(Tesseract, imageSource, label, progressBase, progressSpan) {
+  const result = await Tesseract.recognize(imageSource, 'jpn+eng', {
+    tessedit_pageseg_mode: '6',
+    preserve_interword_spaces: '1',
+    logger: function(message){
+      if (!message || !message.status) return;
+      if (typeof message.progress === 'number') {
+        const pct = Math.min(99, Math.round(progressBase + (message.progress * progressSpan)));
+        setOcrStatus(`${label} ${pct}%`, '');
+      }
+    }
+  });
+  const data = result && result.data ? result.data : {};
+  return {
+    text: data.text ? String(data.text).trim() : '',
+    confidence: Number(data.confidence)
+  };
 }
 
 function getOcrSelectedItemType() {
@@ -7676,22 +7864,24 @@ function inferOcrItemType(text) {
 
 async function runOcrOnImage(imageSource) {
   if (!imageSource) return;
+  ocrState.lastImageSource = imageSource;
   setOcrPreview(imageSource);
   setOcrBusy(true);
   try {
     setOcrStatus('OCRエンジンを読み込んでいます...', '');
     const Tesseract = await loadOcrEngine();
-    setOcrStatus('文字を読み取っています...', '');
-    const result = await Tesseract.recognize(imageSource, 'jpn+eng', {
-      logger: function(message){
-        if (!message || !message.status) return;
-        if (typeof message.progress === 'number') {
-          const pct = Math.round(message.progress * 100);
-          setOcrStatus(`文字を読み取っています... ${pct}%`, '');
-        }
-      }
-    });
-    const text = (result && result.data && result.data.text) ? String(result.data.text).trim() : '';
+    setOcrStatus('画像を読み取りやすく補正しています...', '');
+    const enhancedSource = await prepareOcrImageForRecognition(imageSource);
+    setOcrStatus('補正した画像で文字を読み取っています... 0%', '');
+    const enhancedResult = await recognizeOcrImage(Tesseract, enhancedSource, '補正した画像で文字を読み取っています...', 0, 100);
+    let text = enhancedResult.text || '';
+
+    if (enhancedSource !== imageSource && shouldRetryOcrWithOriginal(enhancedResult)) {
+      setOcrStatus('元画像でも読み取り直しています... 0%', '');
+      const originalResult = await recognizeOcrImage(Tesseract, imageSource, '元画像でも読み取り直しています...', 0, 100);
+      text = mergeOcrTexts(enhancedResult.text, originalResult.text);
+    }
+
     const textArea = getOcrElement('ocr-text');
     if (textArea) textArea.value = text;
     setOcrSelectedItemType(inferOcrItemType(text));
@@ -7722,9 +7912,37 @@ async function getOcrCandidateResidents() {
 }
 
 function getOcrDigitTokens(text) {
-  const normalized = toHalfWidthDigits(String(text || ''));
+  const normalized = toHalfWidthDigits(String(text || ''))
+    .replace(/[OoＯｏ〇○]/g, '0')
+    .replace(/[Il｜|]/g, '1')
+    .replace(/[Zz]/g, '2')
+    .replace(/[Ss]/g, '5')
+    .replace(/[Bb]/g, '8');
   const matches = normalized.match(/[0-9]{2,4}/g);
   return matches ? Array.from(new Set(matches)) : [];
+}
+
+function getOcrPartialHit(normalizedText, value) {
+  const normalizedValue = normalizeSearchText(value || '');
+  if (!normalizedText || normalizedValue.length < 2 || normalizedText.indexOf(normalizedValue) !== -1) return '';
+
+  const parts = [];
+  String(value || '').split(/[ \t\r\n　]+/).forEach(function(part){
+    const normalizedPart = normalizeSearchText(part);
+    if (normalizedPart.length >= 2 && normalizedPart.length < normalizedValue.length) parts.push(normalizedPart);
+  });
+
+  const maxLen = Math.min(4, normalizedValue.length - 1);
+  for (let len = maxLen; len >= 2; len--) {
+    for (let start = 0; start <= normalizedValue.length - len; start++) {
+      parts.push(normalizedValue.slice(start, start + len));
+    }
+  }
+
+  const unique = Array.from(new Set(parts)).sort(function(a, b){
+    return b.length - a.length;
+  });
+  return unique.find(function(part){ return normalizedText.indexOf(part) !== -1; }) || '';
 }
 
 function scoreOcrResident(resident, rawText, normalizedText, digitTokens) {
@@ -7743,6 +7961,12 @@ function scoreOcrResident(resident, rawText, normalizedText, digitTokens) {
   } else if (name && fuzzyIncludesSearchText(normalizedText, name)) {
     score += 55;
     reasons.push('名前が近い');
+  } else {
+    const namePart = getOcrPartialHit(normalizedText, r.name || '');
+    if (namePart) {
+      score += Math.min(48, 22 + (namePart.length * 7));
+      reasons.push(`名前の一部 ${namePart}`);
+    }
   }
 
   if (furigana && normalizedText.indexOf(furigana) !== -1) {
@@ -7751,6 +7975,12 @@ function scoreOcrResident(resident, rawText, normalizedText, digitTokens) {
   } else if (furigana && fuzzyIncludesSearchText(normalizedText, furigana)) {
     score += 30;
     reasons.push('ふりがなが近い');
+  } else {
+    const furiganaPart = getOcrPartialHit(normalizedText, r.furigana || '');
+    if (furiganaPart) {
+      score += Math.min(30, 12 + (furiganaPart.length * 4));
+      reasons.push(`ふりがなの一部 ${furiganaPart}`);
+    }
   }
 
   if (room && digitTokens.indexOf(room) !== -1) {
@@ -7818,7 +8048,7 @@ async function analyzeOcrText() {
   ocrState.candidates = residents.map(function(resident){
       return scoreOcrResident(resident, rawText, normalizedText, digitTokens);
     })
-    .filter(function(candidate){ return candidate.score >= 35; })
+    .filter(function(candidate){ return candidate.score >= 25; })
     .sort(function(a, b){
       if (b.score !== a.score) return b.score - a.score;
       const roomA = parseResidentRoomValue(a.resident);
