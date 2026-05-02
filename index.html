@@ -41,8 +41,8 @@
         .container { max-width: 800px; margin: 0 auto; background-color: var(--container-bg); padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         .header-area { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 10px; flex-wrap: wrap; }
         h1 { text-align: center; color: var(--header-text); border-bottom: 2px solid var(--header-border); padding-bottom: 10px; margin: 0; flex-grow: 1; }
-        .header-buttons { display: flex; gap: 8px; align-items: center; }
-        .header-btn { padding: 6px 12px; font-size: 12px; font-weight: bold; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        .header-buttons { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+        .header-btn { padding: 6px 12px; font-size: 12px; font-weight: bold; color: white; border: none; border-radius: 5px; cursor: pointer; white-space: nowrap; }
         /* 管理者以外には操作履歴ボタンを非表示 */
         #log-view-btn{ display:none; }
         body.admin-logged-in #log-view-btn{ display:inline-block; }
@@ -146,13 +146,13 @@
         #add-resident-btn { background-color: #27ae60; flex-grow: 1; }
         #add-bulk-btn { background-color: #2ecc71; flex-grow: 1; }
         #delete-selected-btn { background-color: #e74c3c; flex-grow: 1; }
-        #ocr-scan-btn {
-          display:none;
-          width:100%;
-          background:#34495e;
-        }
-        body.admin-logged-in #ocr-scan-btn {
-          display:block;
+        #ocr-scan-btn { background:#34495e; }
+        body.sohmu-off #ocr-scan-btn { display:none !important; }
+        .sohmu-switch-wrap{
+          display:inline-flex;
+          align-items:center;
+          gap:4px;
+          white-space:nowrap;
         }
         
         .table-container { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -391,23 +391,26 @@
             display:flex;
             align-items:center;
             justify-content:center;
-            padding:6px 4px 19px;
+            padding:0 4px;
             box-sizing:border-box;
         }
         .count-history-btn{
             position:absolute;
-            right:4px;
-            bottom:3px;
-            border:none;
+            right:3px;
+            bottom:2px;
+            width:18px;
+            height:18px;
+            border:1px solid rgba(52, 152, 219, 0.22);
             border-radius:999px;
             background:rgba(52, 152, 219, 0.14);
             color:var(--header-text);
-            font-size:10px;
+            font-size:9px;
             font-weight:700;
             line-height:1;
-            padding:4px 7px;
+            padding:0;
             cursor:pointer;
             white-space:nowrap;
+            opacity:0.82;
         }
         .count-history-btn:hover,
         .count-history-btn:focus{
@@ -610,14 +613,14 @@
         .off-count-card {
           position: relative;
           min-width: 150px;
-          padding: 16px 18px 34px;
+          padding: 16px 18px;
           border-radius: 16px;
           background: var(--controls-bg);
           border: 1px solid var(--border-color);
         }
         .off-count-card .count-history-btn{
-          right:10px;
-          bottom:9px;
+          right:8px;
+          bottom:8px;
         }
         .off-count-label {
           display: block;
@@ -1310,11 +1313,14 @@
             <button id="change-password-btn" class="header-btn" style="background:#16a085;">パスワード変更</button>
             <button id="enable-notif-btn" class="header-btn" style="background:#2ecc71; display:none;">通知をオンにする</button>
             <button id="morning-run-btn" class="header-btn" style="background:#f39c12;">朝の庶務</button>
-            <label class="switch" style="margin-left:8px;">
-              <input type="checkbox" id="sohmu-toggle">
-              <span class="slider round"></span>
-            </label>
-            <span id="sohmu-label" style="margin-left:4px; font-weight:bold; color:var(--header-text);">庶務</span>
+            <button id="ocr-scan-btn" class="header-btn" style="background:#34495e;">OCR登録</button>
+            <span class="sohmu-switch-wrap">
+              <label class="switch" style="margin-left:8px;">
+                <input type="checkbox" id="sohmu-toggle">
+                <span class="slider round"></span>
+              </label>
+              <span id="sohmu-label" style="font-weight:bold; color:var(--header-text);">庶務</span>
+            </span>
         </div>
     </div>
     
@@ -1336,7 +1342,6 @@
             </div>
         </div>
         <div class="ops-container">
-            <button id="ocr-scan-btn" type="button">カメラ/OCRで自動登録</button>
              <div class="bulk-ops-container">
                 <button id="add-resident-btn">新しい寮生を追加</button>
                 <button id="add-bulk-btn">寮生を一括追加</button>
@@ -6213,7 +6218,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       const label = getItemHistoryTypeLabel(type);
       const residentId = escapeHtml(resident.id);
       const residentName = escapeHtml(resident.name || '');
-      return `<button type="button" class="count-history-btn" data-resident-id="${residentId}" data-item-type="${type}" aria-label="${residentName}の${label}履歴">履歴</button>`;
+      return `<button type="button" class="count-history-btn" data-resident-id="${residentId}" data-item-type="${type}" aria-label="${residentName}の${label}履歴" title="${label}履歴">履</button>`;
     }
 
     function getHistoryTimestampDate(value){
@@ -7052,6 +7057,12 @@ function applySohmuUI(){
   document.body.classList.toggle('sohmu-off', !on);
   const tgl = document.getElementById('sohmu-toggle');
   if (tgl) tgl.checked = on;
+  if (typeof updateAnnouncementVisibility === 'function') {
+    try { updateAnnouncementVisibility(); } catch(_) {}
+  }
+  if (typeof updateNotificationSettingsUI === 'function') {
+    try { updateNotificationSettingsUI(); } catch(_) {}
+  }
 }
 
     // ===== ensureDormSelectionOnBoot (override: 既定は「両方」) =====
@@ -7581,10 +7592,6 @@ function stopOcrCamera() {
 }
 
 async function startOcrCamera() {
-  if (typeof isAdmin === 'function' && !isAdmin()) {
-    alert('管理者ログインが必要です。');
-    return;
-  }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     setOcrStatus('このブラウザではカメラを利用できません。画像から読み取りを使ってください。', 'error');
     return;
@@ -7826,10 +7833,6 @@ async function analyzeOcrText() {
 }
 
 function openOcrModal() {
-  if (typeof isAdmin === 'function' && !isAdmin()) {
-    alert('管理者ログインが必要です。');
-    return;
-  }
   const modal = getOcrElement('ocr-modal');
   if (!modal) return;
   ocrState.candidates = [];
@@ -7838,7 +7841,7 @@ function openOcrModal() {
   if (textArea) textArea.value = '';
   setOcrPreview('');
   renderOcrCandidates();
-  setOcrStatus('', '');
+  setOcrStatus((typeof isAdmin === 'function' && !isAdmin()) ? '撮影と候補確認はできます。登録には管理者ログインが必要です。' : '', '');
   setOcrBusy(false);
   modal.classList.add('active');
 }
@@ -8485,6 +8488,9 @@ if(elements.changePasswordForm){
           // まだ未定義の段階でも落ちないようにガード
           if (typeof updateAnnouncementVisibility === 'function') {
             try { updateAnnouncementVisibility(); } catch(_) {}
+          }
+          if (typeof updateNotificationSettingsUI === 'function') {
+            try { updateNotificationSettingsUI(); } catch(_) {}
           }
           if (typeof window.renderTable === 'function') {
             try { window.renderTable(); } catch(_) {}
@@ -9367,14 +9373,20 @@ if(elements.changePasswordForm){
             const keepFurigana = document.body.classList.contains('show-furigana');
             const keepCircle   = document.body.classList.contains('show-circle');
             const keepDorm     = document.body.classList.contains('show-dorm');
+            const keepSohmuOff = document.body.classList.contains('sohmu-off') || !!(elements.sohmuToggle && !elements.sohmuToggle.checked);
+            const keepMorning  = document.body.classList.contains('morning-mode');
             document.body.className = sessionStorage.getItem('isAdminLoggedIn') === 'true' ? 'admin-logged-in' : '';
             document.body.classList.add(mode);
             if (keepFurigana) document.body.classList.add('show-furigana');
             if (keepCircle)   document.body.classList.add('show-circle');
             if (keepDorm)     document.body.classList.add('show-dorm');
+            if (keepSohmuOff) document.body.classList.add('sohmu-off');
+            if (keepMorning)  document.body.classList.add('morning-mode');
             const currentTheme = localStorage.getItem('theme') || 'system';
             handleThemeChange(currentTheme);
             if (mode !== 'resident-edit-mode') elements.selectAllCheckbox.checked = false;
+            try { updateAnnouncementVisibility(); } catch(_) {}
+            try { updateNotificationSettingsUI(); } catch(_) {}
             renderTable();
         }
 
