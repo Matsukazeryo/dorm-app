@@ -7506,7 +7506,7 @@ const OCR_SCRIPT_URLS = [
   'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js',
   'https://unpkg.com/tesseract.js@5/dist/tesseract.min.js'
 ];
-const OCR_MAX_IMAGE_EDGE = 1600;
+const OCR_MAX_IMAGE_EDGE = 1920;
 let ocrEngineLoadPromise = null;
 const ocrState = {
   candidates: [],
@@ -7750,9 +7750,8 @@ async function prepareOcrImageForFastRecognition(imageSource) {
 
 function isLikelyBlankOcrImage(signal) {
   if (!signal) return false;
-  if (signal.contrast < 28 && signal.edgeAverage < 3.2) return true;
-  if (signal.stdDev < 10 && signal.edgeAverage < 4.2) return true;
-  if (signal.edgeAverage < 2.4 && signal.darkRatio < 0.025) return true;
+  if (signal.contrast < 10 && signal.edgeAverage < 1.1) return true;
+  if (signal.stdDev < 4 && signal.edgeAverage < 1.4) return true;
   return false;
 }
 
@@ -7804,9 +7803,28 @@ function cleanupOcrRecognizedText(text) {
   return lines.slice(0, 40).join('\n').trim();
 }
 
+function lightlyCleanOcrRecognizedText(text) {
+  const seen = new Set();
+  const lines = normalizeOcrRawText(text)
+    .split(/\r?\n/)
+    .map(function(line){
+      return String(line || '')
+        .replace(/[^\S\r\n　]+/g, ' ')
+        .replace(/[ \t　]+/g, ' ')
+        .trim();
+    })
+    .filter(function(line){
+      const key = normalizeSearchText(line);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  return lines.slice(0, 40).join('\n').trim();
+}
+
 function extractOcrRecognizedText(data) {
   const rawText = data && data.text ? String(data.text) : '';
-  return cleanupOcrRecognizedText(rawText);
+  return cleanupOcrRecognizedText(rawText) || lightlyCleanOcrRecognizedText(rawText);
 }
 
 function getOcrTextSignal(text) {
@@ -7882,15 +7900,11 @@ async function runOcrOnImage(imageSource) {
     const textArea = getOcrElement('ocr-text');
     if (textArea) textArea.value = text;
     const analysis = await analyzeOcrText();
-    if (shouldSuppressOcrNoise(text, result.confidence, analysis)) {
-      if (textArea) textArea.value = '';
-      ocrState.candidates = [];
-      ocrState.selectedResidentId = '';
-      renderOcrCandidates();
-      setOcrStatus('登録に使えそうな文字を検出できませんでした。文字が大きく写るように撮り直してください。', 'error');
+    if (!text) {
+      setOcrStatus('文字を読み取れませんでした。文字が大きく写るように撮り直してください。', 'error');
       return;
     }
-    setOcrStatus(analysis && analysis.candidateCount ? '読み取りました。候補を確認してください。' : '候補に結びつく文字が見つかりませんでした。必要ならOCR結果欄を修正してください。', analysis && analysis.candidateCount ? 'success' : 'error');
+    setOcrStatus(analysis && analysis.candidateCount ? '読み取りました。候補を確認してください。' : '読み取りました。候補が違う場合はOCR結果欄を少し直して「候補を更新」を押してください。', analysis && analysis.candidateCount ? 'success' : '');
   } catch (e) {
     console.error('runOcrOnImage failed', e);
     setOcrStatus('OCRに失敗しました。画像を変えるか、OCR結果欄に文字を入力して候補を更新してください。', 'error');
@@ -8059,7 +8073,7 @@ async function analyzeOcrText() {
   ocrState.candidates = residents.map(function(resident){
       return scoreOcrResident(resident, rawText, normalizedText, digitTokens);
     })
-    .filter(function(candidate){ return candidate.score >= 35; })
+    .filter(function(candidate){ return candidate.score >= 25; })
     .sort(function(a, b){
       if (b.score !== a.score) return b.score - a.score;
       const roomA = parseResidentRoomValue(a.resident);
