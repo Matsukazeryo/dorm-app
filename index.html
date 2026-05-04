@@ -5799,6 +5799,24 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       return list;
     }
 
+    function compareResidentsForSelfSelect(a, b){
+      let cmp = compareResidentDormOrder(a, b);
+      if (cmp) return cmp;
+      cmp = compareResidentRoomOrder(a, b);
+      if (cmp) return cmp;
+      cmp = compareResidentNameOrder(a, b);
+      if (cmp) return cmp;
+      const idA = a && a.id ? String(a.id) : '';
+      const idB = b && b.id ? String(b.id) : '';
+      return idA.localeCompare(idB, 'ja');
+    }
+
+    function sortResidentsForSelfSelect(residents){
+      const list = Array.isArray(residents) ? residents.slice() : [];
+      list.sort(compareResidentsForSelfSelect);
+      return list;
+    }
+
     window.applyResidentSortPreference = async function(value){
       const next = setResidentSortOrder(value);
       try {
@@ -6612,8 +6630,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
          ? window.allResidents
          : (Array.isArray(allResidents) ? allResidents : []);
         const list = src.slice();
-        // 寮 -> 部屋番号（数値比較）-> 名前 の順で並べる
-        const sortedList = sortResidentsByPreference(list);
+        const sortedList = sortResidentsForSelfSelect(list);
         selectEl.innerHTML = '';
         // 空行
         const empty = document.createElement('option');
@@ -7178,7 +7195,7 @@ function applySohmuUI(){
         if (dormKey === 'all' || !dormKey) return true;
         return r.dorm === dormKey;
       });
-      sortResidentsByPreference(filtered).forEach(r => {
+      sortResidentsForSelfSelect(filtered).forEach(r => {
         const opt = document.createElement('option');
         opt.value = r.id;
         opt.textContent = `${r.roomNumber || ''} ${r.name || ''}`.trim();
@@ -7510,12 +7527,24 @@ const OCR_SCRIPT_URLS = [
   'https://unpkg.com/tesseract.js@5/dist/tesseract.min.js'
 ];
 const OCR_MAX_IMAGE_EDGE = 1920;
+const OCR_RECOGNITION_PARAMS = {
+  tessedit_pageseg_mode: '6',
+  preserve_interword_spaces: '1'
+};
 let ocrEngineLoadPromise = null;
+let ocrWorkerPromise = null;
+let ocrWorkerInstance = null;
+const ocrProgressState = {
+  label: '',
+  base: 0,
+  span: 100
+};
 const ocrState = {
   candidates: [],
   selectedResidentId: '',
   busy: false,
   lastImageSource: '',
+  lastObjectUrl: '',
   registrationLocked: false,
   registeredResidentId: '',
   registeredType: ''
@@ -7638,6 +7667,70 @@ async function loadOcrEngine() {
   return ocrEngineLoadPromise;
 }
 
+function setOcrProgressContext(label, progressBase, progressSpan) {
+  ocrProgressState.label = label || '文字を読み取っています...';
+  ocrProgressState.base = Number.isFinite(Number(progressBase)) ? Number(progressBase) : 0;
+  ocrProgressState.span = Number.isFinite(Number(progressSpan)) ? Number(progressSpan) : 100;
+}
+
+function handleOcrWorkerProgress(message) {
+  if (!message || !message.status || typeof message.progress !== 'number') return;
+  const pct = Math.min(99, Math.round(ocrProgressState.base + (message.progress * ocrProgressState.span)));
+  setOcrStatus(`${ocrProgressState.label} ${pct}%`, '');
+}
+
+async function terminateOcrWorker() {
+  const worker = ocrWorkerInstance;
+  ocrWorkerInstance = null;
+  ocrWorkerPromise = null;
+  if (worker && typeof worker.terminate === 'function') {
+    try { await worker.terminate(); } catch (_) {}
+  }
+}
+
+async function getReusableOcrWorker(Tesseract) {
+  if (!Tesseract || typeof Tesseract.createWorker !== 'function') return null;
+  if (!ocrWorkerPromise) {
+    ocrWorkerPromise = (async function(){
+      const worker = await Tesseract.createWorker('jpn+eng', undefined, {
+        logger: handleOcrWorkerProgress
+      });
+      if (worker && typeof worker.setParameters === 'function') {
+        await worker.setParameters(OCR_RECOGNITION_PARAMS);
+      }
+      ocrWorkerInstance = worker;
+      return worker;
+    })().catch(function(error){
+      ocrWorkerInstance = null;
+      ocrWorkerPromise = null;
+      throw error;
+    });
+  }
+  return ocrWorkerPromise;
+}
+
+function clearOcrObjectUrl() {
+  if (!ocrState.lastObjectUrl) return;
+  try {
+    if (window.URL && typeof window.URL.revokeObjectURL === 'function') {
+      window.URL.revokeObjectURL(ocrState.lastObjectUrl);
+    }
+  } catch (_) {}
+  ocrState.lastObjectUrl = '';
+}
+
+function rememberOcrObjectUrl(url) {
+  clearOcrObjectUrl();
+  ocrState.lastObjectUrl = url || '';
+}
+
+try {
+  window.addEventListener('pagehide', function(){
+    clearOcrObjectUrl();
+    terminateOcrWorker();
+  });
+} catch (_) {}
+
 function setOcrPreview(dataUrl) {
   const preview = getOcrElement('ocr-preview');
   if (!preview) return;
@@ -7724,19 +7817,32 @@ function clampOcrByte(value) {
 }
 
 function enhanceOcrCanvasForText(ctx, width, height) {
-  if (!ctx || !width || !height) return;
+  if (!ctx || !width || !height) return null;
   const imageData = ctx.getImageData(0, 0, width, height);
   const data = imageData.data;
   const histogram = new Uint32Array(256);
   const grayValues = new Uint8Array(width * height);
+  let total = 0;
+  let min = 255;
+  let max = 0;
 
   for (let i = 0, p = 0; i < data.length; i += 4, p++) {
     const gray = clampOcrByte((data[i] * 0.299) + (data[i + 1] * 0.587) + (data[i + 2] * 0.114));
     grayValues[p] = gray;
     histogram[gray]++;
+    total += gray;
+    if (gray < min) min = gray;
+    if (gray > max) max = gray;
   }
 
   const pixels = Math.max(1, grayValues.length);
+  const average = total / pixels;
+  const sampleStride = Math.max(1, Math.ceil(Math.sqrt(pixels / 160000)));
+  let variance = 0;
+  let darkPixels = 0;
+  let edgeTotal = 0;
+  let edgeCount = 0;
+
   const lowTarget = pixels * 0.04;
   const highTarget = pixels * 0.96;
   let cumulative = 0;
@@ -7764,6 +7870,10 @@ function enhanceOcrCanvasForText(ctx, width, height) {
 
   const range = Math.max(1, high - low);
   for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+    const gray = grayValues[p];
+    const delta = gray - average;
+    variance += delta * delta;
+    if (gray < average - 42 || gray < 95) darkPixels++;
     let next = ((grayValues[p] - low) * 255) / range;
     next = ((next - 128) * 1.18) + 128;
     if (next > 242) next = 255;
@@ -7775,7 +7885,27 @@ function enhanceOcrCanvasForText(ctx, width, height) {
     data[i + 3] = 255;
   }
 
+  for (let y = 0; y < height; y += sampleStride) {
+    for (let x = 0; x < width; x += sampleStride) {
+      const idx = y * width + x;
+      if (x + 1 < width) {
+        edgeTotal += Math.abs(grayValues[idx] - grayValues[idx + 1]);
+        edgeCount++;
+      }
+      if (y + 1 < height) {
+        edgeTotal += Math.abs(grayValues[idx] - grayValues[idx + width]);
+        edgeCount++;
+      }
+    }
+  }
+
   ctx.putImageData(imageData, 0, 0);
+  return {
+    contrast: max - min,
+    edgeAverage: edgeCount ? edgeTotal / edgeCount : 0,
+    darkRatio: darkPixels / pixels,
+    stdDev: Math.sqrt(variance / pixels)
+  };
 }
 
 async function prepareOcrImageForFastRecognition(imageSource) {
@@ -7799,11 +7929,11 @@ async function prepareOcrImageForFastRecognition(imageSource) {
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(img, 0, 0, width, height);
   ctx.restore();
-  const signal = measureOcrCanvasSignal(ctx, width, height);
-  enhanceOcrCanvasForText(ctx, width, height);
+  const signal = enhanceOcrCanvasForText(ctx, width, height);
 
   return {
-    source: canvas.toDataURL('image/png'),
+    source: canvas,
+    previewSource: imageSource,
     signal,
     width,
     height,
@@ -7915,17 +8045,29 @@ function shouldSuppressOcrNoise(text, confidence, analysis) {
 }
 
 async function recognizeOcrImage(Tesseract, imageSource, label, progressBase, progressSpan) {
-  const result = await Tesseract.recognize(imageSource, 'jpn+eng', {
-    tessedit_pageseg_mode: '6',
-    preserve_interword_spaces: '1',
-    logger: function(message){
-      if (!message || !message.status) return;
-      if (typeof message.progress === 'number') {
-        const pct = Math.min(99, Math.round(progressBase + (message.progress * progressSpan)));
-        setOcrStatus(`${label} ${pct}%`, '');
-      }
+  setOcrProgressContext(label, progressBase, progressSpan);
+  let result = null;
+  let workerError = null;
+  try {
+    const worker = await getReusableOcrWorker(Tesseract);
+    if (worker && typeof worker.recognize === 'function') {
+      result = await worker.recognize(imageSource);
     }
-  });
+  } catch (e) {
+    workerError = e;
+    console.warn('reusable OCR worker failed; falling back to single recognition', e);
+    await terminateOcrWorker();
+  }
+
+  if (!result) {
+    const fallbackSource = imageSource && imageSource.toDataURL ? imageSource.toDataURL('image/png') : imageSource;
+    result = await Tesseract.recognize(fallbackSource, 'jpn+eng', Object.assign({}, OCR_RECOGNITION_PARAMS, {
+      logger: handleOcrWorkerProgress
+    }));
+    if (workerError) {
+      console.warn('OCR fallback completed after worker error');
+    }
+  }
   const data = result && result.data ? result.data : {};
   return {
     text: extractOcrRecognizedText(data),
@@ -7944,8 +8086,9 @@ async function runOcrOnImage(imageSource) {
     setOcrStatus('画像をOCR用に軽くしています...', '');
     const prepared = await prepareOcrImageForFastRecognition(imageSource);
     const ocrSource = prepared && prepared.source ? prepared.source : imageSource;
+    const previewSource = prepared && prepared.previewSource ? prepared.previewSource : (typeof ocrSource === 'string' ? ocrSource : imageSource);
     ocrState.lastImageSource = ocrSource;
-    setOcrPreview(ocrSource);
+    setOcrPreview(previewSource);
     if (prepared && isLikelyBlankOcrImage(prepared.signal)) {
       const textArea = getOcrElement('ocr-text');
       if (textArea) textArea.value = '';
@@ -8158,6 +8301,7 @@ async function analyzeOcrText() {
 function openOcrModal() {
   const modal = getOcrElement('ocr-modal');
   if (!modal) return;
+  clearOcrObjectUrl();
   ocrState.candidates = [];
   ocrState.selectedResidentId = '';
   ocrState.registrationLocked = false;
@@ -8176,6 +8320,7 @@ function openOcrModal() {
 function closeOcrModal() {
   const modal = getOcrElement('ocr-modal');
   if (modal) modal.classList.remove('active');
+  clearOcrObjectUrl();
 }
 
 async function applyOcrRegistration(residentId, itemType) {
@@ -8573,8 +8718,14 @@ if (ocrFileInput) {
     const file = ocrFileInput.files && ocrFileInput.files[0];
     if (!file) return;
     try {
-      const imageData = await readFileAsDataUrl(file);
-      await runOcrOnImage(imageData);
+      let imageSource = '';
+      if (window.URL && typeof window.URL.createObjectURL === 'function') {
+        imageSource = window.URL.createObjectURL(file);
+        rememberOcrObjectUrl(imageSource);
+      } else {
+        imageSource = await readFileAsDataUrl(file);
+      }
+      await runOcrOnImage(imageSource);
     } catch (e) {
       console.error('ocr file read failed', e);
       setOcrStatus('画像を読み込めませんでした。', 'error');
@@ -9028,7 +9179,7 @@ if(elements.changePasswordForm){
                      snap.docs.map(doc => mergeResidentDocData(doc, d))
                    )
                 ));
-                const combined = sortResidentsByPreference(flattenOneLevel(lists));
+                const combined = sortResidentsForSelfSelect(flattenOneLevel(lists));
                 select.innerHTML = combined.map(r =>
                   `<option value="${r.id}" data-dorm="${r.dorm}">
                       ${r.dorm==='shofu'?'松風寮':'明善寮'} - ${r.roomNumber} ${r.name}
@@ -9129,7 +9280,7 @@ if(elements.changePasswordForm){
                         snap.docs.map(doc => mergeResidentDocData(doc, d))
                       )
                     ));
-                    const combined = sortResidentsByPreference(flattenOneLevel(lists));
+                    const combined = sortResidentsForSelfSelect(flattenOneLevel(lists));
                     select.innerHTML = combined.map(r =>
                       `<option value="${r.id}" data-dorm="${r.dorm}">${r.dorm === 'shofu' ? '松風寮' : '明善寮'} - ${r.roomNumber} ${r.name}</option>`
                     ).join('');
