@@ -7534,6 +7534,7 @@ const OCR_RECOGNITION_PARAMS = {
 let ocrEngineLoadPromise = null;
 let ocrWorkerPromise = null;
 let ocrWorkerInstance = null;
+let ocrWarmupPromise = null;
 const ocrProgressState = {
   label: '',
   base: 0,
@@ -7707,6 +7708,19 @@ async function getReusableOcrWorker(Tesseract) {
     });
   }
   return ocrWorkerPromise;
+}
+
+function warmUpOcrWorker() {
+  if (ocrWarmupPromise || ocrWorkerInstance || ocrState.busy) return;
+  setOcrProgressContext('OCR準備中...', 0, 100);
+  ocrWarmupPromise = (async function(){
+    const Tesseract = await loadOcrEngine();
+    await getReusableOcrWorker(Tesseract);
+  })().catch(function(error){
+    console.warn('OCR warmup skipped', error);
+  }).finally(function(){
+    ocrWarmupPromise = null;
+  });
 }
 
 function clearOcrObjectUrl() {
@@ -8315,6 +8329,7 @@ function openOcrModal() {
   setOcrStatus((typeof isAdmin === 'function' && !isAdmin()) ? '撮影と候補確認はできます。登録には管理者ログインが必要です。' : '', '');
   setOcrBusy(false);
   modal.classList.add('active');
+  setTimeout(warmUpOcrWorker, 250);
 }
 
 function closeOcrModal() {
