@@ -8409,46 +8409,53 @@ function scoreOcrResident(resident, rawText, normalizedText, digitTokens) {
   const dormLabel = r.dorm === 'shofu' ? '松風寮' : (r.dorm === 'meizen' ? '明善寮' : '');
   const normalizedDorm = normalizeSearchText(dormLabel);
   let score = 0;
+  let hasIdentityEvidence = false;
   const reasons = [];
 
   if (name && normalizedText.indexOf(name) !== -1) {
-    score += 90;
+    score += 220;
+    hasIdentityEvidence = true;
     reasons.push('名前一致');
   } else if (name && fuzzyIncludesSearchText(normalizedText, name)) {
-    score += 55;
+    score += 165;
+    hasIdentityEvidence = true;
     reasons.push('名前が近い');
   } else {
     const namePart = getOcrPartialHit(normalizedText, r.name || '');
     if (namePart) {
-      score += Math.min(48, 22 + (namePart.length * 7));
+      score += Math.min(130, 55 + (namePart.length * 18));
+      hasIdentityEvidence = true;
       reasons.push(`名前の一部 ${namePart}`);
     }
   }
 
   if (furigana && normalizedText.indexOf(furigana) !== -1) {
-    score += 55;
+    score += 130;
+    hasIdentityEvidence = true;
     reasons.push('ふりがな一致');
   } else if (furigana && fuzzyIncludesSearchText(normalizedText, furigana)) {
-    score += 30;
+    score += 85;
+    hasIdentityEvidence = true;
     reasons.push('ふりがなが近い');
   } else {
     const furiganaPart = getOcrPartialHit(normalizedText, r.furigana || '');
     if (furiganaPart) {
-      score += Math.min(30, 12 + (furiganaPart.length * 4));
+      score += Math.min(70, 28 + (furiganaPart.length * 8));
+      hasIdentityEvidence = true;
       reasons.push(`ふりがなの一部 ${furiganaPart}`);
     }
   }
 
   if (room && digitTokens.indexOf(room) !== -1) {
-    score += 58;
+    score += hasIdentityEvidence ? 28 : 18;
     reasons.push(`${room}号室`);
   } else if (room && normalizedText.indexOf(room) !== -1) {
-    score += 35;
+    score += hasIdentityEvidence ? 16 : 10;
     reasons.push(`${room}を検出`);
   }
 
   if (normalizedDorm && normalizedText.indexOf(normalizedDorm) !== -1) {
-    score += 15;
+    score += hasIdentityEvidence ? 8 : 4;
     reasons.push(dormLabel);
   }
 
