@@ -593,6 +593,16 @@
                font-size: 12px;
                border-width: 1px;   /* 枠も細く */
              }
+             body.count-edit-mode .count-cell button{
+               display:none;
+             }
+             body.count-edit-mode .name-cell{
+               cursor:pointer;
+               background:rgba(52, 152, 219, 0.08);
+             }
+             body.count-edit-mode .name-cell:active{
+               background:rgba(52, 152, 219, 0.18);
+             }
         }
 
         /* ===== 庶務モードOFF専用レイアウト ===== */
@@ -660,12 +670,21 @@
         .receive-modal-content {
           max-width: 560px;
         }
+        .mobile-count-edit-modal-content {
+          max-width: 560px;
+        }
+        .mobile-count-edit-summary {
+          margin: 0 0 14px 0;
+          font-size: 0.95rem;
+          color: #7f8c8d;
+        }
         .receive-summary {
           margin: 0 0 14px 0;
           font-size: 0.95rem;
           color: #7f8c8d;
         }
         body.dark-theme .off-count-label,
+        body.dark-theme .mobile-count-edit-summary,
         body.dark-theme .receive-summary {
           color: #bdc3c7;
         }
@@ -1571,6 +1590,44 @@
   </div>
 </div>
 <!-- ==== 寮生受け取りモーダル ここまで ==== -->
+
+<!-- ==== スマホ用 個数編集モーダル ==== -->
+<div id="mobile-count-edit-modal" class="modal-overlay">
+  <div class="modal-content mobile-count-edit-modal-content">
+    <div class="modal-header">
+      <h2>個数編集</h2>
+      <button id="mobile-count-edit-close-btn" class="modal-close-btn">&times;</button>
+    </div>
+    <div id="mobile-count-edit-name" style="font-size:1.15rem; font-weight:700; margin-bottom:6px;"></div>
+    <p class="mobile-count-edit-summary">現在の個数</p>
+    <div class="receive-custom-panel">
+      <div class="receive-stepper-row">
+        <div>
+          <span class="receive-stepper-label">荷物</span>
+        </div>
+        <div class="receive-stepper-controls">
+          <button id="mobile-count-luggage-minus" type="button" class="receive-stepper-btn">-</button>
+          <span id="mobile-count-luggage-value" class="receive-stepper-value">0</span>
+          <button id="mobile-count-luggage-plus" type="button" class="receive-stepper-btn">+</button>
+        </div>
+      </div>
+      <div class="receive-stepper-row">
+        <div>
+          <span class="receive-stepper-label">郵便</span>
+        </div>
+        <div class="receive-stepper-controls">
+          <button id="mobile-count-mail-minus" type="button" class="receive-stepper-btn">-</button>
+          <span id="mobile-count-mail-value" class="receive-stepper-value">0</span>
+          <button id="mobile-count-mail-plus" type="button" class="receive-stepper-btn">+</button>
+        </div>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button id="mobile-count-edit-cancel-btn" type="button" class="header-btn" style="background:#7f8c8d;">閉じる</button>
+    </div>
+  </div>
+</div>
+<!-- ==== スマホ用 個数編集モーダル ここまで ==== -->
 
 <!-- ==== 荷物・郵便 個別履歴モーダル ==== -->
 <div id="item-history-modal" class="modal-overlay">
@@ -7461,6 +7518,16 @@ function applySohmuUI(){
           receiveMailPlus: document.getElementById('receive-mail-plus'),
           receiveCustomConfirmBtn: document.getElementById('receive-custom-confirm-btn'),
           receiveCancelBtn: document.getElementById('receive-cancel-btn'),
+          mobileCountEditModal: document.getElementById('mobile-count-edit-modal'),
+          mobileCountEditCloseBtn: document.getElementById('mobile-count-edit-close-btn'),
+          mobileCountEditCancelBtn: document.getElementById('mobile-count-edit-cancel-btn'),
+          mobileCountEditName: document.getElementById('mobile-count-edit-name'),
+          mobileCountLuggageMinus: document.getElementById('mobile-count-luggage-minus'),
+          mobileCountLuggageValue: document.getElementById('mobile-count-luggage-value'),
+          mobileCountLuggagePlus: document.getElementById('mobile-count-luggage-plus'),
+          mobileCountMailMinus: document.getElementById('mobile-count-mail-minus'),
+          mobileCountMailValue: document.getElementById('mobile-count-mail-value'),
+          mobileCountMailPlus: document.getElementById('mobile-count-mail-plus'),
           addResidentModal: document.getElementById('add-resident-modal'),
           addModalCloseBtn: document.getElementById('add-modal-close-btn'),
           addResidentForm: document.getElementById('add-resident-form'),
@@ -7590,6 +7657,10 @@ const receiveModalState = {
   showCustom: false
 };
 
+const mobileCountEditState = {
+  residentId: null
+};
+
 function getResidentById(residentId) {
   return Array.isArray(allResidents) ? (allResidents.find(r => r.id === residentId) || null) : null;
 }
@@ -7599,6 +7670,14 @@ function resolveResidentCollectionName(residentId) {
   const resident = getResidentById(residentId);
   const dormKey = (resident && resident.dorm) || 'shofu';
   return `residents_${dormKey}`;
+}
+
+function isMobileCountEditLayout() {
+  try {
+    return !!(window.matchMedia && window.matchMedia('(max-width: 600px)').matches);
+  } catch (_) {
+    return window.innerWidth <= 600;
+  }
 }
 
 const OCR_SCRIPT_URLS = [
@@ -8677,6 +8756,48 @@ function formatReceiveLogDetails(luggage, mail) {
   return parts.length ? `${parts.join('・')}を受け取り` : '受け取り';
 }
 
+function syncMobileCountEditModalUI() {
+  if (!elements.mobileCountEditModal) return;
+  const resident = getResidentById(mobileCountEditState.residentId);
+  const luggage = resident ? Math.max(0, parseInt(resident.luggage, 10) || 0) : 0;
+  const mail = resident ? Math.max(0, parseInt(resident.mail, 10) || 0) : 0;
+
+  if (elements.mobileCountEditName) {
+    const room = resident && resident.roomNumber ? `${resident.roomNumber} ` : '';
+    elements.mobileCountEditName.textContent = resident ? `${room}${resident.name || ''}`.trim() : '';
+  }
+  if (elements.mobileCountLuggageValue) elements.mobileCountLuggageValue.textContent = luggage;
+  if (elements.mobileCountMailValue) elements.mobileCountMailValue.textContent = mail;
+  if (elements.mobileCountLuggageMinus) elements.mobileCountLuggageMinus.disabled = !resident || luggage <= 0;
+  if (elements.mobileCountMailMinus) elements.mobileCountMailMinus.disabled = !resident || mail <= 0;
+  if (elements.mobileCountLuggagePlus) elements.mobileCountLuggagePlus.disabled = !resident;
+  if (elements.mobileCountMailPlus) elements.mobileCountMailPlus.disabled = !resident;
+}
+
+function closeMobileCountEditModal() {
+  if (!elements.mobileCountEditModal) return;
+  elements.mobileCountEditModal.classList.remove('active');
+  mobileCountEditState.residentId = null;
+}
+
+function openMobileCountEditModal(residentId) {
+  const resident = getResidentById(residentId);
+  if (!resident) {
+    alert('寮生情報の読み込みが終わってからもう一度お試しください。');
+    return;
+  }
+  mobileCountEditState.residentId = resident.id;
+  syncMobileCountEditModalUI();
+  elements.mobileCountEditModal.classList.add('active');
+}
+
+function adjustMobileCountEdit(type, delta) {
+  const resident = getResidentById(mobileCountEditState.residentId);
+  if (!resident) return;
+  updateCount(resident.id, resident.name || '', type === 'mail' ? 'mail' : 'luggage', delta);
+  setTimeout(syncMobileCountEditModalUI, 0);
+}
+
 function syncReceiveModalUI() {
   if (!elements.receiveModal) return;
 
@@ -8928,6 +9049,32 @@ if (elements.receiveCustomConfirmBtn) {
     confirmReceiveAction(receiveModalState.customLuggage, receiveModalState.customMail);
   });
 }
+if (elements.mobileCountEditCloseBtn) {
+  elements.mobileCountEditCloseBtn.addEventListener('click', closeMobileCountEditModal);
+}
+if (elements.mobileCountEditCancelBtn) {
+  elements.mobileCountEditCancelBtn.addEventListener('click', closeMobileCountEditModal);
+}
+if (elements.mobileCountEditModal) {
+  elements.mobileCountEditModal.addEventListener('click', (ev) => {
+    if (ev.target === elements.mobileCountEditModal) closeMobileCountEditModal();
+  });
+}
+if (elements.mobileCountLuggageMinus) {
+  elements.mobileCountLuggageMinus.addEventListener('click', () => adjustMobileCountEdit('luggage', -1));
+}
+if (elements.mobileCountLuggagePlus) {
+  elements.mobileCountLuggagePlus.addEventListener('click', () => adjustMobileCountEdit('luggage', 1));
+}
+if (elements.mobileCountMailMinus) {
+  elements.mobileCountMailMinus.addEventListener('click', () => adjustMobileCountEdit('mail', -1));
+}
+if (elements.mobileCountMailPlus) {
+  elements.mobileCountMailPlus.addEventListener('click', () => adjustMobileCountEdit('mail', 1));
+}
+window.addEventListener('resize', () => {
+  if (!isMobileCountEditLayout()) closeMobileCountEditModal();
+});
 const ocrScanBtn = document.getElementById('ocr-scan-btn');
 if (ocrScanBtn) {
   ocrScanBtn.addEventListener('click', openOcrModal);
@@ -9008,6 +9155,19 @@ document.addEventListener('click', (ev) => {
   if (!receiveBtn) return;
   ev.preventDefault();
   openReceiveModal(receiveBtn.dataset.residentId);
+}, true);
+document.addEventListener('click', (ev) => {
+  if (!document.body.classList.contains('count-edit-mode')) return;
+  if (!isMobileCountEditLayout()) return;
+  const target = ev.target;
+  if (target && target.closest && target.closest('button, input, select, textarea, a, .favorite-star')) return;
+  const nameCell = target && target.closest ? target.closest('.name-cell[data-count-edit-resident-id]') : null;
+  if (!nameCell) return;
+  const residentId = nameCell.dataset.countEditResidentId || '';
+  if (!residentId) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  openMobileCountEditModal(residentId);
 }, true);
 document.addEventListener('click', (ev) => {
   const historyBtn = ev.target && ev.target.closest && ev.target.closest('.count-history-btn');
@@ -9715,7 +9875,7 @@ if(elements.changePasswordForm){
                         row.innerHTML = `
                           <td class="checkbox-col"><div class="cell-content"><input type="checkbox" class="resident-checkbox" data-id="${resident.id}"></div></td>
                           <td>
-                            <div class="cell-content name-cell">
+                            <div class="cell-content name-cell" data-count-edit-resident-id="${escapeHtml(resident.id || '')}">
                               <span class="room-number">${resident.roomNumber}</span>
                               <span class="dorm-marker">${dormMarker}</span>
                               <span class="circle-badge">${resident.circle || ''}</span>
@@ -9742,6 +9902,9 @@ if(elements.changePasswordForm){
                 });
             }
             updateDeleteButtonState();
+            if (elements.mobileCountEditModal && elements.mobileCountEditModal.classList.contains('active')) {
+              syncMobileCountEditModalUI();
+            }
             try { updateNotificationSettingsUI(); } catch(_){}
         }
         
@@ -10114,6 +10277,7 @@ if(elements.changePasswordForm){
             const currentTheme = localStorage.getItem('theme') || 'system';
             handleThemeChange(currentTheme);
             if (mode !== 'resident-edit-mode') elements.selectAllCheckbox.checked = false;
+            if (mode !== 'count-edit-mode') closeMobileCountEditModal();
             try { updateAnnouncementVisibility(); } catch(_) {}
             try { updateNotificationSettingsUI(); } catch(_) {}
             renderTable();
