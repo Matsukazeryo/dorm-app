@@ -1833,14 +1833,38 @@
   body.dark-theme .modal-close-btn{
     background:rgba(255,255,255,0.08);
   }
+  .announcement{
+    padding:18px !important;
+    overflow:hidden;
+  }
+  .announcement-list{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
   .announcement-list li,
   .announce-item{
     border-radius:18px !important;
+    box-sizing:border-box;
   }
   .announcement-list li{
+    width:100%;
+    margin:0 !important;
+    padding:14px 16px !important;
     background:var(--glass-bg) !important;
     border:1px solid var(--glass-border) !important;
     box-shadow:var(--glass-shadow-soft);
+    overflow:hidden;
+    overflow-wrap:anywhere;
+    word-break:break-word;
+  }
+  .announce-head{
+    align-items:flex-start;
+  }
+  .announce-title,
+  .announce-body{
+    overflow-wrap:anywhere;
+    word-break:break-word;
   }
   .morning-banner{
     background:rgba(255,255,255,0.48);
@@ -1901,6 +1925,12 @@
       padding:14px;
       border-radius:22px;
     }
+    .announcement{
+      padding:14px !important;
+    }
+    .announcement-list li{
+      padding:12px 13px !important;
+    }
     .controls-container{
       top:8px;
       border-radius:22px;
@@ -1959,9 +1989,9 @@
     
     <div class="controls-container">
         <div id="dorm-selector" class="dorm-selector">
+            <button data-dorm="all" class="active">両方</button>
             <button data-dorm="shofu">松風寮</button>
             <button data-dorm="meizen">明善寮</button>
-            <button data-dorm="all" class="active">両方</button>
         </div>
         <div class="top-controls">
             <input type="search" id="search-input" placeholder="部屋番号, 名前, ふりがなで曖昧検索...">
@@ -7847,12 +7877,26 @@ function applySohmuUI(){
       try { updateNotificationSettingsUI(); } catch(_){}
     }
     async function promptAdminLogin(){
-      try { await initAdminPassword(); } catch(_){}
       const input = window.prompt('管理者パスワードを入力してください');
       if (input == null) return; // cancel
+      try {
+        await Promise.race([
+          initAdminPassword(),
+          new Promise(resolve => setTimeout(resolve, 1200))
+        ]);
+      } catch(_){}
       if (String(input) === String(ADMIN_PASSWORD)) {
+        try {
+          if (typeof auth !== 'undefined' && auth && typeof auth.signInAnonymously === 'function') {
+            await auth.signInAnonymously();
+          }
+        } catch(e) {
+          console.warn('auth signInAnonymously failed', e);
+        }
         sessionStorage.setItem('isAdminLoggedIn', 'true');
         applyAdminUI();
+        try { if (typeof updateLoginStatus === 'function') updateLoginStatus(); } catch(_){}
+        try { if (typeof rebuildAnnouncementList === 'function') rebuildAnnouncementList(); } catch(_){}
         alert('管理者ログインしました。');
       } else {
         alert('パスワードが違います。');
