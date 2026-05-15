@@ -593,14 +593,26 @@
                font-size: 12px;
                border-width: 1px;   /* 枠も細く */
              }
-             body.count-edit-mode .count-cell button{
+             body.count-edit-mode:not(.morning-mode) .count-cell button{
                display:none;
              }
-             body.count-edit-mode .name-cell{
+             body.count-edit-mode:not(.morning-mode) .name-cell{
                cursor:pointer;
                background:rgba(52, 152, 219, 0.08);
+               position:relative;
              }
-             body.count-edit-mode .name-cell:active{
+             body.count-edit-mode:not(.morning-mode) .name-cell::after{
+               content:"タップで編集 ›";
+               margin-left:auto;
+               padding:3px 7px;
+               border-radius:999px;
+               background:rgba(52, 152, 219, 0.16);
+               color:var(--header-text);
+               font-size:0.68rem;
+               font-weight:700;
+               white-space:nowrap;
+             }
+             body.count-edit-mode:not(.morning-mode) .name-cell:active{
                background:rgba(52, 152, 219, 0.18);
              }
         }
@@ -9158,6 +9170,7 @@ document.addEventListener('click', (ev) => {
 }, true);
 document.addEventListener('click', (ev) => {
   if (!document.body.classList.contains('count-edit-mode')) return;
+  if (document.body.classList.contains('morning-mode')) return;
   if (!isMobileCountEditLayout()) return;
   const target = ev.target;
   if (target && target.closest && target.closest('button, input, select, textarea, a, .favorite-star')) return;
