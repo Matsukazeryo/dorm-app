@@ -48,6 +48,8 @@
         body.admin-logged-in #log-view-btn{ display:inline-block; }
         #change-password-btn{ display:none; }
         body.admin-logged-in #change-password-btn{ display:inline-block; }
+        #admin-message-btn{ display:none; }
+        body.admin-logged-in #admin-message-btn{ display:inline-block; }
         #login-logout-btn { background-color: #3498db; }
         #login-logout-btn.logout { background-color: #e74c3c; }
 
@@ -1574,6 +1576,93 @@
   .notification-settings-status.is-success{
     color:#1e8449;
   }
+  .admin-message-modal-content{
+    max-width:760px;
+  }
+  .admin-message-toolbar{
+    display:grid;
+    grid-template-columns:minmax(0, 1fr) auto auto;
+    gap:10px;
+    align-items:center;
+    margin:12px 0;
+  }
+  .admin-message-toolbar input{
+    min-width:0;
+  }
+  .admin-message-summary{
+    font-size:0.86rem;
+    color:#5d7182;
+    min-height:1.3em;
+  }
+  body.dark-theme .admin-message-summary{
+    color:#c8d9e8;
+  }
+  .admin-message-targets{
+    display:grid;
+    gap:8px;
+    max-height:320px;
+    overflow:auto;
+    padding:6px;
+    border:1px solid var(--border-color);
+    border-radius:14px;
+    background:rgba(255,255,255,0.42);
+  }
+  body.dark-theme .admin-message-targets{
+    background:rgba(255,255,255,0.06);
+  }
+  .admin-message-target{
+    display:grid;
+    grid-template-columns:auto 1fr;
+    gap:10px;
+    align-items:center;
+    padding:10px 12px;
+    border:1px solid rgba(52,152,219,0.16);
+    border-radius:14px;
+    background:rgba(255,255,255,0.72);
+    cursor:pointer;
+  }
+  body.dark-theme .admin-message-target{
+    background:rgba(255,255,255,0.08);
+    border-color:rgba(221,236,255,0.16);
+  }
+  .admin-message-target input{
+    width:18px;
+    height:18px;
+  }
+  .admin-message-target-name{
+    font-weight:800;
+    color:var(--text-color);
+  }
+  .admin-message-target-meta{
+    display:block;
+    margin-top:2px;
+    font-size:0.82rem;
+    color:#6c7f90;
+  }
+  body.dark-theme .admin-message-target-meta{
+    color:#c8d9e8;
+  }
+  .admin-message-status{
+    min-height:1.35em;
+    font-size:0.88rem;
+    color:#5d7182;
+  }
+  .admin-message-status.is-error{
+    color:#c0392b;
+    font-weight:700;
+  }
+  .admin-message-status.is-success{
+    color:#178a5a;
+    font-weight:700;
+  }
+  @media (max-width:600px){
+    .admin-message-toolbar{
+      grid-template-columns:1fr 1fr;
+    }
+    .admin-message-toolbar input{
+      grid-column:1 / -1;
+    }
+  }
   .morning-banner .left{ font-weight:600; color:var(--header-text); }
   .ref-line{ display:block; font-size:0.78em; opacity:.85; margin-top:2px; color:#7f8c8d; }
   body.dark-theme .ref-line{ color:#bdc3c7; }
@@ -2114,6 +2203,7 @@
         <h1>荷物管理アプリ</h1>
         <div class="header-buttons">
             <button id="log-view-btn" class="header-btn" style="background:#8e44ad;">履歴</button>
+            <button id="admin-message-btn" class="header-btn" style="background:#2c7fb8;">メッセージ</button>
             <button id="change-password-btn" class="header-btn" style="background:#16a085;">パスワード変更</button>
             <button id="enable-notif-btn" class="header-btn" style="background:#2ecc71; display:none;">通知をオンにする</button>
             <button id="morning-run-btn" class="header-btn" style="background:#f39c12;">朝の庶務</button>
@@ -2398,6 +2488,39 @@
     <ul id="log-list"></ul>
   </div>
 </div>
+
+<!-- ==== 管理者メッセージ送信モーダル ==== -->
+<div id="admin-message-modal" class="modal-overlay">
+  <div class="modal-content admin-message-modal-content">
+    <div class="modal-header">
+      <h2>寮生へメッセージ送信</h2>
+      <button id="admin-message-close-btn" class="modal-close-btn">&times;</button>
+    </div>
+    <form id="admin-message-form">
+      <div class="form-group">
+        <label for="admin-message-title">タイトル</label>
+        <input type="text" id="admin-message-title" maxlength="60" placeholder="例: 至急確認してください" required>
+      </div>
+      <div class="form-group">
+        <label for="admin-message-body">本文</label>
+        <textarea id="admin-message-body" rows="4" maxlength="240" placeholder="送信したい内容を入力" required></textarea>
+      </div>
+      <div class="admin-message-toolbar">
+        <input type="search" id="admin-message-search" placeholder="名前・部屋番号・ふりがなで絞り込み">
+        <button type="button" id="admin-message-select-visible-btn" class="header-btn" style="background:#3498db;">表示中を選択</button>
+        <button type="button" id="admin-message-clear-btn" class="header-btn" style="background:#7f8c8d;">解除</button>
+      </div>
+      <div id="admin-message-summary" class="admin-message-summary">送信先を選択してください。</div>
+      <div id="admin-message-targets" class="admin-message-targets" aria-label="送信先の寮生一覧"></div>
+      <div id="admin-message-status" class="admin-message-status" aria-live="polite"></div>
+      <div class="form-actions" style="margin-top:12px;">
+        <button type="button" id="admin-message-cancel-btn" class="header-btn" style="background:#7f8c8d;">キャンセル</button>
+        <button type="submit" id="admin-message-send-btn" class="header-btn" style="background:#27ae60;">選択した寮生へ送信</button>
+      </div>
+    </form>
+  </div>
+</div>
+<!-- ==== 管理者メッセージ送信モーダル ここまで ==== -->
 
 <div id="add-resident-modal" class="modal-overlay">
     <div class="modal-content">
@@ -7311,6 +7434,252 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
     }
+
+    const adminMessageState = {
+      residents: [],
+      visibleIds: [],
+      selectedIds: new Set()
+    };
+
+    function normalizeAdminMessageSearch(value){
+      return String(value || '')
+        .toLowerCase()
+        .replace(/[Ａ-Ｚａ-ｚ０-９]/g, function(ch){
+          return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0);
+        })
+        .replace(/\s+/g, '');
+    }
+
+    function adminMessageDormLabel(dorm){
+      if (dorm === 'shofu') return '松風寮';
+      if (dorm === 'meizen') return '明善寮';
+      return '';
+    }
+
+    async function loadAdminMessageResidents(){
+      const localList = Array.isArray(allResidents) ? allResidents.filter(function(r){ return r && r.id; }) : [];
+      const hasBothDorms = localList.some(function(r){ return r.dorm === 'shofu'; }) && localList.some(function(r){ return r.dorm === 'meizen'; });
+      if (currentCollectionName === 'all' && hasBothDorms) {
+        return sortResidentsForSelfSelect(localList.slice());
+      }
+      try {
+        const dorms = ['shofu', 'meizen'];
+        const lists = await Promise.all(dorms.map(function(dorm){
+          return db.collection('residents_' + dorm).get().then(function(snap){
+            return snap.docs.map(function(doc){ return mergeResidentDocData(doc, dorm); });
+          });
+        }));
+        return sortResidentsForSelfSelect(flattenOneLevel(lists));
+      } catch(e) {
+        console.warn('loadAdminMessageResidents failed; using local list', e);
+        return sortResidentsForSelfSelect(localList.slice());
+      }
+    }
+
+    function setAdminMessageStatus(message, tone){
+      const el = document.getElementById('admin-message-status');
+      if (!el) return;
+      el.textContent = message || '';
+      el.classList.remove('is-error', 'is-success');
+      if (tone === 'error') el.classList.add('is-error');
+      if (tone === 'success') el.classList.add('is-success');
+    }
+
+    function renderAdminMessageTargets(){
+      const box = document.getElementById('admin-message-targets');
+      const summary = document.getElementById('admin-message-summary');
+      const search = document.getElementById('admin-message-search');
+      if (!box) return;
+      const query = normalizeAdminMessageSearch(search ? search.value : '');
+      const residents = adminMessageState.residents.filter(function(r){
+        if (!query) return true;
+        const haystack = normalizeAdminMessageSearch([
+          r.name,
+          r.roomNumber,
+          r.furigana,
+          r.circle,
+          adminMessageDormLabel(r.dorm)
+        ].filter(Boolean).join(' '));
+        return haystack.indexOf(query) !== -1;
+      });
+      adminMessageState.visibleIds = residents.map(function(r){ return r.id; });
+      if (!residents.length) {
+        box.innerHTML = '<div class="admin-message-summary">該当する寮生がいません。</div>';
+      } else {
+        box.innerHTML = residents.map(function(r){
+          const checked = adminMessageState.selectedIds.has(r.id) ? 'checked' : '';
+          const dorm = adminMessageDormLabel(r.dorm);
+          const meta = [dorm, r.roomNumber ? String(r.roomNumber) + '号室' : '', r.furigana || '', r.circle || ''].filter(Boolean).join(' / ');
+          return `
+            <label class="admin-message-target">
+              <input type="checkbox" class="admin-message-target-check" value="${escapeHtml(r.id)}" ${checked}>
+              <span>
+                <span class="admin-message-target-name">${escapeHtml(r.name || '名前なし')}</span>
+                <span class="admin-message-target-meta">${escapeHtml(meta || '詳細なし')}</span>
+              </span>
+            </label>
+          `;
+        }).join('');
+      }
+      if (summary) {
+        const selectedCount = adminMessageState.selectedIds.size;
+        const visibleCount = residents.length;
+        summary.textContent = selectedCount
+          ? `${selectedCount}人を選択中（表示中 ${visibleCount}人）`
+          : `送信先を選択してください（表示中 ${visibleCount}人）`;
+      }
+      const sendBtn = document.getElementById('admin-message-send-btn');
+      if (sendBtn) sendBtn.disabled = adminMessageState.selectedIds.size === 0;
+    }
+
+    async function openAdminMessageModal(){
+      if (sessionStorage.getItem('isAdminLoggedIn') !== 'true') {
+        alert('管理者ログインが必要です。');
+        return;
+      }
+      const modal = document.getElementById('admin-message-modal');
+      const form = document.getElementById('admin-message-form');
+      const title = document.getElementById('admin-message-title');
+      const body = document.getElementById('admin-message-body');
+      const search = document.getElementById('admin-message-search');
+      const box = document.getElementById('admin-message-targets');
+      if (!modal || !box) return;
+      if (form) form.reset();
+      if (title) title.value = '';
+      if (body) body.value = '';
+      if (search) search.value = '';
+      adminMessageState.selectedIds.clear();
+      box.innerHTML = '<div class="admin-message-summary">寮生リストを読み込み中...</div>';
+      setAdminMessageStatus('', '');
+      modal.classList.add('active');
+      try {
+        adminMessageState.residents = await loadAdminMessageResidents();
+        renderAdminMessageTargets();
+        setTimeout(function(){ try { if (title) title.focus(); } catch(_){} }, 0);
+      } catch(e) {
+        console.error('openAdminMessageModal failed', e);
+        box.innerHTML = '<div class="admin-message-summary">寮生リストを読み込めませんでした。</div>';
+        setAdminMessageStatus('通信状態や権限を確認してください。', 'error');
+      }
+    }
+
+    function closeAdminMessageModal(){
+      const modal = document.getElementById('admin-message-modal');
+      if (modal) modal.classList.remove('active');
+    }
+
+    async function submitAdminMessage(ev){
+      ev && ev.preventDefault();
+      if (sessionStorage.getItem('isAdminLoggedIn') !== 'true') {
+        alert('管理者ログインが必要です。');
+        return;
+      }
+      const titleEl = document.getElementById('admin-message-title');
+      const bodyEl = document.getElementById('admin-message-body');
+      const sendBtn = document.getElementById('admin-message-send-btn');
+      const title = String(titleEl && titleEl.value || '').trim();
+      const body = String(bodyEl && bodyEl.value || '').trim();
+      const selectedResidents = adminMessageState.residents.filter(function(r){ return adminMessageState.selectedIds.has(r.id); });
+      if (!selectedResidents.length) {
+        setAdminMessageStatus('送信先を1人以上選択してください。', 'error');
+        return;
+      }
+      if (!title || !body) {
+        setAdminMessageStatus('タイトルと本文を入力してください。', 'error');
+        return;
+      }
+      if (!confirm(`${selectedResidents.length}人の寮生へメッセージを送信します。よろしいですか？`)) return;
+      if (sendBtn) {
+        sendBtn.disabled = true;
+        sendBtn.textContent = '送信依頼中...';
+      }
+      setAdminMessageStatus('送信依頼を登録しています...', '');
+      try {
+        const targetResidents = selectedResidents.map(function(r){
+          return {
+            residentId: r.id,
+            dorm: r.dorm || '',
+            name: r.name || '',
+            roomNumber: r.roomNumber || ''
+          };
+        });
+        await db.collection('admin_message_requests').add({
+          type: 'admin_direct_message',
+          title,
+          body,
+          targetResidentIds: targetResidents.map(function(r){ return r.residentId; }),
+          targetResidents,
+          status: 'queued',
+          createdBy: 'admin',
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        try {
+          await addLog('個別メッセージ送信', `${selectedResidents.length}人へ「${title}」を送信依頼`);
+        } catch(_){}
+        setAdminMessageStatus('送信依頼を登録しました。数秒後に対象端末へ通知されます。', 'success');
+        adminMessageState.selectedIds.clear();
+        renderAdminMessageTargets();
+      } catch(e) {
+        console.error('submitAdminMessage failed', e);
+        const detail = e && (e.code || e.message) ? ` (${e.code || e.message})` : '';
+        setAdminMessageStatus('送信依頼の登録に失敗しました。権限や通信状態を確認してください。' + detail, 'error');
+      } finally {
+        if (sendBtn) {
+          sendBtn.textContent = '選択した寮生へ送信';
+          sendBtn.disabled = adminMessageState.selectedIds.size === 0;
+        }
+      }
+    }
+
+    (function bindAdminMessageUi(){
+      document.addEventListener('click', function(ev){
+        const openBtn = ev.target && ev.target.closest && ev.target.closest('#admin-message-btn');
+        if (openBtn) {
+          ev.preventDefault();
+          openAdminMessageModal();
+          return;
+        }
+        const closeBtn = ev.target && ev.target.closest && (ev.target.closest('#admin-message-close-btn') || ev.target.closest('#admin-message-cancel-btn'));
+        if (closeBtn) {
+          ev.preventDefault();
+          closeAdminMessageModal();
+          return;
+        }
+        const modal = document.getElementById('admin-message-modal');
+        if (modal && ev.target === modal) closeAdminMessageModal();
+      });
+      document.addEventListener('input', function(ev){
+        if (ev.target && ev.target.id === 'admin-message-search') renderAdminMessageTargets();
+      });
+      document.addEventListener('change', function(ev){
+        const checkbox = ev.target && ev.target.closest && ev.target.closest('.admin-message-target-check');
+        if (!checkbox) return;
+        if (checkbox.checked) adminMessageState.selectedIds.add(checkbox.value);
+        else adminMessageState.selectedIds.delete(checkbox.value);
+        renderAdminMessageTargets();
+      });
+      document.addEventListener('submit', function(ev){
+        if (ev.target && ev.target.id === 'admin-message-form') {
+          submitAdminMessage(ev);
+        }
+      });
+      document.addEventListener('DOMContentLoaded', function(){
+        const selectVisibleBtn = document.getElementById('admin-message-select-visible-btn');
+        const clearBtn = document.getElementById('admin-message-clear-btn');
+        if (selectVisibleBtn) {
+          selectVisibleBtn.addEventListener('click', function(){
+            adminMessageState.visibleIds.forEach(function(id){ adminMessageState.selectedIds.add(id); });
+            renderAdminMessageTargets();
+          });
+        }
+        if (clearBtn) {
+          clearBtn.addEventListener('click', function(){
+            adminMessageState.selectedIds.clear();
+            renderAdminMessageTargets();
+          });
+        }
+      });
+    })();
 
     function normalizeResidentNote(value){
       if (value == null) return '';
