@@ -50,6 +50,8 @@
         body.admin-logged-in #change-password-btn{ display:inline-block; }
         #admin-message-btn{ display:none; }
         body.admin-logged-in #admin-message-btn{ display:inline-block; }
+        #admin-logout-btn{ display:none; }
+        body.admin-logged-in #admin-logout-btn{ display:inline-block; }
         #login-logout-btn { background-color: #3498db; }
         #login-logout-btn.logout { background-color: #e74c3c; }
 
@@ -1831,10 +1833,12 @@
   }
   #login-logout-btn,
   #log-view-btn,
+  #admin-logout-btn,
   #change-password-btn{
     background:rgba(47,142,229,0.88) !important;
   }
   #login-logout-btn.logout,
+  #admin-logout-btn,
   .delete-btn,
   #delete-selected-btn{
     background:rgba(232,93,87,0.9) !important;
@@ -2136,6 +2140,9 @@
     color:#9f312d !important;
     border-color:rgba(200,77,72,0.26) !important;
   }
+  body.admin-logged-in .footer-admin-actions{
+    display:none;
+  }
   body.dark-theme .footer{
     background:rgba(255,255,255,0.10);
   }
@@ -2205,6 +2212,7 @@
             <button id="log-view-btn" class="header-btn" style="background:#8e44ad;">履歴</button>
             <button id="admin-message-btn" class="header-btn" style="background:#2c7fb8;">メッセージ</button>
             <button id="change-password-btn" class="header-btn" style="background:#16a085;">パスワード変更</button>
+            <button id="admin-logout-btn" class="header-btn" type="button" style="background:#e74c3c;">ログアウト</button>
             <button id="enable-notif-btn" class="header-btn" style="background:#2ecc71; display:none;">通知をオンにする</button>
             <button id="morning-run-btn" class="header-btn" style="background:#f39c12;">朝の庶務</button>
             <button id="ocr-scan-btn" class="header-btn" style="background:#34495e;">OCR登録</button>
@@ -3364,7 +3372,9 @@
 
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        e.stopPropagation();
+        e.stopImmediatePropagation();
+        if (form.__bulkAddSubmitting) return;
+        form.__bulkAddSubmitting = true;
 
         try {
           const dorm = String(getElementValueById('bulk-form-dorm', 'shofu') || 'shofu').trim();
@@ -3481,6 +3491,8 @@
         } catch (err) {
           console.error('bulk add failed:', err);
           alert('一括追加に失敗しました。管理者ログイン状態・通信状態・権限を確認してください。');
+        } finally {
+          form.__bulkAddSubmitting = false;
         }
       }, false);
     })();
@@ -6171,7 +6183,7 @@ function unifiedConfirm(action){
 
   // 既存のログイン/ログアウト処理実行後に状態を合せる（競合しないように遅延）
   document.addEventListener('click', (ev) => {
-    const btn = ev.target && ev.target.closest && ev.target.closest('#login-logout-btn');
+    const btn = ev.target && ev.target.closest && ev.target.closest('#login-logout-btn, #admin-logout-btn');
     if (!btn) return;
     setTimeout(syncFromSession, 0);
   }, true);
@@ -8408,6 +8420,18 @@ function applySohmuUI(){
       }
       try { updateNotificationSettingsUI(); } catch(_){}
     }
+    function forceSohmuOffAfterLogout(){
+      const tgl = document.getElementById('sohmu-toggle');
+      if (tgl) {
+        tgl.disabled = false;
+        tgl.checked = false;
+      }
+      try { setSohmuOn(false); } catch(_){}
+      try { applySohmuUI(); } catch(_){}
+      try {
+        if (tgl) tgl.dispatchEvent(new Event('change', { bubbles: true }));
+      } catch(_) {}
+    }
     async function promptAdminLogin(){
       const input = window.prompt('管理者パスワードを入力してください');
       if (input == null) return; // cancel
@@ -8489,21 +8513,27 @@ function applySohmuUI(){
       }
     
       // 管理者ログイン/ログアウト（capture で競合回避）
-      const loginBtn = document.getElementById('login-logout-btn');
-      if (loginBtn && !loginBtn.dataset.bound) {
-        loginBtn.dataset.bound = '1';
-        loginBtn.addEventListener('click', async (ev) => {
+      const bindAdminAuthButton = (button) => {
+        if (!button || button.dataset.bound) return;
+        button.dataset.bound = '1';
+        button.addEventListener('click', async (ev) => {
           try { ev.preventDefault(); ev.stopImmediatePropagation(); } catch(_){}
           const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
           if (isAdmin) {
             sessionStorage.removeItem('isAdminLoggedIn');
+            forceSohmuOffAfterLogout();
             applyAdminUI();
+            try { if (typeof updateLoginStatus === 'function') updateLoginStatus(); } catch(_){}
+            try { if (typeof rebuildAnnouncementList === 'function') rebuildAnnouncementList(); } catch(_){}
+            try { if (typeof auth !== 'undefined' && auth && auth.currentUser) auth.signOut().catch(() => {}); } catch(_){}
             alert('ログアウトしました。');
           } else {
             await promptAdminLogin();
           }
         }, true);
-      }
+      };
+      bindAdminAuthButton(document.getElementById('login-logout-btn'));
+      bindAdminAuthButton(document.getElementById('admin-logout-btn'));
     
       // 表示トグル（ふりがな / サークル / 寮）復活 & 永続化
       const f = document.getElementById('toggle-furigana');
@@ -8525,13 +8555,17 @@ function applySohmuUI(){
     
       // クリック委譲（DOM再描画で直付けが外れても動く・保険）
       document.addEventListener('click', async (ev) => {
-        const loginEl = ev.target && ev.target.closest && ev.target.closest('#login-logout-btn');
+        const loginEl = ev.target && ev.target.closest && ev.target.closest('#login-logout-btn, #admin-logout-btn');
         if (loginEl) {
           try { ev.preventDefault(); ev.stopImmediatePropagation(); } catch(_){}
           const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
           if (isAdmin) {
             sessionStorage.removeItem('isAdminLoggedIn');
+            forceSohmuOffAfterLogout();
             applyAdminUI();
+            try { if (typeof updateLoginStatus === 'function') updateLoginStatus(); } catch(_){}
+            try { if (typeof rebuildAnnouncementList === 'function') rebuildAnnouncementList(); } catch(_){}
+            try { if (typeof auth !== 'undefined' && auth && auth.currentUser) auth.signOut().catch(() => {}); } catch(_){}
             alert('ログアウトしました。');
           } else {
             await promptAdminLogin();
@@ -8590,6 +8624,7 @@ function applySohmuUI(){
           selectAllCheckbox: document.getElementById('select-all-checkbox'),
           modeSelectors: document.querySelectorAll('input[name="mode"]'),
           loginLogoutBtn: document.getElementById('login-logout-btn'),
+          adminLogoutBtn: document.getElementById('admin-logout-btn'),
           sohmuToggle: document.getElementById('sohmu-toggle'),
           themeSelector: document.getElementById('theme-selector'),
           residentSortSelector: document.getElementById('resident-sort-selector'),
@@ -11214,6 +11249,7 @@ if(elements.changePasswordForm){
 
         function handleBulkAddSubmit(event) {
             event.preventDefault();
+            if (elements.addBulkForm && elements.addBulkForm.__addBulkBound) return;
             const dorm = document.getElementById('bulk-form-dorm').value;
             const collection = `residents_${dorm}`;
             const entries = document.querySelectorAll('.bulk-add-entry');
@@ -11350,6 +11386,15 @@ if(elements.changePasswordForm){
         function logout() {
             sessionStorage.removeItem('isAdminLoggedIn');
             alert('ログアウトしました。');
+            if (typeof forceSohmuOffAfterLogout === 'function') {
+                forceSohmuOffAfterLogout();
+            } else {
+                elements.sohmuToggle.disabled = false;
+                elements.sohmuToggle.checked = false;
+                setSohmuOn(false);
+                applySohmuUI();
+                elements.sohmuToggle.dispatchEvent(new Event('change', { bubbles: true }));
+            }
             document.getElementById('view-mode').checked = true;
             setMode('view-mode');
             updateLoginStatus();
@@ -11619,6 +11664,9 @@ if(elements.changePasswordForm){
             updateDeleteButtonState();
         });
         elements.loginLogoutBtn.addEventListener('click', handleLoginLogout);
+        if (elements.adminLogoutBtn) {
+            elements.adminLogoutBtn.addEventListener('click', logout);
+        }
         elements.themeSelector.addEventListener('change', e => {
             localStorage.setItem('theme', e.target.value);
             handleThemeChange(e.target.value);
