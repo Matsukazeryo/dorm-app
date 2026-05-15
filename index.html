@@ -1309,15 +1309,109 @@
 
   /* ===== 朝の庶務（モーニング）UI ===== */
   .morning-banner{
-    background: var(--announce-item-bg);
-    border: 1px dashed var(--header-border);
-    padding: 8px 10px;
-    border-radius: 6px;
+    background: linear-gradient(135deg, rgba(243, 156, 18, 0.12), rgba(52, 152, 219, 0.08));
+    border: 1px solid rgba(243, 156, 18, 0.36);
+    padding: 12px 14px;
+    border-radius: 10px;
     margin: 8px 0;
     display: none;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: 14px;
+    box-shadow: 0 8px 18px rgba(0,0,0,0.06);
+  }
+  body.dark-theme .morning-banner{
+    background: linear-gradient(135deg, rgba(243, 156, 18, 0.16), rgba(93, 173, 226, 0.12));
+    border-color: rgba(243, 156, 18, 0.42);
+  }
+  .morning-banner-main{
+    display:flex;
+    align-items:flex-start;
+    gap:10px;
+    min-width:0;
+  }
+  .morning-banner-icon{
+    width:34px;
+    height:34px;
+    border-radius:50%;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    background:#f39c12;
+    color:#fff;
+    flex:0 0 auto;
+    font-size:18px;
+  }
+  .morning-banner-title{
+    font-weight:800;
+    color:var(--header-text);
+    line-height:1.25;
+  }
+  .morning-banner-desc{
+    margin-top:3px;
+    color:#7f8c8d;
+    font-size:0.82rem;
+    line-height:1.35;
+  }
+  body.dark-theme .morning-banner-desc{
+    color:#bdc3c7;
+  }
+  .morning-banner-actions{
+    display:flex;
+    align-items:stretch;
+    gap:10px;
+    flex:0 0 auto;
+  }
+  .morning-action-btn{
+    min-width:132px;
+    border:none;
+    border-radius:10px;
+    padding:9px 12px;
+    color:#fff;
+    cursor:pointer;
+    font-weight:800;
+    line-height:1.15;
+  }
+  .morning-action-btn .sub{
+    display:block;
+    margin-top:2px;
+    font-size:0.68rem;
+    font-weight:700;
+    opacity:0.9;
+  }
+  .morning-action-btn.finish{
+    background:#27ae60;
+    box-shadow:0 8px 16px rgba(39, 174, 96, 0.22);
+  }
+  .morning-action-btn.cancel{
+    background:#7f8c8d;
+    min-width:152px;
+  }
+  .morning-action-btn:disabled{
+    opacity:0.6;
+    cursor:not-allowed;
+    box-shadow:none;
+  }
+  @media (max-width:600px){
+    .morning-banner{
+      align-items:stretch;
+      flex-direction:column;
+    }
+    .morning-banner-actions{
+      display:grid;
+      grid-template-columns:1fr;
+    }
+    .morning-action-btn{
+      width:100%;
+      min-width:0;
+      min-height:48px;
+    }
+    .morning-action-btn.finish{
+      order:1;
+    }
+    .morning-action-btn.cancel{
+      order:2;
+    }
   }
   .pwa-hint{
     background:#fff3cd;
@@ -1494,10 +1588,22 @@
 
     <!-- ===== 朝の庶務バナー ===== -->
     <div id="morning-banner" class="morning-banner" style="display:none;">
-      <div class="left">🌅 朝の庶務中 <span id="morning-banner-dorm"></span>｜参考＝リセット直前の数</div>
-      <div class="right">
-        <button id="morning-cancel-btn" type="button" class="header-btn" style="background:#7f8c8d;">取り消し</button>
-        <button id="morning-finish-btn" type="button" class="header-btn" style="background:#27ae60;">終了</button>
+      <div class="morning-banner-main">
+        <span class="morning-banner-icon" aria-hidden="true">🌅</span>
+        <div>
+          <div class="morning-banner-title">朝の庶務中 <span id="morning-banner-dorm"></span></div>
+          <div class="morning-banner-desc">参考＝開始直前の数。終了すると今の数を確定、取り消すと参考の数に戻します。</div>
+        </div>
+      </div>
+      <div class="morning-banner-actions">
+        <button id="morning-cancel-btn" type="button" class="morning-action-btn cancel">
+          参考に戻して中止
+          <span class="sub">変更を取り消す</span>
+        </button>
+        <button id="morning-finish-btn" type="button" class="morning-action-btn finish">
+          変更を確定して終了
+          <span class="sub">この内容で完了</span>
+        </button>
       </div>
     </div>
     <!-- ===== 朝の庶務バナーここまで ===== -->
@@ -4137,15 +4243,18 @@ const __UCONF = { open:false, resolver:null };
 const UNIFIED_CONFIRM_TEXT = {
   start: {
     title: '朝の庶務を開始しますか？',
-    body : '直前の数を「参考」として保存し、松風寮・明善寮の「荷物/郵便」を0に初期化します。よろしいですか？'
+    body : '直前の数を「参考」として保存し、松風寮・明善寮の「荷物/郵便」を0に初期化します。よろしいですか？',
+    okText: '開始する'
   },
   cancel:{
     title: '朝の庶務を取り消しますか？',
-    body : '参考に保存した数へ復元し、朝の庶務モードを終了します。よろしいですか？'
+    body : '今の変更は反映せず、参考に保存した開始直前の数へ戻します。よろしいですか？',
+    okText: '参考に戻して中止'
   },
   finish:{
-    title: '朝の庶務を終了しますか？',
-    body : '参考表示を消して通常表示に戻ります。よろしいですか？'
+    title: '変更を確定して終了しますか？',
+    body : '現在表示されている荷物・郵便の数を確定して、朝の庶務モードを終了します。よろしいですか？',
+    okText: '変更を確定して終了'
   }
 };
 function unifiedConfirm(action){
@@ -4169,6 +4278,9 @@ function unifiedConfirm(action){
   const t = UNIFIED_CONFIRM_TEXT[action] || UNIFIED_CONFIRM_TEXT.start;
   titleEl.textContent = t.title;
   bodyEl.textContent  = t.body;
+  okBtn.textContent = t.okText || 'OK';
+  cancelBtn.textContent = 'キャンセル';
+  okBtn.style.background = action === 'cancel' ? '#7f8c8d' : '#27ae60';
 
   return new Promise((resolve) => {
     if (__UCONF.open && __UCONF.resolver) { try { __UCONF.resolver(false); } catch(_){} }
