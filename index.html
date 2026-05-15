@@ -1479,11 +1479,13 @@
   }
   .notification-settings-item{
     display:flex;
-    gap:10px;
-    align-items:flex-start;
-    padding:10px 12px;
-    border-radius:8px;
+    gap:12px;
+    align-items:center;
+    justify-content:space-between;
+    padding:12px 14px;
+    border-radius:14px;
     background:rgba(52,152,219,0.06);
+    border:1px solid rgba(52,152,219,0.12);
   }
   body.dark-theme .notification-settings-item{
     background:rgba(93,173,226,0.14);
@@ -1491,8 +1493,56 @@
   .notification-settings-item.is-disabled{
     opacity:0.58;
   }
-  .notification-settings-item input{
-    margin-top:3px;
+  .notification-switch{
+    position:relative;
+    display:inline-flex;
+    align-items:center;
+    flex:0 0 auto;
+    width:52px;
+    height:30px;
+  }
+  .notification-switch input{
+    opacity:0;
+    width:0;
+    height:0;
+  }
+  .notification-switch-slider{
+    position:absolute;
+    inset:0;
+    border-radius:999px;
+    cursor:pointer;
+    background:#bdc3c7;
+    box-shadow:0 1px 3px rgba(0,0,0,0.18) inset;
+    transition:background .2s ease;
+  }
+  .notification-switch-slider::before{
+    content:"";
+    position:absolute;
+    width:24px;
+    height:24px;
+    left:3px;
+    top:3px;
+    border-radius:50%;
+    background:#fff;
+    box-shadow:0 2px 7px rgba(0,0,0,0.24);
+    transition:transform .2s ease;
+  }
+  .notification-switch input:checked + .notification-switch-slider{
+    background:#27ae60;
+  }
+  .notification-switch input:checked + .notification-switch-slider::before{
+    transform:translateX(22px);
+  }
+  .notification-switch input:focus-visible + .notification-switch-slider{
+    outline:3px solid rgba(18,111,190,0.55);
+    outline-offset:3px;
+  }
+  .notification-switch input:disabled + .notification-switch-slider{
+    cursor:not-allowed;
+    opacity:0.52;
+  }
+  .notification-settings-text{
+    min-width:0;
   }
   .notification-settings-item strong{
     display:block;
@@ -2568,29 +2618,38 @@
       </div>
       <button id="notification-settings-enable-btn" type="button" class="header-btn notification-settings-enable-btn" style="background:#2ecc71; display:none;">通知を有効化</button>
     </div>
-    <div class="notification-settings-list">
-      <label id="notification-settings-master-row" class="notification-settings-item">
-        <input id="notif-master-off-toggle" type="checkbox">
-        <span>
-          <strong>全通知をオフにする</strong>
-          <span>荷物・郵便・お知らせをこの端末で止めます。</span>
-        </span>
-      </label>
-      <label id="notification-settings-luggage-row" class="notification-settings-item">
-        <input id="notif-luggage-toggle" type="checkbox">
-        <span>
-          <strong>荷物の通知を受け取る</strong>
-          <span>自分の荷物が増えたときだけ通知します。</span>
-        </span>
-      </label>
-      <label id="notification-settings-mail-row" class="notification-settings-item">
-        <input id="notif-mail-toggle" type="checkbox">
-        <span>
-          <strong>郵便の通知を受け取る</strong>
-          <span>自分の郵便が増えたときだけ通知します。</span>
-        </span>
-      </label>
-    </div>
+	    <div class="notification-settings-list">
+	      <label id="notification-settings-luggage-row" class="notification-settings-item">
+	        <span class="notification-settings-text">
+	          <strong>荷物の通知を受け取る</strong>
+	          <span>自分の荷物が増えたときだけ通知します。</span>
+	        </span>
+	        <span class="notification-switch">
+	          <input id="notif-luggage-toggle" type="checkbox">
+	          <span class="notification-switch-slider"></span>
+	        </span>
+	      </label>
+	      <label id="notification-settings-mail-row" class="notification-settings-item">
+	        <span class="notification-settings-text">
+	          <strong>郵便の通知を受け取る</strong>
+	          <span>自分の郵便が増えたときだけ通知します。</span>
+	        </span>
+	        <span class="notification-switch">
+	          <input id="notif-mail-toggle" type="checkbox">
+	          <span class="notification-switch-slider"></span>
+	        </span>
+	      </label>
+	      <label id="notification-settings-announcement-row" class="notification-settings-item">
+	        <span class="notification-settings-text">
+	          <strong>お知らせの通知を受け取る</strong>
+	          <span>新しいお知らせが投稿されたときに通知します。</span>
+	        </span>
+	        <span class="notification-switch">
+	          <input id="notif-announcement-toggle" type="checkbox">
+	          <span class="notification-switch-slider"></span>
+	        </span>
+	      </label>
+	    </div>
     <div id="notification-settings-status" class="notification-settings-status"></div>
     <div class="form-actions" style="margin-top:12px;">
       <button id="notification-settings-close-btn" type="button" class="header-btn" style="background:#7f8c8d; margin-left:auto;">閉じる</button>
@@ -3316,6 +3375,7 @@ const DEFAULT_NOTIFICATION_PREFS = Object.freeze({
   notificationsEnabled: true,
   notifyLuggage: true,
   notifyMail: true,
+  notifyAnnouncement: true,
   notifyMorning: false
 });
 let notificationPrefsState = null;
@@ -3331,10 +3391,18 @@ let notificationDebugState = {
 
 function normalizeNotificationPrefs(raw){
   const src = raw && typeof raw === 'object' ? raw : {};
+  const legacyEnabled = src.notificationsEnabled !== false;
+  const hasLuggage = Object.prototype.hasOwnProperty.call(src, 'notifyLuggage');
+  const hasMail = Object.prototype.hasOwnProperty.call(src, 'notifyMail');
+  const hasAnnouncement = Object.prototype.hasOwnProperty.call(src, 'notifyAnnouncement');
+  const notifyLuggage = hasLuggage ? src.notifyLuggage !== false : legacyEnabled;
+  const notifyMail = hasMail ? src.notifyMail !== false : legacyEnabled;
+  const notifyAnnouncement = hasAnnouncement ? src.notifyAnnouncement !== false : legacyEnabled;
   return {
-    notificationsEnabled: src.notificationsEnabled !== false,
-    notifyLuggage: src.notifyLuggage !== false,
-    notifyMail: src.notifyMail !== false,
+    notificationsEnabled: !!(notifyLuggage || notifyMail || notifyAnnouncement),
+    notifyLuggage,
+    notifyMail,
+    notifyAnnouncement,
     notifyMorning: false
   };
 }
@@ -3370,6 +3438,7 @@ function buildNotificationPrefsPayload(){
     notificationsEnabled: prefs.notificationsEnabled,
     notifyLuggage: prefs.notifyLuggage,
     notifyMail: prefs.notifyMail,
+    notifyAnnouncement: prefs.notifyAnnouncement,
     notifyMorning: prefs.notifyMorning,
     notificationPrefsUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
   };
@@ -4379,14 +4448,14 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       if (!card) return;
       const enableBtn = document.getElementById('notification-settings-enable-btn');
       const statusEl = document.getElementById('notification-settings-status');
-      const masterOff = document.getElementById('notif-master-off-toggle');
       const luggageToggle = document.getElementById('notif-luggage-toggle');
       const mailToggle = document.getElementById('notif-mail-toggle');
+      const announcementToggle = document.getElementById('notif-announcement-toggle');
       const sohmuToggle = document.getElementById('sohmu-toggle');
       const rows = [
-        { el: document.getElementById('notification-settings-master-row'), disabled: false },
         { el: document.getElementById('notification-settings-luggage-row'), disabled: false },
-        { el: document.getElementById('notification-settings-mail-row'), disabled: false }
+        { el: document.getElementById('notification-settings-mail-row'), disabled: false },
+        { el: document.getElementById('notification-settings-announcement-row'), disabled: false }
       ];
       const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
       const myResidentId = localStorage.getItem('myResidentId');
@@ -4409,18 +4478,18 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
         return;
       }
 
-      if (masterOff) masterOff.checked = !prefs.notificationsEnabled;
       if (luggageToggle) luggageToggle.checked = !!prefs.notifyLuggage;
       if (mailToggle) mailToggle.checked = !!prefs.notifyMail;
+      if (announcementToggle) announcementToggle.checked = !!prefs.notifyAnnouncement;
 
-      const detailDisabled = !supported || !prefs.notificationsEnabled;
-      if (masterOff) masterOff.disabled = !supported;
+      const detailDisabled = !supported;
       if (luggageToggle) luggageToggle.disabled = detailDisabled;
       if (mailToggle) mailToggle.disabled = detailDisabled;
+      if (announcementToggle) announcementToggle.disabled = detailDisabled;
 
-      rows[0].disabled = !!(masterOff && masterOff.disabled);
-      rows[1].disabled = !!(luggageToggle && luggageToggle.disabled);
-      rows[2].disabled = !!(mailToggle && mailToggle.disabled);
+      rows[0].disabled = !!(luggageToggle && luggageToggle.disabled);
+      rows[1].disabled = !!(mailToggle && mailToggle.disabled);
+      rows[2].disabled = !!(announcementToggle && announcementToggle.disabled);
       rows.forEach(row => {
         if (row.el) row.el.classList.toggle('is-disabled', row.disabled);
       });
@@ -4450,7 +4519,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
           } else if (permission !== 'granted') {
             message = '通知を許可すると、この端末で受け取る内容を細かく切り替えられます。';
           } else if (!prefs.notificationsEnabled) {
-            message = 'この端末では、すべての通知を停止中です。';
+            message = 'この端末では、荷物・郵便・お知らせの通知をすべて停止中です。';
           } else if (!tokenReady) {
             message = '通知設定を端末へ反映しています。少し待ってからもう一度確認してください。';
           } else {
@@ -8169,9 +8238,9 @@ function applySohmuUI(){
           notificationSettingsEnableBtn: document.getElementById('notification-settings-enable-btn'),
           notificationSettingsCloseBtn: document.getElementById('notification-settings-close-btn'),
           notificationSettingsStatus: document.getElementById('notification-settings-status'),
-          notifMasterOffToggle: document.getElementById('notif-master-off-toggle'),
           notifLuggageToggle: document.getElementById('notif-luggage-toggle'),
           notifMailToggle: document.getElementById('notif-mail-toggle'),
+          notifAnnouncementToggle: document.getElementById('notif-announcement-toggle'),
           receiveModal: document.getElementById('receive-modal'),
           receiveResidentName: document.getElementById('receive-resident-name'),
           receiveSummary: document.getElementById('receive-summary'),
@@ -8259,10 +8328,14 @@ function applySohmuUI(){
         };
 
         async function handleNotificationPreferenceChange(){
+          const notifyLuggage = !!(elements.notifLuggageToggle && elements.notifLuggageToggle.checked);
+          const notifyMail = !!(elements.notifMailToggle && elements.notifMailToggle.checked);
+          const notifyAnnouncement = !!(elements.notifAnnouncementToggle && elements.notifAnnouncementToggle.checked);
           const nextPrefs = {
-            notificationsEnabled: !(elements.notifMasterOffToggle && elements.notifMasterOffToggle.checked),
-            notifyLuggage: !!(elements.notifLuggageToggle && elements.notifLuggageToggle.checked),
-            notifyMail: !!(elements.notifMailToggle && elements.notifMailToggle.checked),
+            notificationsEnabled: !!(notifyLuggage || notifyMail || notifyAnnouncement),
+            notifyLuggage,
+            notifyMail,
+            notifyAnnouncement,
             notifyMorning: false
           };
           storeNotificationPrefs(nextPrefs);
@@ -8272,9 +8345,9 @@ function applySohmuUI(){
         }
 
         [
-          elements.notifMasterOffToggle,
           elements.notifLuggageToggle,
-          elements.notifMailToggle
+          elements.notifMailToggle,
+          elements.notifAnnouncementToggle
         ].forEach(input => {
           if (input && !input.dataset.bound) {
             input.dataset.bound = '1';
@@ -11165,10 +11238,9 @@ if(elements.changePasswordForm){
         elements.opsContainer.style.display = elements.sohmuToggle.checked ? '' : 'none';
         // Initial display setting for "寮生変更" button
         elements.changeResidentBtn.style.display = elements.sohmuToggle.checked ? 'none' : 'inline-block';
-        // 寮生変更ボタンから開いた場合はキャンセルを非表示
         elements.changeResidentBtn.addEventListener('click', () => {
-            const cancelBtn = document.getElementById('self-cancel-btn');
-            if (cancelBtn) cancelBtn.style.display = 'none';
+          const cancelBtn = document.getElementById('self-cancel-btn');
+            if (cancelBtn) cancelBtn.style.display = '';
             openSelfSelectModal();
         });
         // 初期表示：お知らせ欄を庶務モードに応じて表示/非表示
@@ -11231,6 +11303,8 @@ if(elements.changePasswordForm){
           localStorage.removeItem('myResidentId');
           try { updateNotificationSettingsUI(); } catch(_){}
           await populateSelfSelectOptions();
+          const cancelBtn = document.getElementById('self-cancel-btn');
+          if (cancelBtn) cancelBtn.style.display = '';
           document.getElementById('self-select-modal').classList.add('active');
           // Setup self-select-btn handler again (with loading overlay)
           const btn = document.getElementById('self-select-btn');
