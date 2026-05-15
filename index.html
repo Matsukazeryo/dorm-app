@@ -1327,6 +1327,7 @@
     align-items:flex-start;
     gap:10px;
     min-width:0;
+    flex:1 1 auto;
   }
   .morning-banner-icon{
     width:34px;
@@ -1343,7 +1344,21 @@
   .morning-banner-title{
     font-weight:800;
     color:var(--header-text);
-    line-height:1.25;
+    line-height:1.35;
+    font-size:1rem;
+    display:flex;
+    align-items:baseline;
+    gap:6px;
+    flex-wrap:wrap;
+    min-width:0;
+    word-break:keep-all;
+  }
+  #morning-banner-dorm{
+    display:inline-flex;
+    align-items:center;
+    white-space:nowrap;
+    font-size:0.92em;
+    font-weight:800;
   }
   .morning-banner-desc{
     margin-top:3px;
@@ -1398,6 +1413,9 @@
     .morning-banner-actions{
       display:grid;
       grid-template-columns:1fr;
+    }
+    .morning-banner-title{
+      font-size:0.98rem;
     }
     .morning-action-btn{
       width:100%;
@@ -1513,7 +1531,7 @@
   .diff-plus{ background:#3498db; }
   .diff-minus{ background:#e67e22; }
   .diff-zero{ background:#95a5a6; }
-  body.morning-mode .header-area h1::after{ content:"（朝の庶務中）"; font-size:.6em; margin-left:.4em; color:var(--header-text); opacity:.8; }
+  body.morning-mode .header-area h1::after{ content:""; }
 
   /* ===== Liquid Glass refresh ===== */
   :root{
@@ -1958,8 +1976,38 @@
     backdrop-filter:blur(20px);
     -webkit-backdrop-filter:blur(20px);
   }
+  .footer-admin-actions{
+    flex:1 1 100%;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    padding-top:2px;
+  }
+  .footer-admin-actions #login-logout-btn{
+    background:rgba(255,255,255,0.68) !important;
+    color:rgba(25,55,80,0.72) !important;
+    border-color:rgba(45,72,100,0.20) !important;
+    box-shadow:none !important;
+    font-size:12px;
+    font-weight:700;
+    padding:5px 12px;
+  }
+  .footer-admin-actions #login-logout-btn.logout{
+    background:rgba(200,77,72,0.12) !important;
+    color:#9f312d !important;
+    border-color:rgba(200,77,72,0.26) !important;
+  }
   body.dark-theme .footer{
     background:rgba(255,255,255,0.10);
+  }
+  body.dark-theme .footer-admin-actions #login-logout-btn{
+    background:rgba(255,255,255,0.10) !important;
+    color:rgba(235,245,255,0.78) !important;
+    border-color:rgba(221,236,255,0.20) !important;
+  }
+  body.dark-theme .footer-admin-actions #login-logout-btn.logout{
+    background:rgba(232,93,87,0.18) !important;
+    color:#ffd0cd !important;
   }
   @media (max-width:600px){
     body{
@@ -2015,7 +2063,6 @@
     <div class="header-area">
         <h1>荷物管理アプリ</h1>
         <div class="header-buttons">
-            <button id="login-logout-btn" class="header-btn">管理者ログイン</button>
             <button id="log-view-btn" class="header-btn" style="background:#8e44ad;">履歴</button>
             <button id="change-password-btn" class="header-btn" style="background:#16a085;">パスワード変更</button>
             <button id="enable-notif-btn" class="header-btn" style="background:#2ecc71; display:none;">通知をオンにする</button>
@@ -2495,16 +2542,19 @@
 <!-- ==== 統一確認モーダル ここまで ==== -->
 
 <div class="footer-settings-panel">
-  <footer class="footer">
-      <label class="footer-setting-group" for="theme-selector">
-        <span>表示テーマ:</span>
-        <select id="theme-selector">
-            <option value="system">システム</option>
-            <option value="light">昼</option>
-            <option value="dark">夜</option>
-        </select>
-      </label>
-  </footer>
+	  <footer class="footer">
+	      <label class="footer-setting-group" for="theme-selector">
+	        <span>表示テーマ:</span>
+	        <select id="theme-selector">
+	            <option value="light">昼</option>
+	            <option value="dark">夜</option>
+	            <option value="system">システム</option>
+	        </select>
+	      </label>
+	      <div class="footer-admin-actions">
+	        <button id="login-logout-btn" class="header-btn" type="button">管理者ログイン</button>
+	      </div>
+	  </footer>
 
   <div id="notification-settings-launcher" class="notification-settings-launcher">
     <button id="notification-settings-toggle-btn" type="button" class="header-btn notification-settings-toggle-btn" style="background:#3498db;">通知設定を開く</button>
@@ -7329,7 +7379,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
           }catch(_){/* noop */}
         }
       }
-      function current(){ return localStorage.getItem(KEY) || 'system'; }
+      function current(){ return localStorage.getItem(KEY) || 'light'; }
       // 初期適用
       const sel = document.getElementById('theme-selector');
       if (sel){
@@ -7337,7 +7387,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
         sel.value = initVal;
         applyTheme(initVal);
         sel.addEventListener('change', () => {
-          const v = sel.value || 'system';
+          const v = sel.value || 'light';
           try { localStorage.setItem(KEY, v); } catch(_){}
           applyTheme(v);
         });
@@ -10900,7 +10950,7 @@ if(elements.changePasswordForm){
             if (keepDorm)     document.body.classList.add('show-dorm');
             if (keepSohmuOff) document.body.classList.add('sohmu-off');
             if (keepMorning)  document.body.classList.add('morning-mode');
-            const currentTheme = localStorage.getItem('theme') || 'system';
+            const currentTheme = localStorage.getItem('theme') || 'light';
             handleThemeChange(currentTheme);
             if (mode !== 'resident-edit-mode') elements.selectAllCheckbox.checked = false;
             if (mode !== 'count-edit-mode') closeMobileCountEditModal();
@@ -10922,7 +10972,7 @@ if(elements.changePasswordForm){
         }
 
         function initializeTheme() {
-            const savedTheme = localStorage.getItem('theme') || 'system';
+            const savedTheme = localStorage.getItem('theme') || 'light';
             elements.themeSelector.value = savedTheme;
             handleThemeChange(savedTheme);
         }
@@ -11141,7 +11191,7 @@ if(elements.changePasswordForm){
             });
         }
         prefersDark.addEventListener('change', () => {
-            const savedTheme = localStorage.getItem('theme') || 'system';
+            const savedTheme = localStorage.getItem('theme') || 'light';
             if (savedTheme === 'system') handleThemeChange('system');
         });
         // ===== iOS Safari 対策：ユーザー操作で通知許可をリクエスト =====
