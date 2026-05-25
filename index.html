@@ -10940,7 +10940,17 @@ if(elements.changePasswordForm){
             unsubscribe = () => { try { unsubShofu(); } catch(_){} try { unsubMeizen(); } catch(_){} };
         }
 
+        function normalizeDormSelectionValue(value) {
+            const raw = (value || '').toString();
+            if (raw === 'all' || raw === 'residents_all') return 'all';
+            if (raw === 'shofu' || raw === 'residents_shofu') return 'shofu';
+            if (raw === 'meizen' || raw === 'residents_meizen') return 'meizen';
+            return 'all';
+        }
+
         function switchDorm(dorm) {
+            dorm = normalizeDormSelectionValue(dorm);
+            try { localStorage.setItem('currentDorm', dorm === 'all' ? 'all' : `residents_${dorm}`); } catch(_) {}
             // Update active button UI
             document.querySelectorAll('#dorm-selector button').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.dorm === dorm);
@@ -11475,7 +11485,7 @@ if(elements.changePasswordForm){
             window.applyResidentSortPreference(savedSort);
         }
         
-        const savedDorm = localStorage.getItem('currentDorm') ? (localStorage.getItem('currentDorm').split('_')[1]) : 'shofu';
+        const savedDorm = normalizeDormSelectionValue(localStorage.getItem('currentDorm') || 'all');
         switchDorm(savedDorm);
         
         elements.dormSelector.addEventListener('click', (e) => {
