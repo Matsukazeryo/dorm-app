@@ -3008,6 +3008,78 @@
       messaging = null;
     }
     const auth = firebase.auth();
+    let appAuthReadyPromise = null;
+    let appAuthInitialAttemptDone = false;
+
+    function ensureAppAuthReady(){
+      if (!auth || typeof auth.signInAnonymously !== 'function') {
+        appAuthInitialAttemptDone = true;
+        return Promise.resolve(null);
+      }
+      if (auth.currentUser) {
+        appAuthInitialAttemptDone = true;
+        return Promise.resolve(auth.currentUser);
+      }
+      if (appAuthReadyPromise) return appAuthReadyPromise;
+
+      appAuthReadyPromise = new Promise((resolve) => {
+        let settled = false;
+        let unsubscribeAuth = null;
+        const finish = (user) => {
+          if (settled) return;
+          settled = true;
+          appAuthInitialAttemptDone = true;
+          try { if (typeof unsubscribeAuth === 'function') unsubscribeAuth(); } catch(_) {}
+          resolve(user || auth.currentUser || null);
+        };
+        try {
+          unsubscribeAuth = auth.onAuthStateChanged((user) => {
+            if (user) finish(user);
+          }, () => finish(null));
+        } catch(_) {}
+
+        const setupAuthPersistence = () => {
+          if (!auth || typeof auth.setPersistence !== 'function' || !firebase.auth || !firebase.auth.Auth || !firebase.auth.Auth.Persistence) {
+            return Promise.resolve();
+          }
+          const p = firebase.auth.Auth.Persistence;
+          return auth.setPersistence(p.LOCAL)
+            .catch(() => auth.setPersistence(p.SESSION))
+            .catch(() => auth.setPersistence(p.NONE))
+            .catch((e) => {
+              console.warn('auth persistence fallback failed:', (e && (e.code || e.message)) || e);
+            });
+        };
+
+        try {
+          setupAuthPersistence()
+            .then(() => auth.signInAnonymously())
+            .then((cred) => finish(cred && cred.user))
+            .catch((e) => {
+              console.warn('anonymous auth failed:', (e && (e.code || e.message)) || e);
+              finish(null);
+            });
+        } catch(e) {
+          console.warn('anonymous auth start failed:', (e && (e.code || e.message)) || e);
+          finish(null);
+        }
+        setTimeout(() => finish(auth.currentUser || null), 4000);
+      });
+      return appAuthReadyPromise;
+    }
+
+    function shouldWaitForAppAuth(){
+      return !!(auth && !auth.currentUser && !appAuthInitialAttemptDone);
+    }
+
+    function showResidentLoadingRow(message){
+      try {
+        const tbody = document.querySelector('#resident-table tbody');
+        if (tbody) tbody.innerHTML = `<tr><td colspan="6">${message || '読み込み中...'}</td></tr>`;
+      } catch(_) {}
+    }
+
+    try { ensureAppAuthReady(); } catch(_) {}
 
     function getElementValueById(id, fallbackValue) {
       var el = document.getElementById(id);
@@ -6516,6 +6588,13 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 
   function attachBothDormListeners(){
     if (!db || typeof db.collection !== 'function') return;
+    if (shouldWaitForAppAuth()) {
+      showResidentLoadingRow('認証を準備しています...');
+      ensureAppAuthReady().then(() => {
+        if (currentCollectionName === 'all') attachBothDormListeners();
+      });
+      return;
+    }
 
     // 既存リスナーを全て停止
     if (typeof unsubscribe === 'function') {
@@ -6545,6 +6624,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       } catch(_) {}
     }, (err) => {
       console.error('shofu onSnapshot error (all mode)', err);
+      showResidentLoadingRow('松風寮の読み込みに失敗しました。通信状態を確認して再読み込みしてください。');
     });
 
     unsubMeizen = meizenRef.onSnapshot((snap) => {
@@ -6566,6 +6646,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       } catch(_) {}
     }, (err) => {
       console.error('meizen onSnapshot error (all mode)', err);
+      showResidentLoadingRow('明善寮の読み込みに失敗しました。通信状態を確認して再読み込みしてください。');
     });
 
     // unsubscribe には両方まとめて止める関数を入れておく
@@ -10830,6 +10911,13 @@ if(elements.changePasswordForm){
 
     
         function listenToCollection(collectionName) {
+            if (shouldWaitForAppAuth()) {
+                showResidentLoadingRow('認証を準備しています...');
+                ensureAppAuthReady().then(() => {
+                    if (currentCollectionName === collectionName) listenToCollection(collectionName);
+                });
+                return;
+            }
             if (unsubscribe) unsubscribe();
             unsubscribe = db.collection(collectionName).onSnapshot(snapshot => {
                 const dormKey = collectionName.split('_')[1];
@@ -10904,11 +10992,21 @@ if(elements.changePasswordForm){
                   return;
                 }
                 renderTable(); 
-            }, error => console.error("データの読み込みに失敗しました:", error));
+            }, error => {
+                console.error("データの読み込みに失敗しました:", error);
+                showResidentLoadingRow('寮生の読み込みに失敗しました。通信状態を確認して再読み込みしてください。');
+            });
         }
         
         // Listen to both dorm collections and merge data for "all" view (リアルタイムで両方購読)
         function listenToAllCollections() {
+            if (shouldWaitForAppAuth()) {
+                showResidentLoadingRow('認証を準備しています...');
+                ensureAppAuthReady().then(() => {
+                    if (currentCollectionName === 'all') listenToAllCollections();
+                });
+                return;
+            }
             if (unsubscribe) { unsubscribe(); unsubscribe = null; }
 
             const shofuRef = db.collection('residents_shofu');
@@ -10929,11 +11027,17 @@ if(elements.changePasswordForm){
             const unsubShofu = shofuRef.onSnapshot(snap => {
                 shofuDocs = snap.docs;
                 renderMerged();
+            }, error => {
+                console.error('shofu listen failed', error);
+                showResidentLoadingRow('松風寮の読み込みに失敗しました。通信状態を確認して再読み込みしてください。');
             });
 
             const unsubMeizen = meizenRef.onSnapshot(snap => {
                 meizenDocs = snap.docs;
                 renderMerged();
+            }, error => {
+                console.error('meizen listen failed', error);
+                showResidentLoadingRow('明善寮の読み込みに失敗しました。通信状態を確認して再読み込みしてください。');
             });
 
             // unify into one unsubscribe
