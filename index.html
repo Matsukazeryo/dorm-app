@@ -3008,68 +3008,55 @@
       messaging = null;
     }
     const auth = firebase.auth();
-    let appAuthReadyPromise = null;
-    let appAuthInitialAttemptDone = false;
+    let readerAuthCleanupPromise = null;
+    let readerAuthCleanupDone = false;
 
-    function ensureAppAuthReady(){
-      if (!auth || typeof auth.signInAnonymously !== 'function') {
-        appAuthInitialAttemptDone = true;
-        return Promise.resolve(null);
+    function ensureReaderAuthStateReady(){
+      if (sessionStorage.getItem('isAdminLoggedIn') === 'true') {
+        readerAuthCleanupDone = true;
+        return Promise.resolve();
       }
-      if (auth.currentUser) {
-        appAuthInitialAttemptDone = true;
-        return Promise.resolve(auth.currentUser);
+      if (!auth || typeof auth.onAuthStateChanged !== 'function') {
+        readerAuthCleanupDone = true;
+        return Promise.resolve();
       }
-      if (appAuthReadyPromise) return appAuthReadyPromise;
+      if (readerAuthCleanupPromise) return readerAuthCleanupPromise;
 
-      appAuthReadyPromise = new Promise((resolve) => {
+      readerAuthCleanupPromise = new Promise((resolve) => {
         let settled = false;
         let unsubscribeAuth = null;
-        const finish = (user) => {
+        const finish = () => {
           if (settled) return;
           settled = true;
-          appAuthInitialAttemptDone = true;
+          readerAuthCleanupDone = true;
           try { if (typeof unsubscribeAuth === 'function') unsubscribeAuth(); } catch(_) {}
-          resolve(user || auth.currentUser || null);
+          resolve();
         };
         try {
           unsubscribeAuth = auth.onAuthStateChanged((user) => {
-            if (user) finish(user);
-          }, () => finish(null));
-        } catch(_) {}
-
-        const setupAuthPersistence = () => {
-          if (!auth || typeof auth.setPersistence !== 'function' || !firebase.auth || !firebase.auth.Auth || !firebase.auth.Auth.Persistence) {
-            return Promise.resolve();
-          }
-          const p = firebase.auth.Auth.Persistence;
-          return auth.setPersistence(p.LOCAL)
-            .catch(() => auth.setPersistence(p.SESSION))
-            .catch(() => auth.setPersistence(p.NONE))
-            .catch((e) => {
-              console.warn('auth persistence fallback failed:', (e && (e.code || e.message)) || e);
-            });
-        };
-
-        try {
-          setupAuthPersistence()
-            .then(() => auth.signInAnonymously())
-            .then((cred) => finish(cred && cred.user))
-            .catch((e) => {
-              console.warn('anonymous auth failed:', (e && (e.code || e.message)) || e);
-              finish(null);
-            });
-        } catch(e) {
-          console.warn('anonymous auth start failed:', (e && (e.code || e.message)) || e);
-          finish(null);
+            if (sessionStorage.getItem('isAdminLoggedIn') === 'true') {
+              finish();
+              return;
+            }
+            if (user && user.isAnonymous && typeof auth.signOut === 'function') {
+              auth.signOut().then(finish).catch((e) => {
+                console.warn('anonymous reader signOut failed:', (e && (e.code || e.message)) || e);
+                finish();
+              });
+              return;
+            }
+            finish();
+          }, finish);
+        } catch(_) {
+          finish();
         }
-        setTimeout(() => finish(auth.currentUser || null), 4000);
+        setTimeout(finish, 1600);
       });
-      return appAuthReadyPromise;
+      return readerAuthCleanupPromise;
     }
 
-    function shouldWaitForAppAuth(){
-      return !!(auth && !auth.currentUser && !appAuthInitialAttemptDone);
+    function shouldWaitForReaderAuthState(){
+      return !!(!readerAuthCleanupDone && sessionStorage.getItem('isAdminLoggedIn') !== 'true');
     }
 
     function showResidentLoadingRow(message){
@@ -3078,8 +3065,6 @@
         if (tbody) tbody.innerHTML = `<tr><td colspan="6">${message || '読み込み中...'}</td></tr>`;
       } catch(_) {}
     }
-
-    try { ensureAppAuthReady(); } catch(_) {}
 
     function getElementValueById(id, fallbackValue) {
       var el = document.getElementById(id);
@@ -6588,9 +6573,9 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 
   function attachBothDormListeners(){
     if (!db || typeof db.collection !== 'function') return;
-    if (shouldWaitForAppAuth()) {
-      showResidentLoadingRow('認証を準備しています...');
-      ensureAppAuthReady().then(() => {
+    if (shouldWaitForReaderAuthState()) {
+      showResidentLoadingRow('認証状態を整理しています...');
+      ensureReaderAuthStateReady().then(() => {
         if (currentCollectionName === 'all') attachBothDormListeners();
       });
       return;
@@ -10911,9 +10896,9 @@ if(elements.changePasswordForm){
 
     
         function listenToCollection(collectionName) {
-            if (shouldWaitForAppAuth()) {
-                showResidentLoadingRow('認証を準備しています...');
-                ensureAppAuthReady().then(() => {
+            if (shouldWaitForReaderAuthState()) {
+                showResidentLoadingRow('認証状態を整理しています...');
+                ensureReaderAuthStateReady().then(() => {
                     if (currentCollectionName === collectionName) listenToCollection(collectionName);
                 });
                 return;
@@ -11000,9 +10985,9 @@ if(elements.changePasswordForm){
         
         // Listen to both dorm collections and merge data for "all" view (リアルタイムで両方購読)
         function listenToAllCollections() {
-            if (shouldWaitForAppAuth()) {
-                showResidentLoadingRow('認証を準備しています...');
-                ensureAppAuthReady().then(() => {
+            if (shouldWaitForReaderAuthState()) {
+                showResidentLoadingRow('認証状態を整理しています...');
+                ensureReaderAuthStateReady().then(() => {
                     if (currentCollectionName === 'all') listenToAllCollections();
                 });
                 return;
