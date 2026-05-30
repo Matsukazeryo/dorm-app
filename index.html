@@ -97,11 +97,15 @@
         .top-controls { display: flex; align-items: center; width: 100%; gap: 15px; flex-wrap: wrap;}
         #search-input { flex-grow: 1; min-width: 150px; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 16px; background-color: var(--mode-label-bg); color: var(--text-color); }
         .mode-selector { display: flex; border-radius: 6px; overflow: hidden; border: 1px solid var(--mode-selector-border); flex-shrink: 0; }
+        body:not(.admin-logged-in) .mode-selector { display: none; }
+        body.admin-logged-in .mode-selector { display: flex; }
         .mode-selector input { display: none; }
         .mode-selector label { padding: 10px 12px; cursor: pointer; background-color: var(--mode-label-bg); color: var(--mode-label-text); transition: background-color 0.2s; border-left: 1px solid var(--mode-selector-border); white-space: nowrap; }
         .mode-selector label:first-child { border-left: none; }
         .mode-selector input:checked + label { background-color: var(--mode-label-checked-bg); color: var(--mode-label-checked-text); font-weight: bold; }
+        #view-mode-label,
         #resident-edit-mode-label { display: none; }
+        body.admin-logged-in #view-mode-label,
         body.admin-logged-in #resident-edit-mode-label { display: block; }
         body.resident-edit-mode .mode-selector input:checked + label { background-color: var(--admin-mode-bg); }
         
@@ -177,6 +181,27 @@
         th { background-color: var(--mode-label-checked-bg); color: var(--mode-label-checked-text); font-weight: bold; padding: 6px 10px; }
         .cell-content { min-height: 42px; display:flex; align-items:center; justify-content:center; padding: 6px 10px; }
         .name-cell { justify-content: flex-start; text-align: left; font-weight: 500; min-width: 180px; white-space: nowrap; }
+        body:not(.sohmu-off) #resident-table tbody tr.resident-main-row{
+            cursor:pointer;
+        }
+        body:not(.sohmu-off) #resident-table tbody tr.resident-main-row:active{
+            transform:scale(0.995);
+        }
+        body.resident-edit-mode #resident-table tbody tr.resident-main-row{
+            cursor:default;
+        }
+        .row-open-indicator{
+            margin-left:auto;
+            color:var(--mode-label-checked-bg);
+            font-size:1.35em;
+            font-weight:800;
+            line-height:1;
+            opacity:0.8;
+            padding-left:8px;
+        }
+        body.resident-edit-mode .row-open-indicator{
+            display:none;
+        }
         .name-meta{
             display:flex;
             flex-direction:column;
@@ -692,6 +717,45 @@
           font-size: 0.95rem;
           color: #7f8c8d;
         }
+        .mobile-count-note-section{
+          margin-top:14px;
+          padding-top:14px;
+          border-top:1px solid var(--border-color);
+        }
+        .mobile-count-note-section label{
+          display:block;
+          margin-bottom:7px;
+          font-weight:700;
+          color:var(--header-text);
+        }
+        #mobile-count-note-input{
+          width:100%;
+          min-height:82px;
+          padding:10px;
+          border:1px solid var(--border-color);
+          border-radius:10px;
+          background:var(--mode-label-bg);
+          color:var(--text-color);
+          font-family:inherit;
+          font-size:0.95rem;
+          line-height:1.45;
+          resize:vertical;
+          box-sizing:border-box;
+        }
+        .mobile-count-note-actions{
+          display:flex;
+          align-items:center;
+          gap:10px;
+          margin-top:10px;
+          flex-wrap:wrap;
+        }
+        .mobile-count-note-status{
+          font-size:0.86rem;
+          color:#7f8c8d;
+          font-weight:700;
+        }
+        .mobile-count-note-status.is-success{ color:#27ae60; }
+        .mobile-count-note-status.is-error{ color:#c0392b; }
         .receive-summary {
           margin: 0 0 14px 0;
           font-size: 0.95rem;
@@ -2235,10 +2299,9 @@
         <div class="top-controls">
             <input type="search" id="search-input" placeholder="部屋番号, 名前, ふりがなで曖昧検索...">
             <div class="mode-selector">
-                <input type="radio" id="view-mode" name="mode" checked>
-                <label for="view-mode">閲覧</label>
-                <input type="radio" id="count-edit-mode" name="mode">
-                <label for="count-edit-mode">個数変更</label>
+                <input type="radio" id="view-mode" name="mode" checked style="display:none;">
+                <label for="view-mode" id="view-mode-label">通常</label>
+                <input type="radio" id="count-edit-mode" name="mode" style="display:none;">
                 <input type="radio" id="resident-edit-mode" name="mode">
                 <label for="resident-edit-mode" id="resident-edit-mode-label">寮生編集</label>
             </div>
@@ -2395,7 +2458,7 @@
 <div id="mobile-count-edit-modal" class="modal-overlay">
   <div class="modal-content mobile-count-edit-modal-content">
     <div class="modal-header">
-      <h2>個数編集</h2>
+      <h2>個数・備考編集</h2>
       <button id="mobile-count-edit-close-btn" class="modal-close-btn">&times;</button>
     </div>
     <div id="mobile-count-edit-name" style="font-size:1.15rem; font-weight:700; margin-bottom:6px;"></div>
@@ -2420,6 +2483,14 @@
           <span id="mobile-count-mail-value" class="receive-stepper-value">0</span>
           <button id="mobile-count-mail-plus" type="button" class="receive-stepper-btn">+</button>
         </div>
+      </div>
+    </div>
+    <div class="mobile-count-note-section">
+      <label for="mobile-count-note-input">備考</label>
+      <textarea id="mobile-count-note-input" rows="3" maxlength="120" placeholder="備考を入力"></textarea>
+      <div class="mobile-count-note-actions">
+        <button id="mobile-count-note-save-btn" type="button" class="header-btn" style="background:#2980b9;">備考を保存</button>
+        <span id="mobile-count-note-status" class="mobile-count-note-status" aria-live="polite"></span>
       </div>
     </div>
     <div class="form-actions">
@@ -7083,20 +7154,16 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 
       isMorningMode = true;
       document.body.classList.add('morning-mode');
-      // ★ 朝の庶務開始時は「個数変更」モードを強制ON
+      // 朝の庶務開始時も通常一覧に戻し、行タップで個数・備考を編集する
       try {
         const viewRadio = document.getElementById('view-mode');
         const countRadio = document.getElementById('count-edit-mode');
         const residentRadio = document.getElementById('resident-edit-mode');
-        if (viewRadio) viewRadio.checked = false;
+        if (viewRadio) viewRadio.checked = true;
+        if (countRadio) countRadio.checked = false;
         if (residentRadio) residentRadio.checked = false;
-        if (countRadio) {
-          countRadio.checked = true;
-          // 既存のモード切替ロジックに対応するため、class操作とchange発火を両方やる
-          document.body.classList.add('count-edit-mode');
-          document.body.classList.remove('resident-edit-mode');
-          try { countRadio.dispatchEvent(new Event('change', { bubbles: true })); } catch(_) {}
-        }
+        document.body.classList.remove('count-edit-mode', 'resident-edit-mode');
+        if (typeof setMode === 'function') setMode('view-mode');
       } catch(_) {}
       morningRef.dorm = 'both';
       morningRef.byId        = mergeMorningRefMaps(refShofu && refShofu.byId,        refMeizen && refMeizen.byId);
@@ -8742,6 +8809,9 @@ function applySohmuUI(){
           mobileCountMailMinus: document.getElementById('mobile-count-mail-minus'),
           mobileCountMailValue: document.getElementById('mobile-count-mail-value'),
           mobileCountMailPlus: document.getElementById('mobile-count-mail-plus'),
+          mobileCountNoteInput: document.getElementById('mobile-count-note-input'),
+          mobileCountNoteSaveBtn: document.getElementById('mobile-count-note-save-btn'),
+          mobileCountNoteStatus: document.getElementById('mobile-count-note-status'),
           addResidentModal: document.getElementById('add-resident-modal'),
           addModalCloseBtn: document.getElementById('add-modal-close-btn'),
           addResidentForm: document.getElementById('add-resident-form'),
@@ -8876,7 +8946,9 @@ const receiveModalState = {
 };
 
 const mobileCountEditState = {
-  residentId: null
+  residentId: null,
+  noteDirty: false,
+  noteSaving: false
 };
 
 function getResidentById(residentId) {
@@ -9979,6 +10051,7 @@ function syncMobileCountEditModalUI() {
   const resident = getResidentById(mobileCountEditState.residentId);
   const luggage = resident ? Math.max(0, parseInt(resident.luggage, 10) || 0) : 0;
   const mail = resident ? Math.max(0, parseInt(resident.mail, 10) || 0) : 0;
+  const note = resident ? normalizeResidentNote(resident.note || resident.memo || resident.notes || '') : '';
 
   if (elements.mobileCountEditName) {
     const room = resident && resident.roomNumber ? `${resident.roomNumber} ` : '';
@@ -9990,12 +10063,19 @@ function syncMobileCountEditModalUI() {
   if (elements.mobileCountMailMinus) elements.mobileCountMailMinus.disabled = !resident || mail <= 0;
   if (elements.mobileCountLuggagePlus) elements.mobileCountLuggagePlus.disabled = !resident;
   if (elements.mobileCountMailPlus) elements.mobileCountMailPlus.disabled = !resident;
+  if (elements.mobileCountNoteInput && (!mobileCountEditState.noteDirty || document.activeElement !== elements.mobileCountNoteInput)) {
+    elements.mobileCountNoteInput.value = note;
+  }
+  if (elements.mobileCountNoteSaveBtn) elements.mobileCountNoteSaveBtn.disabled = !resident || mobileCountEditState.noteSaving;
 }
 
 function closeMobileCountEditModal() {
   if (!elements.mobileCountEditModal) return;
   elements.mobileCountEditModal.classList.remove('active');
   mobileCountEditState.residentId = null;
+  mobileCountEditState.noteDirty = false;
+  mobileCountEditState.noteSaving = false;
+  setMobileCountNoteStatus('', '');
 }
 
 function openMobileCountEditModal(residentId) {
@@ -10005,6 +10085,9 @@ function openMobileCountEditModal(residentId) {
     return;
   }
   mobileCountEditState.residentId = resident.id;
+  mobileCountEditState.noteDirty = false;
+  mobileCountEditState.noteSaving = false;
+  setMobileCountNoteStatus('', '');
   syncMobileCountEditModalUI();
   elements.mobileCountEditModal.classList.add('active');
 }
@@ -10014,6 +10097,45 @@ function adjustMobileCountEdit(type, delta) {
   if (!resident) return;
   updateCount(resident.id, resident.name || '', type === 'mail' ? 'mail' : 'luggage', delta);
   setTimeout(syncMobileCountEditModalUI, 0);
+}
+
+function setMobileCountNoteStatus(message, tone) {
+  if (!elements.mobileCountNoteStatus) return;
+  elements.mobileCountNoteStatus.textContent = message || '';
+  elements.mobileCountNoteStatus.classList.remove('is-success', 'is-error');
+  if (tone === 'success') elements.mobileCountNoteStatus.classList.add('is-success');
+  if (tone === 'error') elements.mobileCountNoteStatus.classList.add('is-error');
+}
+
+async function saveMobileCountEditNote() {
+  const residentId = mobileCountEditState.residentId;
+  if (!residentId || !elements.mobileCountNoteInput) return;
+  const targetCollection = resolveResidentCollectionName(residentId);
+  if (!targetCollection) {
+    setMobileCountNoteStatus('保存先を特定できません。', 'error');
+    return;
+  }
+  const nextNote = normalizeResidentNote(elements.mobileCountNoteInput.value);
+  mobileCountEditState.noteSaving = true;
+  if (elements.mobileCountNoteSaveBtn) elements.mobileCountNoteSaveBtn.disabled = true;
+  elements.mobileCountNoteInput.disabled = true;
+  setMobileCountNoteStatus('保存中...', '');
+  try {
+    await db.collection(targetCollection).doc(residentId).update({ note: nextNote });
+    const resident = getResidentById(residentId);
+    if (resident) resident.note = nextNote;
+    mobileCountEditState.noteDirty = false;
+    setMobileCountNoteStatus('保存しました。', 'success');
+    try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_) {}
+    syncMobileCountEditModalUI();
+  } catch (e) {
+    console.error('saveMobileCountEditNote failed', e);
+    setMobileCountNoteStatus('保存に失敗しました。', 'error');
+  } finally {
+    mobileCountEditState.noteSaving = false;
+    elements.mobileCountNoteInput.disabled = false;
+    if (elements.mobileCountNoteSaveBtn) elements.mobileCountNoteSaveBtn.disabled = false;
+  }
 }
 
 function syncReceiveModalUI() {
@@ -10290,9 +10412,17 @@ if (elements.mobileCountMailMinus) {
 if (elements.mobileCountMailPlus) {
   elements.mobileCountMailPlus.addEventListener('click', () => adjustMobileCountEdit('mail', 1));
 }
-window.addEventListener('resize', () => {
-  if (!isMobileCountEditLayout()) closeMobileCountEditModal();
-});
+if (elements.mobileCountNoteInput) {
+  elements.mobileCountNoteInput.addEventListener('input', () => {
+    mobileCountEditState.noteDirty = true;
+    setMobileCountNoteStatus('', '');
+  });
+}
+if (elements.mobileCountNoteSaveBtn) {
+  elements.mobileCountNoteSaveBtn.addEventListener('click', () => {
+    saveMobileCountEditNote();
+  });
+}
 const ocrScanBtn = document.getElementById('ocr-scan-btn');
 if (ocrScanBtn) {
   ocrScanBtn.addEventListener('click', openOcrModal);
@@ -10375,14 +10505,13 @@ document.addEventListener('click', (ev) => {
   openReceiveModal(receiveBtn.dataset.residentId);
 }, true);
 document.addEventListener('click', (ev) => {
-  if (!document.body.classList.contains('count-edit-mode')) return;
-  if (document.body.classList.contains('morning-mode')) return;
-  if (!isMobileCountEditLayout()) return;
+  if (document.body.classList.contains('resident-edit-mode')) return;
+  if (!elements.sohmuToggle || !elements.sohmuToggle.checked) return;
   const target = ev.target;
-  if (target && target.closest && target.closest('button, input, select, textarea, a, .favorite-star')) return;
-  const nameCell = target && target.closest ? target.closest('.name-cell[data-count-edit-resident-id]') : null;
-  if (!nameCell) return;
-  const residentId = nameCell.dataset.countEditResidentId || '';
+  if (target && target.closest && target.closest('button, input, select, textarea, a, .favorite-star, .count-history-btn')) return;
+  const row = target && target.closest ? target.closest('tr.resident-main-row[data-resident-id]') : null;
+  if (!row) return;
+  const residentId = row.dataset.residentId || '';
   if (!residentId) return;
   ev.preventDefault();
   ev.stopPropagation();
@@ -11084,15 +11213,14 @@ if(elements.changePasswordForm){
                 filteredResidents.forEach(resident => {
                     const dorm = resident.dorm || currentCollectionName.split('_')[1];
                     const dormMarker = dorm === 'shofu' ? '松' : '明';
-                    const isCountEditMode = document.body.classList.contains('count-edit-mode');
                     const residentNoteValue = resident.note || resident.memo || resident.notes || '';
-                    const residentNoteHtml = isCountEditMode
-                      ? renderResidentNoteEditorHtml(resident.id, residentNoteValue)
-                      : renderResidentNoteHtml(residentNoteValue, 'なし');
+                    const residentNoteHtml = renderResidentNoteHtml(residentNoteValue, 'なし');
                     const residentOffNoteHtml = renderResidentOffNoteHtml(residentNoteValue);
                     const luggageHistoryButton = renderCountHistoryButton(resident, 'luggage');
                     const mailHistoryButton = renderCountHistoryButton(resident, 'mail');
                     const row = document.createElement('tr');
+                    row.classList.add('resident-main-row');
+                    row.dataset.residentId = resident.id || '';
                     if (!elements.sohmuToggle.checked) {
                         // 庶務モード OFF のときのレイアウト
                         const dormMarker = resident.dorm === 'shofu' ? '松' : (resident.dorm === 'meizen' ? '明' : '');
@@ -11137,10 +11265,11 @@ if(elements.changePasswordForm){
                                   <span class="kanji-name">${resident.name}</span>
                                 </span>
                               </span>
+                              <span class="row-open-indicator" aria-hidden="true">&gt;</span>
                             </div>
                           </td>
-                          <td class="count-col luggage-col"><div class="count-box"><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1)">-</button><span class="count-span">${resident.luggage}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1)">+</button></div>${luggageHistoryButton}</div></td>
-                          <td class="count-col mail-col"><div class="count-box"><div class="count-cell"><button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', -1)">-</button><span class="count-span">${resident.mail}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', 1)">+</button></div>${mailHistoryButton}</div></td>
+                          <td class="count-col luggage-col"><div class="count-box"><div class="count-cell"><span class="count-span">${resident.luggage}</span></div>${luggageHistoryButton}</div></td>
+                          <td class="count-col mail-col"><div class="count-box"><div class="count-cell"><span class="count-span">${resident.mail}</span></div>${mailHistoryButton}</div></td>
                           <td class="note-col"><div class="cell-content">${residentNoteHtml}</div></td>
                           <td class="edit-op-cell">
                             <div class="cell-content">
