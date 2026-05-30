@@ -2309,7 +2309,7 @@
             <button data-dorm="meizen">明善寮</button>
         </div>
         <div class="top-controls">
-            <input type="search" id="search-input" placeholder="部屋番号, 名前, ふりがなで曖昧検索...">
+            <input type="search" id="search-input" placeholder="部屋番号, 名前, ふりがなで検索...">
             <div class="mode-selector">
                 <input type="radio" id="view-mode" name="mode" checked style="display:none;">
                 <label for="view-mode" id="view-mode-label">通常</label>
@@ -3255,6 +3255,50 @@
       return false;
     }
 
+    var KANJI_SEARCH_EQUIVALENT_GROUPS = [
+      '高髙',
+      '崎﨑嵜',
+      '斉斎齊齋',
+      '辺邊邉',
+      '沢澤',
+      '浜濱',
+      '広廣',
+      '桜櫻',
+      '真眞',
+      '島嶋嶌',
+      '吉𠮷'
+    ];
+
+    var KANJI_SEARCH_VARIANT_MAP = (function(){
+      var map = {};
+      KANJI_SEARCH_EQUIVALENT_GROUPS.forEach(function(group){
+        var chars = Array.from(group);
+        var canonical = chars[0];
+        chars.forEach(function(ch){ map[ch] = canonical; });
+      });
+      return map;
+    })();
+
+    function normalizeKanjiSearchVariants(value){
+      return Array.from(String(value || '')).map(function(ch){
+        return KANJI_SEARCH_VARIANT_MAP[ch] || ch;
+      }).join('');
+    }
+
+    function strictIncludesSearchText(text, term){
+      text = String(text || '');
+      term = String(term || '');
+      if (!term) return true;
+      if (!text) return false;
+      if (text.indexOf(term) !== -1) return true;
+
+      var normalizedText = normalizeKanjiSearchVariants(text);
+      var normalizedTerm = normalizeKanjiSearchVariants(term);
+      return normalizedText !== text || normalizedTerm !== term
+        ? normalizedText.indexOf(normalizedTerm) !== -1
+        : false;
+    }
+
     function getResidentSearchFields(resident){
       var r = resident || {};
       var dormLabel = r.dorm === 'shofu' ? '松風寮' : (r.dorm === 'meizen' ? '明善寮' : '');
@@ -3275,9 +3319,11 @@
       var terms = normalizeSearchTerms(searchValue);
       if (terms.length === 0) return true;
       var fields = getResidentSearchFields(resident);
+      var roomNumber = normalizeSearchText((resident && resident.roomNumber) || '');
       return terms.every(function(term){
+        if (/^[0-9]+$/.test(term)) return roomNumber === term;
         return fields.some(function(field){
-          return fuzzyIncludesSearchText(field, term);
+          return strictIncludesSearchText(field, term);
         });
       });
     }
@@ -9761,6 +9807,24 @@ function getOcrDigitTokens(text) {
   return matches ? Array.from(new Set(matches)) : [];
 }
 
+function getOcrDormAliases(dorm) {
+  if (dorm === 'shofu') return ['松風寮', '松風', 'しょうふうりょう', 'しょうふう', 'shofu'];
+  if (dorm === 'meizen') return ['明善寮', '明善', 'めいぜんりょう', 'めいぜん', 'meizen'];
+  return [];
+}
+
+function hasOcrDormMatch(normalizedText, dorm) {
+  return getOcrDormAliases(dorm).some(function(alias){
+    const normalizedAlias = normalizeSearchText(alias);
+    return normalizedAlias && normalizedText.indexOf(normalizedAlias) !== -1;
+  });
+}
+
+function hasOcrExactRoomToken(room, digitTokens) {
+  if (!room) return false;
+  return Array.isArray(digitTokens) && digitTokens.indexOf(room) !== -1;
+}
+
 function getOcrPartialHit(normalizedText, value) {
   const normalizedValue = normalizeSearchText(value || '');
   if (!normalizedText || normalizedValue.length < 2 || normalizedText.indexOf(normalizedValue) !== -1) return '';
@@ -9790,10 +9854,17 @@ function scoreOcrResident(resident, rawText, normalizedText, digitTokens) {
   const furigana = normalizeSearchText(r.furigana || '');
   const room = normalizeRoomNumberInput(r.roomNumber || '');
   const dormLabel = r.dorm === 'shofu' ? '松風寮' : (r.dorm === 'meizen' ? '明善寮' : '');
-  const normalizedDorm = normalizeSearchText(dormLabel);
+  const dormMatched = hasOcrDormMatch(normalizedText, r.dorm);
+  const roomMatched = hasOcrExactRoomToken(room, digitTokens);
   let score = 0;
   let hasIdentityEvidence = false;
   const reasons = [];
+
+  if (dormMatched && roomMatched) {
+    score += 260;
+    hasIdentityEvidence = true;
+    reasons.push(`${dormLabel} ${room}号室一致`);
+  }
 
   if (name && normalizedText.indexOf(name) !== -1) {
     score += 220;
@@ -9829,15 +9900,12 @@ function scoreOcrResident(resident, rawText, normalizedText, digitTokens) {
     }
   }
 
-  if (room && digitTokens.indexOf(room) !== -1) {
+  if (roomMatched && !(dormMatched && roomMatched)) {
     score += hasIdentityEvidence ? 28 : 18;
     reasons.push(`${room}号室`);
-  } else if (room && normalizedText.indexOf(room) !== -1) {
-    score += hasIdentityEvidence ? 16 : 10;
-    reasons.push(`${room}を検出`);
   }
 
-  if (normalizedDorm && normalizedText.indexOf(normalizedDorm) !== -1) {
+  if (dormMatched && !(dormMatched && roomMatched)) {
     score += hasIdentityEvidence ? 8 : 4;
     reasons.push(dormLabel);
   }
