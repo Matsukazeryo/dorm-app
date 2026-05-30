@@ -284,7 +284,8 @@
             margin-top:0;
             position:relative;
         }
-        body.count-edit-mode .resident-note-editor{
+        body.count-edit-mode .resident-note-editor,
+        body.morning-mode .resident-note-editor{
             display:block;
         }
         .resident-note-input{
@@ -412,7 +413,8 @@
             flex-shrink: 0;
             visibility: hidden;
         }
-        body.count-edit-mode .count-cell button { visibility: visible; }
+        body.count-edit-mode .count-cell button,
+        body.morning-mode .count-cell button { visibility: visible; }
         .count-box{
             position:relative;
             min-width:72px;
@@ -451,8 +453,18 @@
             background:rgba(93, 173, 226, 0.18);
             color:#ecf0f1;
         }
-        body.count-edit-mode .count-history-btn{
+        body.count-edit-mode .count-history-btn,
+        body.morning-mode .count-history-btn{
             display:none;
+        }
+        body.morning-mode .row-open-indicator{
+            display:none;
+        }
+        body.morning-mode #resident-table tbody tr.resident-main-row{
+            cursor:default;
+        }
+        body.morning-mode #resident-table tbody tr.resident-main-row:active{
+            transform:none;
         }
         .delete-btn { background-color: #c0392b; color: white; border: none; font-size: 12px; padding: 4px 8px; border-radius: 5px; cursor: pointer; }
         .edit-btn{
@@ -7154,7 +7166,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 
       isMorningMode = true;
       document.body.classList.add('morning-mode');
-      // 朝の庶務開始時も通常一覧に戻し、行タップで個数・備考を編集する
+      // 朝の庶務開始時は通常モードのまま、一覧内の±と備考編集だけ有効にする
       try {
         const viewRadio = document.getElementById('view-mode');
         const countRadio = document.getElementById('count-edit-mode');
@@ -7164,6 +7176,8 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
         if (residentRadio) residentRadio.checked = false;
         document.body.classList.remove('count-edit-mode', 'resident-edit-mode');
         if (typeof setMode === 'function') setMode('view-mode');
+        document.body.classList.add('morning-mode');
+        if (typeof renderTable === 'function') renderTable();
       } catch(_) {}
       morningRef.dorm = 'both';
       morningRef.byId        = mergeMorningRefMaps(refShofu && refShofu.byId,        refMeizen && refMeizen.byId);
@@ -10506,6 +10520,7 @@ document.addEventListener('click', (ev) => {
 }, true);
 document.addEventListener('click', (ev) => {
   if (document.body.classList.contains('resident-edit-mode')) return;
+  if (document.body.classList.contains('morning-mode')) return;
   if (!elements.sohmuToggle || !elements.sohmuToggle.checked) return;
   const target = ev.target;
   if (target && target.closest && target.closest('button, input, select, textarea, a, .favorite-star, .count-history-btn')) return;
@@ -11196,6 +11211,7 @@ if(elements.changePasswordForm){
         window.renderTable = async () => {
             const searchTerm = elements.searchInput.value;
             const sohmuOn = elements.sohmuToggle.checked;
+            const morningInlineEdit = isMorningMode || document.body.classList.contains('morning-mode');
             const myId = localStorage.getItem('myResidentId');
             // Hide table header when 庶務モード is OFF
             const tableHead = document.querySelector('#resident-table thead');
@@ -11214,10 +11230,18 @@ if(elements.changePasswordForm){
                     const dorm = resident.dorm || currentCollectionName.split('_')[1];
                     const dormMarker = dorm === 'shofu' ? '松' : '明';
                     const residentNoteValue = resident.note || resident.memo || resident.notes || '';
-                    const residentNoteHtml = renderResidentNoteHtml(residentNoteValue, 'なし');
+                    const residentNoteHtml = morningInlineEdit
+                      ? renderResidentNoteEditorHtml(resident.id, residentNoteValue)
+                      : renderResidentNoteHtml(residentNoteValue, 'なし');
                     const residentOffNoteHtml = renderResidentOffNoteHtml(residentNoteValue);
-                    const luggageHistoryButton = renderCountHistoryButton(resident, 'luggage');
-                    const mailHistoryButton = renderCountHistoryButton(resident, 'mail');
+                    const luggageHistoryButton = morningInlineEdit ? '' : renderCountHistoryButton(resident, 'luggage');
+                    const mailHistoryButton = morningInlineEdit ? '' : renderCountHistoryButton(resident, 'mail');
+                    const luggageCountHtml = morningInlineEdit
+                      ? `<button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1)">-</button><span class="count-span">${resident.luggage}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1)">+</button>`
+                      : `<span class="count-span">${resident.luggage}</span>`;
+                    const mailCountHtml = morningInlineEdit
+                      ? `<button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', -1)">-</button><span class="count-span">${resident.mail}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', 1)">+</button>`
+                      : `<span class="count-span">${resident.mail}</span>`;
                     const row = document.createElement('tr');
                     row.classList.add('resident-main-row');
                     row.dataset.residentId = resident.id || '';
@@ -11268,8 +11292,8 @@ if(elements.changePasswordForm){
                               <span class="row-open-indicator" aria-hidden="true">&gt;</span>
                             </div>
                           </td>
-                          <td class="count-col luggage-col"><div class="count-box"><div class="count-cell"><span class="count-span">${resident.luggage}</span></div>${luggageHistoryButton}</div></td>
-                          <td class="count-col mail-col"><div class="count-box"><div class="count-cell"><span class="count-span">${resident.mail}</span></div>${mailHistoryButton}</div></td>
+                          <td class="count-col luggage-col"><div class="count-box"><div class="count-cell">${luggageCountHtml}</div>${luggageHistoryButton}</div></td>
+                          <td class="count-col mail-col"><div class="count-box"><div class="count-cell">${mailCountHtml}</div>${mailHistoryButton}</div></td>
                           <td class="note-col"><div class="cell-content">${residentNoteHtml}</div></td>
                           <td class="edit-op-cell">
                             <div class="cell-content">
