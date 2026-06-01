@@ -466,6 +466,25 @@
         body.morning-mode #resident-table tbody tr.resident-main-row:active{
             transform:none;
         }
+        body.count-edit-mode:not(.morning-mode) .ops-container{
+            display:none !important;
+        }
+        body.count-edit-mode:not(.morning-mode) .resident-note-editor{
+            display:none !important;
+        }
+        body.count-edit-mode:not(.morning-mode) .count-cell button{
+            display:none !important;
+            visibility:hidden !important;
+        }
+        body.count-edit-mode:not(.morning-mode) .count-history-btn{
+            display:inline-flex !important;
+        }
+        body.count-edit-mode:not(.morning-mode) .name-cell{
+            background:transparent !important;
+        }
+        body.count-edit-mode:not(.morning-mode) .name-cell::after{
+            content:none !important;
+        }
         .delete-btn { background-color: #c0392b; color: white; border: none; font-size: 12px; padding: 4px 8px; border-radius: 5px; cursor: pointer; }
         .edit-btn{
             background-color:#2980b9;
@@ -3092,9 +3111,55 @@
     }
     const auth = firebase.auth();
     let readerAuthCleanupPromise = null;
-    let readerAuthCleanupDone = false;
+    let readerAuthCleanupDone = true;
+
+    function getStoredResidentId(){
+      let id = '';
+      try { id = localStorage.getItem('myResidentId') || ''; } catch(_) {}
+      if (!id) {
+        try { id = sessionStorage.getItem('myResidentId') || ''; } catch(_) {}
+        if (id) {
+          try { localStorage.setItem('myResidentId', id); } catch(_) {}
+        }
+      }
+      return String(id || '').trim();
+    }
+
+    function setStoredResidentId(id){
+      const next = String(id || '').trim();
+      try { localStorage.setItem('myResidentId', next); } catch(_) {}
+      try { sessionStorage.setItem('myResidentId', next); } catch(_) {}
+    }
+
+    function clearStoredResidentId(){
+      try { localStorage.removeItem('myResidentId'); } catch(_) {}
+      try { sessionStorage.removeItem('myResidentId'); } catch(_) {}
+    }
+
+    function matchesElementCompat(el, selector){
+      if (!el || el.nodeType !== 1) return false;
+      const fn = el.matches || el.msMatchesSelector || el.webkitMatchesSelector;
+      if (!fn) return false;
+      try { return fn.call(el, selector); } catch(_) { return false; }
+    }
+
+    function closestElementCompat(el, selector){
+      if (!el) return null;
+      if (el.closest) {
+        try { return el.closest(selector); } catch(_) {}
+      }
+      let node = el;
+      while (node && node.nodeType === 1) {
+        if (matchesElementCompat(node, selector)) return node;
+        node = node.parentElement || node.parentNode;
+      }
+      return null;
+    }
 
     function ensureReaderAuthStateReady(){
+      readerAuthCleanupDone = true;
+      return Promise.resolve();
+      /*
       if (sessionStorage.getItem('isAdminLoggedIn') === 'true') {
         readerAuthCleanupDone = true;
         return Promise.resolve();
@@ -3136,10 +3201,11 @@
         setTimeout(finish, 1600);
       });
       return readerAuthCleanupPromise;
+      */
     }
 
     function shouldWaitForReaderAuthState(){
-      return !!(!readerAuthCleanupDone && sessionStorage.getItem('isAdminLoggedIn') !== 'true');
+      return false;
     }
 
     function showResidentLoadingRow(message){
@@ -4716,7 +4782,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
                         : /Android/.test(navigator.userAgent)    ? 'android'
                         : 'desktop';
       const payload = Object.assign({
-        residentId: localStorage.getItem('myResidentId') || null,
+        residentId: getStoredResidentId() || null,
         dorm     : getCurrentDormForToken(),
         lastSeen : firebase.firestore.FieldValue.serverTimestamp(),
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -4779,7 +4845,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
         { el: document.getElementById('notification-settings-announcement-row'), disabled: false }
       ];
       const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
-      const myResidentId = localStorage.getItem('myResidentId');
+      const myResidentId = getStoredResidentId();
       const isSohmuOn = !!(sohmuToggle && sohmuToggle.checked);
       const supported = ('Notification' in window) && ('serviceWorker' in navigator);
       const permission = supported ? getEffectiveNotificationPermissionState() : 'unsupported';
@@ -6570,7 +6636,7 @@ window.addEventListener('load', function(){
       window.addEventListener('load', function(){
         // すでに自分が設定されている端末は対象外
         function hasMyId(){
-          try { return !!localStorage.getItem('myResidentId'); } catch(_) { return true; }
+          try { return !!getStoredResidentId(); } catch(_) { return true; }
         }
         if (hasMyId()) return;
 
@@ -6652,7 +6718,7 @@ window.addEventListener('load', function(){
           // 既存の決定処理（myResidentId保存やモーダルを閉じる処理）が終わったあとで判定したいので、0ms遅延
           setTimeout(function(){
             let myId = null;
-            try { myId = localStorage.getItem('myResidentId'); } catch(_) {}
+            try { myId = getStoredResidentId(); } catch(_) {}
             // 本当に自分の寮生が登録されたときだけ通知を確認
             if (myId) {
               try { maybeRequestNotifAfterSelfSelect(); } catch(_) {}
@@ -8065,7 +8131,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
     　
       function populate(){
         if (!selectEl) return;
-        const mine = (localStorage.getItem('myResidentId') || '').trim();
+        const mine = getStoredResidentId();
         const src = (Array.isArray(window.allResidents) && window.allResidents.length)
          ? window.allResidents
          : (Array.isArray(allResidents) ? allResidents : []);
@@ -8093,7 +8159,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 
       // ボタンでモーダルを開く
       document.addEventListener('click', (ev)=>{
-        const btn = ev.target && ev.target.closest && ev.target.closest('#change-resident-btn');
+        const btn = closestElementCompat(ev.target, '#change-resident-btn');
         if (!btn) return;
         ev.preventDefault();
         open();
@@ -8105,13 +8171,21 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
         e.preventDefault();
         if (!selectEl) { close(); return; }
         const id = (selectEl.value || '').trim();
-        try { localStorage.setItem('myResidentId', id || ''); } catch(_){}
-        // FCMトークンの residentId を同期
-        try { if (typeof window.resyncFcmToken === 'function') await window.resyncFcmToken(); } catch(_){}
+        try { setStoredResidentId(id || ''); } catch(_){}
         // 画面更新（既存の強調等のロジックに委ねる）
         try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_){}
         try { window.addLog && addLog('自分選択', id ? ('residentId=' + id) : '(未選択)'); } catch(_){}
         close();
+        // 通知トークン同期は画面遷移をブロックしない
+        setTimeout(function(){
+          try {
+            if (typeof window.resyncFcmToken === 'function') {
+              Promise.resolve(window.resyncFcmToken()).catch(function(e){
+                console.warn('resyncFcmToken skipped:', (e && (e.code || e.message)) || e);
+              });
+            }
+          } catch(_) {}
+        }, 0);
       });
     })();
 
@@ -10591,8 +10665,8 @@ document.addEventListener('click', (ev) => {
   if (document.body.classList.contains('morning-mode')) return;
   if (!elements.sohmuToggle || !elements.sohmuToggle.checked) return;
   const target = ev.target;
-  if (target && target.closest && target.closest('button, input, select, textarea, a, .favorite-star, .count-history-btn')) return;
-  const row = target && target.closest ? target.closest('tr.resident-main-row[data-resident-id]') : null;
+  if (closestElementCompat(target, 'button, input, select, textarea, a, .favorite-star, .count-history-btn')) return;
+  const row = closestElementCompat(target, 'tr.resident-main-row[data-resident-id]');
   if (!row) return;
   const residentId = row.dataset.residentId || '';
   if (!residentId) return;
@@ -11062,18 +11136,15 @@ if(elements.changePasswordForm){
           const tbody = document.querySelector('#resident-table tbody');
           if (tbody) tbody.innerHTML = '<tr><td colspan="6">読み込み中...</td></tr>';
           const id = select.value;
-          localStorage.setItem('myResidentId', id);
+          setStoredResidentId(id);
           var opt = select.options[select.selectedIndex];
           const selectedDorm = (opt && opt.getAttribute('data-dorm')) || 'shofu';
           switchDorm(selectedDorm);
-          try {
-            if (!currentDeviceToken) { await requestNotificationPermission(); }
-            if (currentDeviceToken) {
-              await saveFcmTokenDocument(currentDeviceToken, { residentId: id });
-            }
-          } catch(e) { console.warn('save token failed', e); }
           closeSelfSelectModal();
           renderTable();
+          setTimeout(function(){
+            try { maybeRequestNotifAfterSelfSelect(); } catch(_) {}
+          }, 0);
           if (btn){ btn.disabled = false; btn.textContent = '決定'; }
           if (overlay) overlay.style.display = 'none';
         }
@@ -11120,7 +11191,7 @@ if(elements.changePasswordForm){
                 const dormKey = collectionName.split('_')[1];
                 allResidents = snapshot.docs.map(doc => mergeResidentDocData(doc, dormKey));
                 // Show self-select modal if first visit
-                if (!localStorage.getItem('myResidentId')) {
+                if (!getStoredResidentId()) {
                   const selectModal = document.getElementById('self-select-modal');
                   (async () => {
                     const select = document.getElementById('self-select');
@@ -11147,34 +11218,21 @@ if(elements.changePasswordForm){
                         if (tbody) tbody.innerHTML = '<tr><td colspan="6">読み込み中...</td></tr>';
 
                         const id = select.value;
-                        localStorage.setItem('myResidentId', id);
+                        setStoredResidentId(id);
 
                         // Switch dorm view to match selected resident
                         const selectedDorm = select.options[select.selectedIndex].getAttribute('data-dorm');
                         switchDorm(selectedDorm);
 
-                        // Acquire or refresh push token (now idempotent & timeout-protected)
-                        if (!currentDeviceToken) {
-                          await requestNotificationPermission();
-                        }
-                        if (currentDeviceToken) {
-                          try {
-                            await saveFcmTokenDocument(currentDeviceToken, { residentId: id });
-                            console.log('residentId saved to Firestore:', id);
-                          } catch (e) {
-                            console.warn('residentId save skipped due to permission error:', (e && (e.code || e.message)) || e);
-                            // 非致命扱い: 通知トークンは取得済み。後から権限を直して再紐づけできる。
-                          }
-                        } else {
-                          console.warn('No device token available (skipping token save).');
-                        }
-
                         selectModal.classList.remove('active');
                         selectModal.style.pointerEvents = 'none';
                         renderTable();
+                        setTimeout(function(){
+                          try { maybeRequestNotifAfterSelfSelect(); } catch(_) {}
+                        }, 0);
                       } catch (e) {
                         console.error('self-select confirm failed', e);
-                        alert('初期化に失敗しました。電波状況や通知設定を確認して、もう一度お試しください。');
+                        alert('寮生の選択に失敗しました。もう一度お試しください。');
                       } finally {
                         if (btn) { btn.disabled = false; btn.textContent = '決定'; }
                         if (overlayEl) overlayEl.style.display = 'none';
@@ -11280,7 +11338,7 @@ if(elements.changePasswordForm){
             const searchTerm = elements.searchInput.value;
             const sohmuOn = elements.sohmuToggle.checked;
             const morningInlineEdit = isMorningMode || document.body.classList.contains('morning-mode');
-            const myId = localStorage.getItem('myResidentId');
+            const myId = getStoredResidentId();
             // Hide table header when 庶務モード is OFF
             const tableHead = document.querySelector('#resident-table thead');
             tableHead.style.display = sohmuOn ? '' : 'none';
@@ -11745,6 +11803,7 @@ if(elements.changePasswordForm){
         }
 
         function setMode(mode) {
+            mode = (mode === 'resident-edit-mode') ? 'resident-edit-mode' : 'view-mode';
             const keepFurigana = document.body.classList.contains('show-furigana');
             const keepCircle   = document.body.classList.contains('show-circle');
             const keepDorm     = document.body.classList.contains('show-dorm');
@@ -11752,6 +11811,8 @@ if(elements.changePasswordForm){
             const keepMorning  = document.body.classList.contains('morning-mode');
             document.body.className = sessionStorage.getItem('isAdminLoggedIn') === 'true' ? 'admin-logged-in' : '';
             document.body.classList.add(mode);
+            const countRadio = document.getElementById('count-edit-mode');
+            if (countRadio) countRadio.checked = false;
             if (keepFurigana) document.body.classList.add('show-furigana');
             if (keepCircle)   document.body.classList.add('show-circle');
             if (keepDorm)     document.body.classList.add('show-dorm');
@@ -11760,7 +11821,7 @@ if(elements.changePasswordForm){
             const currentTheme = localStorage.getItem('theme') || 'light';
             handleThemeChange(currentTheme);
             if (mode !== 'resident-edit-mode') elements.selectAllCheckbox.checked = false;
-            if (mode !== 'count-edit-mode') closeMobileCountEditModal();
+            closeMobileCountEditModal();
             try { updateAnnouncementVisibility(); } catch(_) {}
             try { updateNotificationSettingsUI(); } catch(_) {}
             renderTable();
@@ -12036,8 +12097,9 @@ if(elements.changePasswordForm){
 
         // 寮生変更ボタン：毎回リストを再取得してモーダルを開く
         elements.changeResidentBtn.addEventListener('click', async () => {
+          if (window.__selfBind) return;
           // Reset stored ID and reload list each time
-          localStorage.removeItem('myResidentId');
+          clearStoredResidentId();
           try { updateNotificationSettingsUI(); } catch(_){}
           await populateSelfSelectOptions();
           const cancelBtn = document.getElementById('self-cancel-btn');
@@ -12053,19 +12115,15 @@ if(elements.changePasswordForm){
             document.querySelector('#resident-table tbody').innerHTML = '<tr><td colspan="6">読み込み中...</td></tr>';
             const select = document.getElementById('self-select');
             const id = select.value;
-            localStorage.setItem('myResidentId', id);
+            setStoredResidentId(id);
             const selectedDorm = select.options[select.selectedIndex].getAttribute('data-dorm');
             switchDorm(selectedDorm);
-            if (!currentDeviceToken) {
-              await requestNotificationPermission();
-            }
-            if (currentDeviceToken) {
-              await saveFcmTokenDocument(currentDeviceToken, { residentId: id });
-              console.log('residentId saved to Firestore:', id);
-            }
             document.getElementById('self-select-modal').classList.remove('active');
             document.getElementById('self-select-modal').style.pointerEvents = 'none';
             renderTable();
+            setTimeout(function(){
+              try { maybeRequestNotifAfterSelfSelect(); } catch(_) {}
+            }, 0);
             btn.disabled = false;
             btn.textContent = '決定';
             // Hide loading overlay
