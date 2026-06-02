@@ -57,7 +57,7 @@
 
         /* ==== 操作履歴モーダル ==== */
         .modal-overlay{
-            position:fixed; inset:0;
+            position:fixed; inset:0; top:0; right:0; bottom:0; left:0;
             background:rgba(0,0,0,.5);
             display:none; align-items:center; justify-content:center;
             z-index:2000;
@@ -2296,7 +2296,7 @@
 </head>
 <body>
 
-<div id="loading-overlay" style="display:none; position:fixed; inset:0; background:rgba(255,255,255,0.8); z-index:3000; align-items:center; justify-content:center;">
+<div id="loading-overlay" style="display:none; position:fixed; inset:0; top:0; right:0; bottom:0; left:0; background:rgba(255,255,255,0.8); z-index:3000; align-items:center; justify-content:center;">
   <div>読み込み中...</div>
 </div>
 
@@ -3145,15 +3145,40 @@
 
     function closestElementCompat(el, selector){
       if (!el) return null;
-      if (el.closest) {
-        try { return el.closest(selector); } catch(_) {}
+      var node = el;
+      if (node.nodeType !== 1) {
+        node = node.parentElement || node.parentNode;
       }
-      let node = el;
+      if (node && node.closest) {
+        try { return node.closest(selector); } catch(_) {}
+      }
       while (node && node.nodeType === 1) {
         if (matchesElementCompat(node, selector)) return node;
         node = node.parentElement || node.parentNode;
       }
       return null;
+    }
+
+    function closestEventTargetCompat(ev, selector){
+      return closestElementCompat(ev && (ev.target || ev.srcElement), selector);
+    }
+
+    function createEventCompat(type, bubbles){
+      try {
+        return new Event(type, {
+          bubbles: bubbles !== false,
+          cancelable: true
+        });
+      } catch (_) {
+        var evt = document.createEvent('Event');
+        evt.initEvent(type, bubbles !== false, true);
+        return evt;
+      }
+    }
+
+    function dispatchEventCompat(el, type, bubbles){
+      if (!el || typeof el.dispatchEvent !== 'function') return;
+      try { el.dispatchEvent(createEventCompat(type, bubbles)); } catch(_) {}
     }
 
     function ensureReaderAuthStateReady(){
@@ -4415,7 +4440,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       if (window.__bindMorningRunSuppressOnTap) return;
       window.__bindMorningRunSuppressOnTap = true;
       document.addEventListener('click', (ev) => {
-        const run = ev.target && ev.target.closest && ev.target.closest('#morning-run-btn');
+        const run = closestEventTargetCompat(ev, '#morning-run-btn');
         if (!run) return;
         // start suppress immediately
         window.__morningModeSuppressPush = true;
@@ -4714,7 +4739,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
 
       // Capture clicks to know whether the exit was “finish” or “cancel”
       document.addEventListener('click', (ev) => {
-        const fin = ev.target && ev.target.closest && ev.target.closest('#morning-finish-btn');
+        const fin = closestEventTargetCompat(ev, '#morning-finish-btn');
         if (fin){
           window.__morningFinishRequested = true;
           setTargetDorm();
@@ -4724,7 +4749,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
           }, 4000);
           return;
         }
-        const cancel = ev.target && ev.target.closest && ev.target.closest('#morning-cancel-btn');
+        const cancel = closestEventTargetCompat(ev, '#morning-cancel-btn');
         if (cancel){
           // Cancel should never send notifications, and should discard staged changes
           window.__morningFinishRequested = false;
@@ -5303,9 +5328,9 @@ function unifiedConfirm(action){
     function onBackdrop(e){ if (e.target === modal) onCancel(e); }
     function onKey(e){ if (e.key === 'Escape') onCancel(e); }
 
-    okBtn.addEventListener('click', onOk, { once:true });
-    cancelBtn.addEventListener('click', onCancel, { once:true });
-    if (closeBtn) closeBtn.addEventListener('click', onCancel, { once:true });
+    okBtn.addEventListener('click', onOk, false);
+    cancelBtn.addEventListener('click', onCancel, false);
+    if (closeBtn) closeBtn.addEventListener('click', onCancel, false);
     modal.addEventListener('click', onBackdrop);
     document.addEventListener('keydown', onKey);
 
@@ -5322,9 +5347,9 @@ function unifiedConfirm(action){
   window.__morningUnifiedActionInFlight = false;
 
   document.addEventListener('click', function(ev){
-    var runEl = ev.target && ev.target.closest && ev.target.closest('#morning-run-btn');
-    var cancelEl = ev.target && ev.target.closest && ev.target.closest('#morning-cancel-btn');
-    var finishEl = ev.target && ev.target.closest && ev.target.closest('#morning-finish-btn');
+    var runEl = closestEventTargetCompat(ev, '#morning-run-btn');
+    var cancelEl = closestEventTargetCompat(ev, '#morning-cancel-btn');
+    var finishEl = closestEventTargetCompat(ev, '#morning-finish-btn');
     var action = '';
     var btn = null;
 
@@ -5333,9 +5358,9 @@ function unifiedConfirm(action){
     else if (finishEl) { action = 'finish'; btn = finishEl; }
     else return;
 
-    ev.preventDefault();
-    ev.stopPropagation();
-    ev.stopImmediatePropagation();
+    if (ev.preventDefault) ev.preventDefault();
+    if (ev.stopPropagation) ev.stopPropagation();
+    if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
 
     if (!btn || btn.disabled) return;
     if (window.__morningUnifiedActionInFlight) return;
@@ -5401,7 +5426,7 @@ function unifiedConfirm(action){
   let allowPassThrough = false;
 
   document.addEventListener('click', async (ev) => {
-    const btn = ev.target && ev.target.closest && ev.target.closest('#morning-cancel-btn');
+    const btn = closestEventTargetCompat(ev, '#morning-cancel-btn');
     if (!btn) return;
 
     // 2回目の擬似クリックは素通し（元の処理を動かす）
@@ -6397,14 +6422,15 @@ function unifiedConfirm(action){
       // === ログアウト時は「庶務モードONの閲覧」へ強制 ===
       try {
         // 閲覧モードへ
-        document.body.classList.remove('resident-edit-mode','count-edit-mode');
+        document.body.classList.remove('resident-edit-mode');
+        document.body.classList.remove('count-edit-mode');
         const viewRadio = document.getElementById('view-mode');
         if (viewRadio) viewRadio.checked = true;
         // 庶務ON（sohmu-off を外し、トグルをONに、イベントも飛ばす）
         const sohmu = document.getElementById('sohmu-toggle');
         if (sohmu) {
           sohmu.checked = true;
-          try { sohmu.dispatchEvent(new Event('change')); } catch(_) {}
+      dispatchEventCompat(sohmu, 'change', true);
         }
         document.body.classList.remove('sohmu-off');
         // 表を最新状態で再描画
@@ -6435,7 +6461,7 @@ function unifiedConfirm(action){
 
   // 既存のログイン/ログアウト処理実行後に状態を合せる（競合しないように遅延）
   document.addEventListener('click', (ev) => {
-    const btn = ev.target && ev.target.closest && ev.target.closest('#login-logout-btn, #admin-logout-btn');
+    const btn = closestEventTargetCompat(ev, '#login-logout-btn, #admin-logout-btn');
     if (!btn) return;
     setTimeout(syncFromSession, 0);
   }, true);
@@ -6599,12 +6625,12 @@ window.addEventListener('load', function(){
             if (toggle.checked !== desired) {
               toggle.checked = desired;
               try {
-                toggle.dispatchEvent(new Event('change'));
+                dispatchEventCompat(toggle, 'change', true);
               } catch(_) {}
             } else {
               // 既にOFF表示でも、関連処理を確実に走らせるため一度changeを投げておく
               try {
-                toggle.dispatchEvent(new Event('change'));
+                dispatchEventCompat(toggle, 'change', true);
               } catch(_) {}
             }
             try {
@@ -6618,7 +6644,7 @@ window.addEventListener('load', function(){
             if (toggle.checked !== desired) {
               toggle.checked = desired;
               try {
-                toggle.dispatchEvent(new Event('change'));
+                dispatchEventCompat(toggle, 'change', true);
               } catch(_) {}
             }
           } else {
@@ -7286,7 +7312,8 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
         if (viewRadio) viewRadio.checked = true;
         if (countRadio) countRadio.checked = false;
         if (residentRadio) residentRadio.checked = false;
-        document.body.classList.remove('count-edit-mode', 'resident-edit-mode');
+        document.body.classList.remove('count-edit-mode');
+        document.body.classList.remove('resident-edit-mode');
         if (typeof setMode === 'function') setMode('view-mode');
         document.body.classList.add('morning-mode');
         if (typeof renderTable === 'function') renderTable();
@@ -8254,7 +8281,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
     if (!window.__morningDelegationBound) {
       document.addEventListener('click', (ev) => {
         // 朝の庶務開始ボタン（DOM再描画にも強い委任ハンドラ）
-        const runEl = ev.target && ev.target.closest && ev.target.closest('#morning-run-btn');
+        const runEl = closestEventTargetCompat(ev, '#morning-run-btn');
         if (runEl) {
           if (runEl.disabled) return;
           ev.preventDefault();
@@ -8264,7 +8291,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
           })();
           return;
         }
-        const cancelEl = ev.target && ev.target.closest && ev.target.closest('#morning-cancel-btn');
+        const cancelEl = closestEventTargetCompat(ev, '#morning-cancel-btn');
         if (cancelEl) {
           if (cancelEl.disabled) return;
           ev.preventDefault();
@@ -8274,7 +8301,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
           })();
           return;
         }
-        const finishEl = ev.target && ev.target.closest && ev.target.closest('#morning-finish-btn');
+        const finishEl = closestEventTargetCompat(ev, '#morning-finish-btn');
         if (finishEl) {
           if (finishEl.disabled) return;
           ev.preventDefault();
@@ -8667,9 +8694,9 @@ function applySohmuUI(){
         }
       }
       if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => setTimeout(ensure, 0), { once: true });
+        document.addEventListener('DOMContentLoaded', () => setTimeout(ensure, 0), false);
         // 念のため load 後にも一度（イベントバインドが遅い環境対策）
-        window.addEventListener('load', () => setTimeout(ensure, 0), { once: true });
+        window.addEventListener('load', () => setTimeout(ensure, 0), false);
       } else {
         setTimeout(ensure, 0);
       }
@@ -8696,7 +8723,7 @@ function applySohmuUI(){
       try { setSohmuOn(false); } catch(_){}
       try { applySohmuUI(); } catch(_){}
       try {
-        if (tgl) tgl.dispatchEvent(new Event('change', { bubbles: true }));
+        dispatchEventCompat(tgl, 'change', true);
       } catch(_) {}
     }
     async function promptAdminLogin(){
@@ -8839,7 +8866,7 @@ function applySohmuUI(){
           }
           return;
         }
-        const runEl = ev.target && ev.target.closest && ev.target.closest('#morning-run-btn');
+        const runEl = closestEventTargetCompat(ev, '#morning-run-btn');
         if (runEl) {
           try { ev.preventDefault(); } catch(_){}
           startMorning(false);
@@ -10260,6 +10287,7 @@ function syncMobileCountEditModalUI() {
 function closeMobileCountEditModal() {
   if (!elements.mobileCountEditModal) return;
   elements.mobileCountEditModal.classList.remove('active');
+  elements.mobileCountEditModal.style.display = 'none';
   mobileCountEditState.residentId = null;
   mobileCountEditState.noteDirty = false;
   mobileCountEditState.noteSaving = false;
@@ -10267,6 +10295,7 @@ function closeMobileCountEditModal() {
 }
 
 function openMobileCountEditModal(residentId) {
+  if (!elements.mobileCountEditModal) return;
   const resident = getResidentById(residentId);
   if (!resident) {
     alert('寮生情報の読み込みが終わってからもう一度お試しください。');
@@ -10277,7 +10306,21 @@ function openMobileCountEditModal(residentId) {
   mobileCountEditState.noteSaving = false;
   setMobileCountNoteStatus('', '');
   syncMobileCountEditModalUI();
+  elements.mobileCountEditModal.style.display = 'flex';
   elements.mobileCountEditModal.classList.add('active');
+}
+
+function handleResidentRowCountEditTap(ev, residentId) {
+  if (document.body.classList.contains('resident-edit-mode')) return;
+  if (document.body.classList.contains('morning-mode')) return;
+  if (!elements.sohmuToggle || !elements.sohmuToggle.checked) return;
+  const target = ev && (ev.target || ev.srcElement);
+  if (closestElementCompat(target, 'button, input, select, textarea, a, .favorite-star, .count-history-btn')) return;
+  const id = String(residentId || '').trim();
+  if (!id) return;
+  if (ev && ev.preventDefault) ev.preventDefault();
+  if (ev && ev.stopPropagation) ev.stopPropagation();
+  openMobileCountEditModal(id);
 }
 
 function adjustMobileCountEdit(type, delta) {
@@ -10693,18 +10736,11 @@ document.addEventListener('click', (ev) => {
   openReceiveModal(receiveBtn.dataset.residentId);
 }, true);
 document.addEventListener('click', (ev) => {
-  if (document.body.classList.contains('resident-edit-mode')) return;
-  if (document.body.classList.contains('morning-mode')) return;
-  if (!elements.sohmuToggle || !elements.sohmuToggle.checked) return;
   const target = ev.target;
-  if (closestElementCompat(target, 'button, input, select, textarea, a, .favorite-star, .count-history-btn')) return;
   const row = closestElementCompat(target, 'tr.resident-main-row[data-resident-id]');
   if (!row) return;
-  const residentId = row.dataset.residentId || '';
-  if (!residentId) return;
-  ev.preventDefault();
-  ev.stopPropagation();
-  openMobileCountEditModal(residentId);
+  const residentId = (row.dataset && row.dataset.residentId) || row.getAttribute('data-resident-id') || '';
+  handleResidentRowCountEditTap(ev, residentId);
 }, true);
 document.addEventListener('click', (ev) => {
   const historyBtn = ev.target && ev.target.closest && ev.target.closest('.count-history-btn');
@@ -10743,13 +10779,13 @@ if (elements.morningRunBtn) {
 
 // === Fallback delegation (DOMが差し替わっても確実に反応) ===
 document.addEventListener('click', (ev) => {
-  const cancelEl = ev.target && ev.target.closest && ev.target.closest('#morning-cancel-btn');
+  const cancelEl = closestEventTargetCompat(ev, '#morning-cancel-btn');
   if (cancelEl) {
     ev.preventDefault();
     try { cancelMorningAndRestore(); } catch(_) {}
     return;
   }
-  const finishEl = ev.target && ev.target.closest && ev.target.closest('#morning-finish-btn');
+  const finishEl = closestEventTargetCompat(ev, '#morning-finish-btn');
   if (finishEl) {
     ev.preventDefault();
     try { finishMorning(); } catch(_) {}
@@ -10846,14 +10882,14 @@ if(elements.changePasswordForm){
 
         // ===== フォールバック: デリゲートで確実に拾う =====
         document.addEventListener('click', (ev) => {
-          const cancelEl = ev.target && ev.target.closest && ev.target.closest('#morning-cancel-btn');
+          const cancelEl = closestEventTargetCompat(ev, '#morning-cancel-btn');
           if (cancelEl) {
             if (cancelEl.disabled) return;
             ev.preventDefault();
             cancelMorningAndRestore();
             return;
           }
-          const finishEl = ev.target && ev.target.closest && ev.target.closest('#morning-finish-btn');
+          const finishEl = closestEventTargetCompat(ev, '#morning-finish-btn');
           if (finishEl) {
             if (finishEl.disabled) return;
             ev.preventDefault();
@@ -11403,6 +11439,7 @@ if(elements.changePasswordForm){
                     const row = document.createElement('tr');
                     row.classList.add('resident-main-row');
                     row.dataset.residentId = resident.id || '';
+                    row.setAttribute('data-resident-id', resident.id || '');
                     if (!elements.sohmuToggle.checked) {
                         // 庶務モード OFF のときのレイアウト
                         const dormMarker = resident.dorm === 'shofu' ? '松' : (resident.dorm === 'meizen' ? '明' : '');
@@ -11460,6 +11497,11 @@ if(elements.changePasswordForm){
                             </div>
                           </td>
                         `;
+                    }
+                    if (elements.sohmuToggle.checked && !morningInlineEdit) {
+                        row.addEventListener('click', function(ev){
+                            handleResidentRowCountEditTap(ev, resident.id || '');
+                        }, false);
                     }
                     elements.tableBody.appendChild(row);
                 });
@@ -11803,7 +11845,7 @@ if(elements.changePasswordForm){
                 elements.sohmuToggle.checked = false;
                 setSohmuOn(false);
                 applySohmuUI();
-                elements.sohmuToggle.dispatchEvent(new Event('change', { bubbles: true }));
+                dispatchEventCompat(elements.sohmuToggle, 'change', true);
             }
             document.getElementById('view-mode').checked = true;
             setMode('view-mode');
@@ -11823,7 +11865,7 @@ if(elements.changePasswordForm){
                 // 管理者は常に庶務モード ON、トグル無効化
                 elements.sohmuToggle.checked = true;
                 elements.sohmuToggle.disabled = true;
-                elements.sohmuToggle.dispatchEvent(new Event('change'));
+                dispatchEventCompat(elements.sohmuToggle, 'change', true);
             } else {
                 elements.postAnnouncementBtn.style.display = 'none';
                 repositionAnnouncement(false);
