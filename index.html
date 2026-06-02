@@ -2368,7 +2368,7 @@
         <span class="morning-banner-icon" aria-hidden="true">🌅</span>
         <div>
           <div class="morning-banner-title">朝の庶務中 <span id="morning-banner-dorm"></span></div>
-          <div class="morning-banner-desc">参考＝開始直前の数。終了すると今の数を確定、取り消すと参考の数に戻します。</div>
+          <div class="morning-banner-desc">開始直前の数を参考表示中。終了でまとめて反映、取り消しで未反映のまま戻します。</div>
         </div>
       </div>
       <div class="morning-banner-actions">
@@ -4751,9 +4751,9 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
         }
         const cancel = closestEventTargetCompat(ev, '#morning-cancel-btn');
         if (cancel){
-          // Cancel should never send notifications, and should discard staged changes
+          // Cancel should never send notifications. The staged values are discarded only
+          // after the user confirms cancellation in cancelMorningAndRestore().
           window.__morningFinishRequested = false;
-          try { window.__morningStagedWrites && window.__morningStagedWrites.clear && window.__morningStagedWrites.clear(); } catch(_){ }
           return;
         }
       }, true);
@@ -5261,12 +5261,12 @@ const __UCONF = { open:false, resolver:null };
 const UNIFIED_CONFIRM_TEXT = {
   start: {
     title: '朝の庶務を開始しますか？',
-    body : '直前の数を「参考」として保存し、松風寮・明善寮の「荷物/郵便」を0に初期化します。よろしいですか？',
+    body : '開始直前の数を参考として読み込み、画面上の荷物/郵便を0にします。サーバーへの反映は「変更を確定して終了」を押した時だけ行います。',
     okText: '開始する'
   },
   cancel:{
     title: '朝の庶務を取り消しますか？',
-    body : '今の変更は反映せず、参考に保存した開始直前の数へ戻します。よろしいですか？',
+    body : '朝の庶務中の変更は反映せず、開始直前の数へ画面を戻して終了します。',
     okText: '参考に戻して中止'
   },
   finish:{
@@ -6942,7 +6942,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
         try { annotateReferenceOnTable(); } catch(_) {}
       }, 0);
     }
-    /* ===== 朝の庶務：参考＝「リセット直前」スナップショット取得 → 全0リセット → 参照表示 ===== */
+    /* ===== 朝の庶務：開始時はローカルで0表示、終了時にまとめて反映 ===== */
     function getDormKeyFromCollectionName(name){
       if (!name || name === 'all') return 'both';
       return (name.split('_')[1] || 'shofu'); // 'residents_shofu' -> 'shofu'
@@ -7138,6 +7138,148 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       __morningObserver.observe(tbody, { childList: true });
     }
 
+    function getMorningCountNumber(value){
+      const num = __normalizeMorningCountValue(value);
+      return num == null ? 0 : num;
+    }
+
+    function buildMorningRefFromResidents(dormKey, residents){
+      const byId = new Map();
+      const byName = new Map();
+      const byRoom = new Map();
+      const byComposite = new Map();
+
+      (residents || []).forEach(function(source){
+        if (!source || !source.id) return;
+        const room = getResidentRoomRawValue(source);
+        const obj = {
+          id: source.id,
+          dorm: dormKey,
+          luggage: getMorningCountNumber(source.luggage),
+          mail: getMorningCountNumber(source.mail),
+          name: source.name || '',
+          roomNumber: room
+        };
+
+        byId.set(source.id, obj);
+
+        const nameKey = normalizeKey(obj.name);
+        if (nameKey) byName.set(nameKey, obj);
+
+        if (room) {
+          const arr = byRoom.get(room) || [];
+          arr.push(obj);
+          byRoom.set(room, arr);
+          if (nameKey) byComposite.set(room + '::' + nameKey, obj);
+        }
+      });
+
+      return {
+        runId: 'local_' + Date.now().toString(36) + '_' + dormKey,
+        byId: byId,
+        byName: byName,
+        byRoom: byRoom,
+        byComposite: byComposite
+      };
+    }
+
+    async function loadMorningResidentsForDorm(dormKey){
+      const collectionName = `residents_${dormKey}`;
+      try {
+        const snap = await db.collection(collectionName).get({ source: 'server' }).catch(function(){
+          return db.collection(collectionName).get();
+        });
+        return snap.docs.map(function(doc){
+          return mergeResidentDocData(doc, dormKey);
+        });
+      } catch(e) {
+        const fallback = Array.isArray(allResidents)
+          ? allResidents.filter(function(r){
+              return r && (r.dorm === dormKey || currentCollectionName === collectionName);
+            })
+          : [];
+        if (fallback.length) {
+          return fallback.map(function(r){
+            return Object.assign({}, r, { dorm: dormKey, roomNumber: getResidentRoomRawValue(r) });
+          });
+        }
+        throw e;
+      }
+    }
+
+    function buildMorningZeroedResidents(dormKey, residents){
+      return (residents || []).map(function(source){
+        const next = Object.assign({}, source, {
+          dorm: dormKey,
+          roomNumber: getResidentRoomRawValue(source),
+          luggage: 0,
+          mail: 0
+        });
+        next.__morningOriginalLuggage = getMorningCountNumber(source && source.luggage);
+        next.__morningOriginalMail = getMorningCountNumber(source && source.mail);
+        return next;
+      });
+    }
+
+    function stageMorningInitialZeroes(residents){
+      try {
+        if (window.__morningStagedWrites && typeof window.__morningStagedWrites.clear === 'function') {
+          window.__morningStagedWrites.clear();
+        }
+      } catch(_) {}
+      (residents || []).forEach(function(r){
+        if (!r || !r.id || !(r.dorm === 'shofu' || r.dorm === 'meizen')) return;
+        __stageResidentWrite(`residents_${r.dorm}`, r.id, { luggage: 0, mail: 0 });
+      });
+    }
+
+    function restoreMorningLocalReferenceValues(){
+      const refById = morningRef && morningRef.byId;
+      if (!refById || typeof refById.get !== 'function') return;
+
+      const seen = {};
+      if (Array.isArray(allResidents) && allResidents.length) {
+        allResidents = allResidents.map(function(r){
+          if (!r || !r.id) return r;
+          const refObj = refById.get(r.id);
+          if (!refObj) return r;
+          seen[r.id] = true;
+          return Object.assign({}, r, {
+            luggage: getMorningCountNumber(refObj.luggage),
+            mail: getMorningCountNumber(refObj.mail)
+          });
+        });
+      } else {
+        allResidents = [];
+      }
+
+      try {
+        refById.forEach(function(refObj, rid){
+          if (seen[rid]) return;
+          allResidents.push(Object.assign({}, refObj, {
+            id: rid,
+            luggage: getMorningCountNumber(refObj && refObj.luggage),
+            mail: getMorningCountNumber(refObj && refObj.mail)
+          }));
+        });
+      } catch(_) {}
+    }
+
+    function activateMorningViewMode(){
+      try {
+        const viewRadio = document.getElementById('view-mode');
+        const countRadio = document.getElementById('count-edit-mode');
+        const residentRadio = document.getElementById('resident-edit-mode');
+        if (viewRadio) viewRadio.checked = true;
+        if (countRadio) countRadio.checked = false;
+        if (residentRadio) residentRadio.checked = false;
+        document.body.classList.remove('count-edit-mode');
+        document.body.classList.remove('resident-edit-mode');
+        if (typeof setMode === 'function') setMode('view-mode');
+        document.body.classList.add('morning-mode');
+      } catch(_) {}
+    }
+
     async function snapshotDormToFirestore(dormKey){
       // runId 例: 20251004T083012_shofu
       const runId = new Date().toISOString().replace(/[:.]/g,'') + '_' + dormKey;
@@ -7231,6 +7373,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
     function closeMorningModeUI(){
       isMorningMode = false;
       document.body.classList.remove('morning-mode');
+      try { window.__morningModeSuppressPush = false; } catch(_){}
       const b = document.getElementById('morning-banner');
       if (b) b.style.display = 'none';
       // 参照表示を消去
@@ -7278,70 +7421,80 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
     // ===== 統一版: 朝の庶務モード開始（両寮のみ） =====
     async function startMorning(skipConfirm){
       // すでに開始処理中なら無視（多重起動防止）
-      if (__morningStarting) return;
+      if (__morningStarting || isMorningMode) return;
 
-      // ★ここで必ず確認ダイアログを出し、OKのときだけスナップショット＋0リセットを実行する
       const ok = skipConfirm ? true : await unifiedConfirm('start');
       if (!ok) return;
 
       __morningStarting = true;
       setMorningOverlayVisible(true);
 
-      let refShofu = null, refMeizen = null;
-      try { refShofu  = await snapshotDormToFirestore('shofu'); }  catch(e){ console.warn('snapshot shofu failed', e); alert('参考データ（松風）の保存に失敗しました。続行します。'); }
-      try { refMeizen = await snapshotDormToFirestore('meizen'); } catch(e){ console.warn('snapshot meizen failed', e); alert('参考データ（明善）の保存に失敗しました。続行します。'); }
-
       try {
-        // 両寮を**同時**にゼロ化
-        await Promise.all([ zeroDorm('shofu'), zeroDorm('meizen') ]);
+        const loaded = await Promise.all([
+          loadMorningResidentsForDorm('shofu'),
+          loadMorningResidentsForDorm('meizen')
+        ]);
+        const shofuResidents = loaded[0] || [];
+        const meizenResidents = loaded[1] || [];
+        const refShofu = buildMorningRefFromResidents('shofu', shofuResidents);
+        const refMeizen = buildMorningRefFromResidents('meizen', meizenResidents);
+
+        morningRef.dorm = 'both';
+        morningRef.byId        = mergeMorningRefMaps(refShofu && refShofu.byId,        refMeizen && refMeizen.byId);
+        morningRef.byName      = mergeMorningRefMaps(refShofu && refShofu.byName,      refMeizen && refMeizen.byName);
+        morningRef.byRoom      = mergeMorningRefMaps(refShofu && refShofu.byRoom,      refMeizen && refMeizen.byRoom);
+        morningRef.byComposite = mergeMorningRefMaps(refShofu && refShofu.byComposite, refMeizen && refMeizen.byComposite);
+        morningRef.startedAt   = Date.now();
+
+        try {
+          if (typeof unsubscribe === 'function') unsubscribe();
+          unsubscribe = null;
+        } catch(_) {}
+
+        allResidents = buildMorningZeroedResidents('shofu', shofuResidents)
+          .concat(buildMorningZeroedResidents('meizen', meizenResidents));
+        stageMorningInitialZeroes(allResidents);
+
+        isMorningMode = true;
+        window.__morningModeSuppressPush = true;
+        document.body.classList.add('morning-mode');
+        syncMorningTargetDormFromRef();
+        activateMorningViewMode();
+
+        try { addLog('朝の庶務開始', '[both] 参考＝開始直前の読込値、終了時にまとめて反映'); } catch(_){}
+
+        // 画面を「両方」表示に固定
+        try {
+          localStorage.setItem('currentDorm', 'all');
+          currentCollectionName = 'all';
+        } catch(_){}
+        try {
+          if (typeof switchDorm === 'function') switchDorm('all');
+          else {
+            const allBtn = document.querySelector('#dorm-selector button[data-dorm="all"]');
+            if (allBtn) allBtn.classList.add('active');
+          }
+        } catch(_) {}
+
+        showMorningBanner();
+        refreshMorningTable();
+        scheduleAnnotate();
+        ensureMorningObserver();
       } catch(e){
-        console.error('zero both failed', e);
-        alert('全0の初期化に失敗しました。');
+        console.error('startMorning failed', e);
+        try {
+          if (window.__morningStagedWrites && typeof window.__morningStagedWrites.clear === 'function') {
+            window.__morningStagedWrites.clear();
+          }
+        } catch(_) {}
+        closeMorningModeUI();
+        const detail = (e && (e.code || e.message)) ? `\n[${e.code || 'error'}] ${e.message}` : '';
+        alert('朝の庶務の開始に失敗しました。通信状態を確認して、もう一度お試しください。' + detail);
+      } finally {
         setMorningOverlayVisible(false);
         __morningStarting = false;
-        return;
+        if (!isMorningMode) window.__morningModeSuppressPush = false;
       }
-
-      isMorningMode = true;
-      document.body.classList.add('morning-mode');
-      // 朝の庶務開始時は通常モードのまま、一覧内の±と備考編集だけ有効にする
-      try {
-        const viewRadio = document.getElementById('view-mode');
-        const countRadio = document.getElementById('count-edit-mode');
-        const residentRadio = document.getElementById('resident-edit-mode');
-        if (viewRadio) viewRadio.checked = true;
-        if (countRadio) countRadio.checked = false;
-        if (residentRadio) residentRadio.checked = false;
-        document.body.classList.remove('count-edit-mode');
-        document.body.classList.remove('resident-edit-mode');
-        if (typeof setMode === 'function') setMode('view-mode');
-        document.body.classList.add('morning-mode');
-        if (typeof renderTable === 'function') renderTable();
-      } catch(_) {}
-      morningRef.dorm = 'both';
-      morningRef.byId        = mergeMorningRefMaps(refShofu && refShofu.byId,        refMeizen && refMeizen.byId);
-      morningRef.byName      = mergeMorningRefMaps(refShofu && refShofu.byName,      refMeizen && refMeizen.byName);
-      morningRef.byRoom      = mergeMorningRefMaps(refShofu && refShofu.byRoom,      refMeizen && refMeizen.byRoom);
-      morningRef.byComposite = mergeMorningRefMaps(refShofu && refShofu.byComposite, refMeizen && refMeizen.byComposite);
-      morningRef.startedAt   = Date.now();
-
-      try { addLog('朝の庶務開始', '[both] 参考＝直前スナップショット取得、両寮を全0初期化'); } catch(_){}
-
-      // 画面を「両方」表示に固定
-      try {
-        localStorage.setItem('currentDorm', 'all');
-        currentCollectionName = 'all';
-      } catch(_){}
-      const allBtn = document.querySelector('#dorm-selector button[data-dorm="all"]');
-      if (allBtn) { try { allBtn.click(); } catch(_){ } }
-
-      showMorningBanner();
-      refreshMorningTable();
-      scheduleAnnotate();
-      ensureMorningObserver();
-
-      setMorningOverlayVisible(false);
-      __morningStarting = false;
     }
 
     async function startMorningForDorm(dormKey, skipConfirm){
@@ -8224,49 +8377,19 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
         const btn = document.getElementById('morning-cancel-btn');
         if (btn) btn.disabled = true;
 
-        // 参考スナップショットから復元する対象を寮別に正確に仕分け
-        const updatesByDorm = { shofu: [], meizen: [] };
-        if (morningRef && morningRef.byId && typeof morningRef.byId.forEach === 'function') {
-          morningRef.byId.forEach((refObj, rid) => {
-            let dormKey = null;
-            // 1) allResidents から正確な寮を特定（両寮モードでもOK）
-            try{
-              const r = Array.isArray(allResidents) ? allResidents.find(x => x.id === rid) : null;
-              if (r && (r.dorm === 'shofu' || r.dorm === 'meizen')) dormKey = r.dorm;
-            }catch(_){}
-            // 2) 単寮モードで寮が分かっている場合はフォールバック
-            if (!dormKey && (morningRef.dorm === 'shofu' || morningRef.dorm === 'meizen')) dormKey = morningRef.dorm;
-            // 3) まだ不明なら安全のためスキップ（誤コレ更新 → 権限/存在エラーを避ける）
-            if (!dormKey) return;
-            updatesByDorm[dormKey].push({ id: rid, luggage: refObj.luggage || 0, mail: refObj.mail || 0 });
-          });
-        }
-
-        // Firestore バッチで安全に復元（各 480 件で区切る）
-        for (const dormKey of MORNING_DORMS){
-          const list = updatesByDorm[dormKey];
-          if (!list || !list.length) continue;
-          let batch = db.batch();
-          let opCount = 0;
-          for (const u of list){
-            const dref = db.collection(`residents_${dormKey}`).doc(u.id);
-            batch.update(dref, { luggage: u.luggage, mail: u.mail });
-            opCount++;
-            if (opCount >= MORNING_BATCH_LIMIT){
-              await batch.commit();
-              batch = db.batch();
-              opCount = 0;
-            }
+        try {
+          if (window.__morningStagedWrites && typeof window.__morningStagedWrites.clear === 'function') {
+            window.__morningStagedWrites.clear();
           }
-          await batch.commit();
-        }
+        } catch(_) {}
+        restoreMorningLocalReferenceValues();
 
-        try { addLog('朝の庶務取り消し', '参考の数に復元'); } catch(_){}
-        alert('朝の庶務を取り消し、参考の数に戻しました。');
+        try { addLog('朝の庶務取り消し', '未反映のまま開始直前の数へ戻しました'); } catch(_){}
+        alert('朝の庶務を取り消しました。サーバーには反映していません。');
       } catch(e){
         console.error('cancelMorningAndRestore error', e);
         const detail = (e && (e.code || e.message)) ? `\n[${e.code || 'error'}] ${e.message}` : '';
-        alert('取り消しに失敗しました。' + detail + '\n権限やネットワークを確認してください。');
+        alert('取り消しに失敗しました。' + detail);
       } finally {
         setMorningOverlayVisible(false);
         const btn = document.getElementById('morning-cancel-btn');
