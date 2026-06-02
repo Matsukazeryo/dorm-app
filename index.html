@@ -6812,6 +6812,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
     const meizenRef = db.collection('residents_meizen').orderBy('roomNumber');
 
     unsubShofu = shofuRef.onSnapshot((snap) => {
+      if (document.body.classList.contains('morning-mode')) return;
       shofuCache = [];
       snap.forEach((doc) => {
         const d = doc.data() || {};
@@ -6834,6 +6835,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
     });
 
     unsubMeizen = meizenRef.onSnapshot((snap) => {
+      if (document.body.classList.contains('morning-mode')) return;
       meizenCache = [];
       snap.forEach((doc) => {
         const d = doc.data() || {};
@@ -7391,6 +7393,15 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       disconnectMorningObserver();
     }
 
+    function resumeResidentListenersAfterMorning(){
+      try {
+        const nextDorm = (currentCollectionName === 'residents_shofu') ? 'shofu'
+          : (currentCollectionName === 'residents_meizen') ? 'meizen'
+            : 'all';
+        if (typeof switchDorm === 'function') switchDorm(nextDorm);
+      } catch(_) {}
+    }
+
     async function finishMorning(){
       if (window.__morningFinishing) return;
       window.__morningFinishing = true;
@@ -7411,6 +7422,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
         window.__morningFinishRequested = false;
         closeMorningModeUI();
         refreshMorningTable();
+        resumeResidentListenersAfterMorning();
         if (window.__morningLastNotificationError) {
           const notifyErr = window.__morningLastNotificationError;
           const notifyDetail = (notifyErr && (notifyErr.code || notifyErr.message)) ? `\n[${notifyErr.code || 'error'}] ${notifyErr.message}` : '';
@@ -7477,10 +7489,12 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
           currentCollectionName = 'all';
         } catch(_){}
         try {
-          if (typeof switchDorm === 'function') switchDorm('all');
-          else {
-            const allBtn = document.querySelector('#dorm-selector button[data-dorm="all"]');
-            if (allBtn) allBtn.classList.add('active');
+          document.querySelectorAll('#dorm-selector button').forEach(function(btn){
+            btn.classList.toggle('active', btn.getAttribute('data-dorm') === 'all');
+          });
+          const resetBtn = document.getElementById('reset-all-btn');
+          if (resetBtn) {
+            resetBtn.textContent = '松風・明善寮の全ての荷物/郵便を0にする';
           }
         } catch(_) {}
 
@@ -8405,6 +8419,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
         // 表示上も朝モードを終了して注釈を消す
         closeMorningModeUI();
         refreshMorningTable();
+        resumeResidentListenersAfterMorning();
       }
     }
 
@@ -11442,6 +11457,7 @@ if(elements.changePasswordForm){
             }
             if (unsubscribe) unsubscribe();
             unsubscribe = db.collection(collectionName).onSnapshot(snapshot => {
+                if (document.body.classList.contains('morning-mode')) return;
                 const dormKey = collectionName.split('_')[1];
                 allResidents = snapshot.docs.map(doc => mergeResidentDocData(doc, dormKey));
                 // Show self-select modal if first visit
@@ -11525,6 +11541,7 @@ if(elements.changePasswordForm){
             let meizenDocs = [];
 
             const renderMerged = () => {
+                if (document.body.classList.contains('morning-mode')) return;
                 allResidents = shofuDocs.map(function(doc){
                     return mergeResidentDocData(doc, 'shofu');
                 }).concat(meizenDocs.map(function(doc){
