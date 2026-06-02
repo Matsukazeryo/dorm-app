@@ -8331,9 +8331,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
             previousValue = cur;
             allResidents[idx][type] = next;
             nextValue = next;
-            if (typeof window.renderTable === 'function') {
-              try { window.renderTable(); } catch (_) {}
-            }
+            syncDisplayedResidentCount(residentId, type, next);
           } else {
             // 変化なしならサーバー更新も不要
             return;
@@ -8393,6 +8391,11 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
           }).then((result) => {
             if (!result || !result.changed) return;
             try {
+              const idx = Array.isArray(allResidents) ? allResidents.findIndex(r => r.id === residentId) : -1;
+              if (idx >= 0) allResidents[idx][type] = normalizeCountDisplayValue(result.nextValue);
+              syncDisplayedResidentCount(residentId, type, result.nextValue);
+            } catch (_) {}
+            try {
               const typeJa = (type === 'luggage') ? '荷物' : '郵便';
               const dormKey = (targetCollection.split('_')[1] || '');
               addLog('個数変更', `[${dormKey}] ${residentName} の${typeJa}を ${value > 0 ? '+1' : '-1'}`,
@@ -8401,6 +8404,8 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
           }).catch(err => console.error('updateCount フォールバック失敗', err));
         });
     }
+
+    try { window.updateCount = updateCount; } catch (_) {}
 
 async function deleteResident(residentId, residentName) {
     // まずは確実に寮を解決（allResidents → Firestore 両寮）
@@ -9121,6 +9126,57 @@ function resolveResidentCollectionName(residentId) {
   const resident = getResidentById(residentId);
   const dormKey = (resident && resident.dorm) || 'shofu';
   return `residents_${dormKey}`;
+}
+
+function normalizeCountDisplayValue(value) {
+  return Math.max(0, parseInt(value, 10) || 0);
+}
+
+function findResidentMainRows(residentId) {
+  const id = String(residentId || '');
+  const rows = document.querySelectorAll('#resident-table tbody tr.resident-main-row');
+  const out = [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const rowId = (row.dataset && row.dataset.residentId) || row.getAttribute('data-resident-id') || '';
+    if (rowId === id) out.push(row);
+  }
+  return out;
+}
+
+function syncMobileCountEditValuesForResident(residentId) {
+  if (!elements.mobileCountEditModal) return;
+  if (String(mobileCountEditState.residentId || '') !== String(residentId || '')) return;
+  const resident = getResidentById(residentId);
+  const luggage = normalizeCountDisplayValue(resident && resident.luggage);
+  const mail = normalizeCountDisplayValue(resident && resident.mail);
+  if (elements.mobileCountLuggageValue) elements.mobileCountLuggageValue.textContent = luggage;
+  if (elements.mobileCountMailValue) elements.mobileCountMailValue.textContent = mail;
+  if (elements.mobileCountLuggageMinus) elements.mobileCountLuggageMinus.disabled = !resident || luggage <= 0;
+  if (elements.mobileCountMailMinus) elements.mobileCountMailMinus.disabled = !resident || mail <= 0;
+  if (elements.mobileCountLuggagePlus) elements.mobileCountLuggagePlus.disabled = !resident;
+  if (elements.mobileCountMailPlus) elements.mobileCountMailPlus.disabled = !resident;
+}
+
+function syncDisplayedResidentCount(residentId, type, nextValue) {
+  const safeType = type === 'mail' ? 'mail' : 'luggage';
+  const value = normalizeCountDisplayValue(nextValue);
+  const rows = findResidentMainRows(residentId);
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    let targets = row.querySelectorAll('[data-count-type="' + safeType + '"]');
+    if (!targets.length) {
+      const fallback = row.querySelector((safeType === 'mail' ? '.mail-col' : '.luggage-col') + ' .count-span');
+      targets = fallback ? [fallback] : [];
+    }
+    for (let j = 0; j < targets.length; j++) {
+      targets[j].textContent = value;
+    }
+  }
+  syncMobileCountEditValuesForResident(residentId);
+  if (isMorningMode || document.body.classList.contains('morning-mode')) {
+    scheduleAnnotate();
+  }
 }
 
 function isMobileCountEditLayout() {
@@ -10182,7 +10238,7 @@ async function applyOcrRegistration(residentId, itemType) {
     const typeJa = getItemHistoryTypeLabel(type);
     await addLog('個数変更', `[${dormKey}] ${resident.name || ''} の${typeJa}を +1（OCR登録）`,
       buildItemHistoryLogMeta(resident.id, resident.name || '', collectionName, type, 1, previousValue, nextValue, 'ocr'));
-    try { if (typeof window.renderTable === 'function') window.renderTable(); } catch (_) {}
+    try { syncDisplayedResidentCount(resident.id, type, nextValue); } catch (_) {}
     ocrState.registeredResidentId = resident.id;
     ocrState.registeredType = type;
     setOcrRegistrationLocked(true);
@@ -10327,7 +10383,6 @@ function adjustMobileCountEdit(type, delta) {
   const resident = getResidentById(mobileCountEditState.residentId);
   if (!resident) return;
   updateCount(resident.id, resident.name || '', type === 'mail' ? 'mail' : 'luggage', delta);
-  setTimeout(syncMobileCountEditModalUI, 0);
 }
 
 function setMobileCountNoteStatus(message, tone) {
@@ -11430,12 +11485,17 @@ if(elements.changePasswordForm){
                     const residentOffNoteHtml = renderResidentOffNoteHtml(residentNoteValue);
                     const luggageHistoryButton = morningInlineEdit ? '' : renderCountHistoryButton(resident, 'luggage');
                     const mailHistoryButton = morningInlineEdit ? '' : renderCountHistoryButton(resident, 'mail');
+                    const residentIdAttr = escapeHtml(resident.id || '');
+                    const luggageValue = Math.max(0, parseInt(resident.luggage, 10) || 0);
+                    const mailValue = Math.max(0, parseInt(resident.mail, 10) || 0);
+                    const luggageCountSpan = `<span class="count-span" data-resident-id="${residentIdAttr}" data-count-type="luggage">${luggageValue}</span>`;
+                    const mailCountSpan = `<span class="count-span" data-resident-id="${residentIdAttr}" data-count-type="mail">${mailValue}</span>`;
                     const luggageCountHtml = morningInlineEdit
-                      ? `<button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1)">-</button><span class="count-span">${resident.luggage}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1)">+</button>`
-                      : `<span class="count-span">${resident.luggage}</span>`;
+                      ? `<button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1)">-</button>${luggageCountSpan}<button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1)">+</button>`
+                      : luggageCountSpan;
                     const mailCountHtml = morningInlineEdit
-                      ? `<button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', -1)">-</button><span class="count-span">${resident.mail}</span><button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', 1)">+</button>`
-                      : `<span class="count-span">${resident.mail}</span>`;
+                      ? `<button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', -1)">-</button>${mailCountSpan}<button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', 1)">+</button>`
+                      : mailCountSpan;
                     const row = document.createElement('tr');
                     row.classList.add('resident-main-row');
                     row.dataset.residentId = resident.id || '';
@@ -11453,12 +11513,12 @@ if(elements.changePasswordForm){
                               <div class="off-counts">
                                 <div class="off-count-card">
                                   <span class="off-count-label">荷物</span>
-                                  <span class="off-count-number">${luggageCount}</span>
+                                  <span class="off-count-number" data-resident-id="${residentIdAttr}" data-count-type="luggage">${luggageCount}</span>
                                   ${luggageHistoryButton}
                                 </div>
                                 <div class="off-count-card">
                                   <span class="off-count-label">郵便</span>
-                                  <span class="off-count-number">${mailCount}</span>
+                                  <span class="off-count-number" data-resident-id="${residentIdAttr}" data-count-type="mail">${mailCount}</span>
                                   ${mailHistoryButton}
                                 </div>
                               </div>
