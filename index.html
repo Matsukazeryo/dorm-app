@@ -7183,8 +7183,22 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       };
     }
 
+    function getLoadedMorningResidentsForDorm(dormKey){
+      const collectionName = `residents_${dormKey}`;
+      if (!Array.isArray(allResidents) || !allResidents.length) return [];
+      return allResidents
+        .filter(function(r){
+          return r && r.id && (r.dorm === dormKey || currentCollectionName === collectionName);
+        })
+        .map(function(r){
+          return Object.assign({}, r, { dorm: dormKey, roomNumber: getResidentRoomRawValue(r) });
+        });
+    }
+
     async function loadMorningResidentsForDorm(dormKey){
       const collectionName = `residents_${dormKey}`;
+      const loaded = getLoadedMorningResidentsForDorm(dormKey);
+      if (loaded.length) return loaded;
       try {
         const snap = await db.collection(collectionName).get({ source: 'server' }).catch(function(){
           return db.collection(collectionName).get();
@@ -7193,15 +7207,9 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
           return mergeResidentDocData(doc, dormKey);
         });
       } catch(e) {
-        const fallback = Array.isArray(allResidents)
-          ? allResidents.filter(function(r){
-              return r && (r.dorm === dormKey || currentCollectionName === collectionName);
-            })
-          : [];
+        const fallback = getLoadedMorningResidentsForDorm(dormKey);
         if (fallback.length) {
-          return fallback.map(function(r){
-            return Object.assign({}, r, { dorm: dormKey, roomNumber: getResidentRoomRawValue(r) });
-          });
+          return fallback;
         }
         throw e;
       }
