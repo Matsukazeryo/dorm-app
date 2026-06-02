@@ -9108,7 +9108,8 @@ const OCR_SCRIPT_URLS = [
   'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js',
   'https://unpkg.com/tesseract.js@5/dist/tesseract.min.js'
 ];
-const OCR_MAX_IMAGE_EDGE = 1920;
+const OCR_MAX_IMAGE_EDGE = 1728;
+const OCR_PREVIEW_MAX_IMAGE_EDGE = 960;
 const OCR_RECOGNITION_PARAMS = {
   tessedit_pageseg_mode: '6',
   preserve_interword_spaces: '1',
@@ -9121,7 +9122,9 @@ let ocrWarmupPromise = null;
 const ocrProgressState = {
   label: '',
   base: 0,
-  span: 100
+  span: 100,
+  lastPct: -1,
+  lastAt: 0
 };
 const ocrState = {
   candidates: [],
@@ -9273,11 +9276,18 @@ function setOcrProgressContext(label, progressBase, progressSpan) {
   ocrProgressState.label = label || '文字を読み取っています...';
   ocrProgressState.base = Number.isFinite(Number(progressBase)) ? Number(progressBase) : 0;
   ocrProgressState.span = Number.isFinite(Number(progressSpan)) ? Number(progressSpan) : 100;
+  ocrProgressState.lastPct = -1;
+  ocrProgressState.lastAt = 0;
 }
 
 function handleOcrWorkerProgress(message) {
   if (!message || !message.status || typeof message.progress !== 'number') return;
   const pct = Math.min(99, Math.round(ocrProgressState.base + (message.progress * ocrProgressState.span)));
+  const now = Date.now();
+  if (pct === ocrProgressState.lastPct && pct < 99) return;
+  if (now - ocrProgressState.lastAt < 120 && pct < 99) return;
+  ocrProgressState.lastPct = pct;
+  ocrProgressState.lastAt = now;
   setOcrStatus(`${ocrProgressState.label} ${pct}%`, '');
 }
 
@@ -9358,17 +9368,39 @@ function createOcrCanvasPreviewSource(canvas) {
       resolve('');
       return;
     }
+    let previewCanvas = canvas;
+    const maxEdge = Math.max(canvas.width || 0, canvas.height || 0);
+    if (maxEdge > OCR_PREVIEW_MAX_IMAGE_EDGE) {
+      const scale = OCR_PREVIEW_MAX_IMAGE_EDGE / maxEdge;
+      const width = Math.max(1, Math.round((canvas.width || 1) * scale));
+      const height = Math.max(1, Math.round((canvas.height || 1) * scale));
+      previewCanvas = document.createElement('canvas');
+      previewCanvas.width = width;
+      previewCanvas.height = height;
+      const previewCtx = previewCanvas.getContext('2d');
+      if (previewCtx) {
+        previewCtx.fillStyle = '#fff';
+        previewCtx.fillRect(0, 0, width, height);
+        previewCtx.imageSmoothingEnabled = true;
+        previewCtx.imageSmoothingQuality = 'medium';
+        previewCtx.drawImage(canvas, 0, 0, width, height);
+      } else {
+        previewCanvas = canvas;
+      }
+    }
+    const previewType = 'image/jpeg';
+    const previewQuality = 0.82;
     if (window.URL && typeof window.URL.createObjectURL === 'function' && typeof canvas.toBlob === 'function') {
-      canvas.toBlob(function(blob){
+      previewCanvas.toBlob(function(blob){
         if (blob) {
           resolve(trackOcrObjectUrl(window.URL.createObjectURL(blob)));
           return;
         }
-        try { resolve(canvas.toDataURL('image/png')); } catch (_) { resolve(''); }
-      }, 'image/png');
+        try { resolve(previewCanvas.toDataURL(previewType, previewQuality)); } catch (_) { resolve(''); }
+      }, previewType, previewQuality);
       return;
     }
-    try { resolve(canvas.toDataURL('image/png')); } catch (_) { resolve(''); }
+    try { resolve(previewCanvas.toDataURL(previewType, previewQuality)); } catch (_) { resolve(''); }
   });
 }
 
@@ -9558,26 +9590,26 @@ function enhanceOcrCanvasForText(ctx, width, height, options) {
         + integral[topRow + left];
       const localMean = sum / ((right - left + 1) * areaHeight);
       const localDelta = localMean - gray;
-      const shadowLift = Math.max(0, 222 - localMean) * 0.92;
+      const shadowLift = Math.max(0, 222 - localMean) * 0.88;
       const delta = gray - average;
       variance += delta * delta;
       if (gray < average - 42 || gray < 95) darkPixels++;
       let next = (((gray + shadowLift) - low) * 255) / range;
-      next = ((next - 128) * 1.32) + 128;
+      next = ((next - 128) * 1.28) + 128;
       if (localDelta >= 34 && gray < 214) {
-        next = Math.min(next, 92 - ((localDelta - 34) * 2.1));
+        next = Math.min(next, 98 - ((localDelta - 34) * 1.95));
       } else if (localDelta >= 24 && gray < 185) {
-        next = Math.min(next, 132 - ((localDelta - 24) * 1.6));
-      } else if (localDelta < 20 && next > 88) {
+        next = Math.min(next, 138 - ((localDelta - 24) * 1.45));
+      } else if (localDelta < 18 && next > 96) {
         next = 255;
       }
-      if (next > 226) next = 255;
-      if (next < 106) next = 0;
+      if (next > 232) next = 255;
+      if (next < 101) next = 0;
       enhancedValues[p] = clampOcrByte(next);
     }
   }
 
-  const sharpenAmount = 0.5;
+  const sharpenAmount = 0.44;
   const finalValues = new Uint8Array(enhancedValues);
   if (width > 2 && height > 2) {
     for (let y = 1; y < height - 1; y++) {
@@ -9591,8 +9623,8 @@ function enhanceOcrCanvasForText(ctx, width, height, options) {
           enhancedValues[idx + width]
         ) / 4;
         let sharpened = center + ((center - neighborAverage) * sharpenAmount);
-        if (sharpened > 218) sharpened = 255;
-        if (sharpened < 116) sharpened = 0;
+        if (sharpened > 224) sharpened = 255;
+        if (sharpened < 111) sharpened = 0;
         finalValues[idx] = clampOcrByte(sharpened);
       }
     }
@@ -11855,6 +11887,17 @@ if(elements.changePasswordForm){
             }
             window.applyResidentSortPreference(savedSort);
         }
+
+        let renderTableFrameId = 0;
+        function scheduleRenderTable() {
+            if (renderTableFrameId) return;
+            const run = () => {
+                renderTableFrameId = 0;
+                renderTable();
+            };
+            if (window.requestAnimationFrame) renderTableFrameId = window.requestAnimationFrame(run);
+            else renderTableFrameId = setTimeout(run, 16);
+        }
         
         const savedDorm = normalizeDormSelectionValue(localStorage.getItem('currentDorm') || 'all');
         switchDorm(savedDorm);
@@ -11872,7 +11915,7 @@ if(elements.changePasswordForm){
         setMode('view-mode');
         updateLoginStatus();
         repositionAnnouncement(sessionStorage.getItem('isAdminLoggedIn')==='true');
-        elements.searchInput.addEventListener('input', renderTable);
+        elements.searchInput.addEventListener('input', scheduleRenderTable);
         elements.addResidentBtn.addEventListener('click', showAddResidentModal);
         elements.addBulkBtn.addEventListener('click', showBulkAddModal);
         elements.deleteSelectedBtn.addEventListener('click', deleteSelectedResidents);
