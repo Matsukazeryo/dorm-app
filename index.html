@@ -4022,27 +4022,52 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
         entryMap.set(path, safePatch);
       }
 
+      function findCurrentResidentForRef(refObj, residentId){
+        try{
+          const dorm = refObj && (refObj.dorm === 'shofu' || refObj.dorm === 'meizen') ? refObj.dorm : null;
+          const list = Array.isArray(allResidents) ? allResidents : [];
+          for (let i = 0; i < list.length; i++) {
+            const r = list[i];
+            if (!r || r.id !== residentId) continue;
+            if (dorm && r.dorm && r.dorm !== dorm) continue;
+            return r;
+          }
+        }catch(_){ }
+        return null;
+      }
+
+      function pushMorningRefEntry(path, refObj, residentId){
+        if (!path || !residentId) return;
+        const currentResident = findCurrentResidentForRef(refObj || {}, residentId) || {};
+        const stagedPatch = window.__morningStagedWrites && window.__morningStagedWrites.get
+          ? window.__morningStagedWrites.get(path) || null
+          : null;
+        const currentLuggage = (stagedPatch && Object.prototype.hasOwnProperty.call(stagedPatch, 'luggage'))
+          ? stagedPatch.luggage
+          : ((currentResident && currentResident.luggage != null) ? currentResident.luggage : 0);
+        const currentMail = (stagedPatch && Object.prototype.hasOwnProperty.call(stagedPatch, 'mail'))
+          ? stagedPatch.mail
+          : ((currentResident && currentResident.mail != null) ? currentResident.mail : 0);
+        pushEntry(path, {
+          luggage: currentLuggage,
+          mail: currentMail
+        });
+      }
+
       try{
-        if (morningRef && morningRef.byId && typeof morningRef.byId.forEach === 'function') {
+        if (morningRef && morningRef.byPath && typeof morningRef.byPath.forEach === 'function' && morningRef.byPath.size) {
+          morningRef.byPath.forEach((refObj, path) => {
+            const residentId = refObj && refObj.id ? refObj.id : __getResidentIdFromMorningKey(path);
+            pushMorningRefEntry(path, refObj, residentId);
+          });
+        } else if (morningRef && morningRef.byId && typeof morningRef.byId.forEach === 'function') {
           morningRef.byId.forEach((refObj, residentId) => {
-            const currentResident = __getResidentSnapshotForMorning(residentId) || {};
-            const stagedPatch = window.__morningStagedWrites && window.__morningStagedWrites.get
-              ? window.__morningStagedWrites.get(__resolveMorningResidentPath('', residentId)) || null
-              : null;
-            const dorm = (currentResident && (currentResident.dorm === 'shofu' || currentResident.dorm === 'meizen'))
-              ? currentResident.dorm
-              : ((morningRef && (morningRef.dorm === 'shofu' || morningRef.dorm === 'meizen')) ? morningRef.dorm : null);
-            if (!dorm) return;
-            const currentLuggage = (stagedPatch && Object.prototype.hasOwnProperty.call(stagedPatch, 'luggage'))
-              ? stagedPatch.luggage
-              : ((currentResident && currentResident.luggage != null) ? currentResident.luggage : refObj.luggage);
-            const currentMail = (stagedPatch && Object.prototype.hasOwnProperty.call(stagedPatch, 'mail'))
-              ? stagedPatch.mail
-              : ((currentResident && currentResident.mail != null) ? currentResident.mail : refObj.mail);
-            pushEntry(`residents_${dorm}/${residentId}`, {
-              luggage: currentLuggage,
-              mail: currentMail
-            });
+            const currentResident = findCurrentResidentForRef(refObj || {}, residentId) || {};
+            const dorm = (refObj && (refObj.dorm === 'shofu' || refObj.dorm === 'meizen'))
+              ? refObj.dorm
+              : ((currentResident && (currentResident.dorm === 'shofu' || currentResident.dorm === 'meizen')) ? currentResident.dorm : null);
+            const path = getMorningResidentPath(dorm, residentId);
+            pushMorningRefEntry(path, refObj, residentId);
           });
         }
       }catch(_){ }
@@ -4143,6 +4168,18 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       return null;
     }
 
+    function __morningPatchTouchesCounts(patchObj){
+      try{
+        if (!patchObj || typeof patchObj !== 'object') return false;
+        return Object.prototype.hasOwnProperty.call(patchObj, 'luggage') ||
+          Object.prototype.hasOwnProperty.call(patchObj, 'mail') ||
+          Object.prototype.hasOwnProperty.call(patchObj, 'luggageCount') ||
+          Object.prototype.hasOwnProperty.call(patchObj, 'mailCount');
+      }catch(_){
+        return false;
+      }
+    }
+
     function __stageResidentWrite(colOrPath, docIdOrPatch, maybePatch){
       try{
         // 2引数: (docPath, patchObj)
@@ -4163,12 +4200,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
 
         const cur = window.__morningStagedWrites.get(canonicalKey) || {};
         const merged = __mergeObject(cur, patchObj);
-        const touchesCounts =
-          Object.prototype.hasOwnProperty.call(merged, 'luggage') ||
-          Object.prototype.hasOwnProperty.call(merged, 'mail') ||
-          Object.prototype.hasOwnProperty.call(merged, 'luggageCount') ||
-          Object.prototype.hasOwnProperty.call(merged, 'mailCount');
-        if (!touchesCounts) return;
+        if (!__morningPatchTouchesCounts(merged)) return;
 
         const next = {};
         const luggageValue = __normalizeMorningCountValue(
@@ -4325,9 +4357,11 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
               const path = getPath(this);
               if ((window.__morningModeSuppressPush || __isMorningMode()) && !window.__morningCommitInProgress && isResidentPath(path)){
                 const obj = __toUpdateObject(arguments);
-                if (obj) __stageResidentWrite(path, obj);
-                console.log('[morning] staged DocRef.update', path, obj);
-                return Promise.resolve(null);
+                if (obj && __morningPatchTouchesCounts(obj)) {
+                  __stageResidentWrite(path, obj);
+                  console.log('[morning] staged DocRef.update', path, obj);
+                  return Promise.resolve(null);
+                }
               }
             }catch(_){ }
             return _origUpdate.apply(this, arguments);
@@ -4342,9 +4376,11 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
               const path = getPath(this);
               if ((window.__morningModeSuppressPush || __isMorningMode()) && !window.__morningCommitInProgress && isResidentPath(path)){
                 const obj = (data && typeof data === 'object') ? data : null;
-                if (obj) __stageResidentWrite(path, obj);
-                console.log('[morning] staged DocRef.set', path, obj);
-                return Promise.resolve(null);
+                if (obj && __morningPatchTouchesCounts(obj)) {
+                  __stageResidentWrite(path, obj);
+                  console.log('[morning] staged DocRef.set', path, obj);
+                  return Promise.resolve(null);
+                }
               }
             }catch(_){ }
             return _origSet.apply(this, arguments);
@@ -4579,9 +4615,11 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
                 try{
                   if ((window.__morningModeSuppressPush || __isMorningMode()) && !window.__morningCommitInProgress){
                     const obj = __toUpdateObject(arguments);
-                    if (obj) __stageResidentWrite(colName, docId, obj);
-                    console.log('[morning] staged update', colName, docId, obj);
-                    return Promise.resolve(null);
+                    if (obj && __morningPatchTouchesCounts(obj)) {
+                      __stageResidentWrite(colName, docId, obj);
+                      console.log('[morning] staged update', colName, docId, obj);
+                      return Promise.resolve(null);
+                    }
                   }
                 }catch(_){ }
                 return _update.apply(this, arguments);
@@ -4594,9 +4632,11 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
                 try{
                   if ((window.__morningModeSuppressPush || __isMorningMode()) && !window.__morningCommitInProgress){
                     const obj = (data && typeof data === 'object') ? data : null;
-                    if (obj) __stageResidentWrite(colName, docId, obj);
-                    console.log('[morning] staged set', colName, docId, obj);
-                    return Promise.resolve(null);
+                    if (obj && __morningPatchTouchesCounts(obj)) {
+                      __stageResidentWrite(colName, docId, obj);
+                      console.log('[morning] staged set', colName, docId, obj);
+                      return Promise.resolve(null);
+                    }
                   }
                 }catch(_){ }
                 return _set.apply(this, arguments);
@@ -6884,6 +6924,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
     const morningRef = {
       dorm: null,                 // 'shofu' | 'meizen'
       byId: new Map(),            // residentId -> { luggage, mail, name, roomNumber, id }
+      byPath: new Map(),          // residents_xxx/residentId -> obj
       byName: new Map(),          // normalized name -> obj
       byRoom: new Map(),          // roomNumber -> [obj, ...]
       byComposite: new Map(),     // `${roomNumber}::${normalizedName}` -> obj
@@ -6926,6 +6967,11 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       if (a) a.forEach((v, k) => m.set(k, v));
       if (b) b.forEach((v, k) => m.set(k, v));
       return m;
+    }
+
+    function getMorningResidentPath(dormKey, residentId){
+      if (!(dormKey === 'shofu' || dormKey === 'meizen') || !residentId) return '';
+      return `residents_${dormKey}/${residentId}`;
     }
 
     function syncMorningTargetDormFromRef(){
@@ -7147,6 +7193,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 
     function buildMorningRefFromResidents(dormKey, residents){
       const byId = new Map();
+      const byPath = new Map();
       const byName = new Map();
       const byRoom = new Map();
       const byComposite = new Map();
@@ -7157,6 +7204,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
         const obj = {
           id: source.id,
           dorm: dormKey,
+          path: getMorningResidentPath(dormKey, source.id),
           luggage: getMorningCountNumber(source.luggage),
           mail: getMorningCountNumber(source.mail),
           name: source.name || '',
@@ -7164,6 +7212,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
         };
 
         byId.set(source.id, obj);
+        if (obj.path) byPath.set(obj.path, obj);
 
         const nameKey = normalizeKey(obj.name);
         if (nameKey) byName.set(nameKey, obj);
@@ -7179,6 +7228,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       return {
         runId: 'local_' + Date.now().toString(36) + '_' + dormKey,
         byId: byId,
+        byPath: byPath,
         byName: byName,
         byRoom: byRoom,
         byComposite: byComposite
@@ -7199,8 +7249,6 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 
     async function loadMorningResidentsForDorm(dormKey){
       const collectionName = `residents_${dormKey}`;
-      const loaded = getLoadedMorningResidentsForDorm(dormKey);
-      if (loaded.length) return loaded;
       try {
         const snap = await db.collection(collectionName).get({ source: 'server' }).catch(function(){
           return db.collection(collectionName).get();
@@ -7461,6 +7509,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 
         morningRef.dorm = 'both';
         morningRef.byId        = mergeMorningRefMaps(refShofu && refShofu.byId,        refMeizen && refMeizen.byId);
+        morningRef.byPath      = mergeMorningRefMaps(refShofu && refShofu.byPath,      refMeizen && refMeizen.byPath);
         morningRef.byName      = mergeMorningRefMaps(refShofu && refShofu.byName,      refMeizen && refMeizen.byName);
         morningRef.byRoom      = mergeMorningRefMaps(refShofu && refShofu.byRoom,      refMeizen && refMeizen.byRoom);
         morningRef.byComposite = mergeMorningRefMaps(refShofu && refShofu.byComposite, refMeizen && refMeizen.byComposite);
@@ -8462,7 +8511,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
     }
 
     // 荷物/郵便の個数を ±1（即時にUI反映し、バックグラウンドで保存）
-    function updateCount(residentId, residentName, type, value) {
+    function updateCount(residentId, residentName, type, value, dormHint) {
       let nextValue = null;
       let previousValue = null;
       // 1) 楽観的にメモリ上のデータとUIを即反映
@@ -8487,7 +8536,9 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 
       // 2) 保存先コレクションを決定（両寮表示時にも正しく解決）
       let targetCollection = currentCollectionName;
-      if (currentCollectionName === 'all') {
+      if (dormHint === 'shofu' || dormHint === 'meizen') {
+        targetCollection = `residents_${dormHint}`;
+      } else if (currentCollectionName === 'all') {
         const res = Array.isArray(allResidents) ? allResidents.find(r => r.id === residentId) : null;
         const dormKey = (res && res.dorm) || (currentCollectionName.split('_')[1] || 'shofu');
         targetCollection = `residents_${dormKey}`;
@@ -10404,9 +10455,9 @@ function findResidentNoteEditorElement(selector, residentId) {
     const el = list[i];
     if (el && el.dataset && el.dataset.residentId === residentId) return el;
     if (el && el.dataset && el.dataset.residentNoteStatus === residentId) return el;
-  }
-  return null;
-}
+      }
+      return null;
+    }
 
 function setResidentInlineNoteStatus(residentId, message, tone) {
   const statusEl = findResidentNoteEditorElement('.resident-note-status', residentId);
@@ -11639,10 +11690,10 @@ if(elements.changePasswordForm){
                     const luggageCountSpan = `<span class="count-span" data-resident-id="${residentIdAttr}" data-count-type="luggage">${luggageValue}</span>`;
                     const mailCountSpan = `<span class="count-span" data-resident-id="${residentIdAttr}" data-count-type="mail">${mailValue}</span>`;
                     const luggageCountHtml = morningInlineEdit
-                      ? `<button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1)">-</button>${luggageCountSpan}<button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1)">+</button>`
+                      ? `<button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', -1, '${dorm}')">-</button>${luggageCountSpan}<button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'luggage', 1, '${dorm}')">+</button>`
                       : luggageCountSpan;
                     const mailCountHtml = morningInlineEdit
-                      ? `<button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', -1)">-</button>${mailCountSpan}<button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', 1)">+</button>`
+                      ? `<button class="minus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', -1, '${dorm}')">-</button>${mailCountSpan}<button class="plus" onclick="updateCount('${resident.id}', '${resident.name}', 'mail', 1, '${dorm}')">+</button>`
                       : mailCountSpan;
                     const row = document.createElement('tr');
                     row.classList.add('resident-main-row');
