@@ -54,6 +54,14 @@
         body.admin-logged-in #admin-logout-btn{ display:inline-block; }
         #login-logout-btn { background-color: #3498db; }
         #login-logout-btn.logout { background-color: #e74c3c; }
+        body.admin-auth-busy #login-logout-btn,
+        body.admin-auth-busy #admin-logout-btn{
+            opacity:.65;
+            cursor:wait;
+        }
+        body.admin-auth-busy #loading-overlay{
+            display:flex !important;
+        }
 
         /* ==== 操作履歴モーダル ==== */
         .modal-overlay{
@@ -1533,13 +1541,15 @@
     align-items:center;
     justify-content:space-between;
     gap:12px;
-    margin:10px 0 14px;
-    padding:13px 15px;
+    margin:-20px -20px 16px;
+    padding:12px 20px;
     border:1px solid rgba(185, 116, 0, 0.42);
-    border-radius:12px;
+    border-radius:0 0 14px 14px;
     background:rgba(255, 248, 224, 0.96);
     color:#5f4100;
     box-shadow:0 8px 20px rgba(94,67,0,0.08);
+    position:relative;
+    z-index:1700;
   }
   .morning-reminder-banner.is-visible{
     display:flex;
@@ -1551,7 +1561,7 @@
   }
   .morning-reminder-main{
     display:flex;
-    align-items:flex-start;
+    align-items:center;
     gap:10px;
     min-width:0;
   }
@@ -1571,11 +1581,6 @@
     font-weight:900;
     line-height:1.35;
   }
-  .morning-reminder-text{
-    margin-top:2px;
-    font-size:0.9rem;
-    line-height:1.45;
-  }
   .morning-reminder-close{
     border:none;
     border-radius:10px;
@@ -1593,11 +1598,12 @@
   }
   @media (max-width:600px){
     .morning-reminder-banner{
-      align-items:stretch;
-      flex-direction:column;
+      align-items:center;
+      flex-direction:row;
+      margin:-12px -12px 12px;
+      padding:10px 12px;
     }
     .morning-reminder-close{
-      width:100%;
       min-height:42px;
     }
   }
@@ -2369,6 +2375,14 @@
 </head>
 <body>
 
+<div id="morning-reminder-banner" class="morning-reminder-banner" role="status" aria-live="polite">
+  <div class="morning-reminder-main">
+    <span class="morning-reminder-icon" aria-hidden="true">!</span>
+    <div class="morning-reminder-title">今日の朝の庶務がまだ完了していません</div>
+  </div>
+  <button id="morning-reminder-close-btn" type="button" class="morning-reminder-close">今日は閉じる</button>
+</div>
+
 <div id="loading-overlay" style="display:none; position:fixed; inset:0; top:0; right:0; bottom:0; left:0; background:rgba(255,255,255,0.8); z-index:3000; align-items:center; justify-content:center;">
   <div>読み込み中...</div>
 </div>
@@ -2436,16 +2450,6 @@
     </div>
 
     <!-- ===== 朝の庶務バナー ===== -->
-    <div id="morning-reminder-banner" class="morning-reminder-banner" role="status" aria-live="polite">
-      <div class="morning-reminder-main">
-        <span class="morning-reminder-icon" aria-hidden="true">!</span>
-        <div>
-          <div class="morning-reminder-title">今日の朝の庶務がまだ完了していません</div>
-          <div class="morning-reminder-text">完了したら「朝の庶務」から変更を確定して終了してください。事情がある場合はこの警告を閉じられます。</div>
-        </div>
-      </div>
-      <button id="morning-reminder-close-btn" type="button" class="morning-reminder-close">今日は閉じる</button>
-    </div>
     <div id="morning-banner" class="morning-banner" style="display:none;">
       <div class="morning-banner-main">
         <span class="morning-banner-icon" aria-hidden="true">🌅</span>
@@ -9110,19 +9114,39 @@ function applySohmuUI(){
     })();
 
     // ===== 管理者ログイン / 自分選択 / 庶務OFF ヘルパ =====
-    function applyAdminUI(){
-      const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
-      document.body.classList.toggle('admin-logged-in', isAdmin);
+	    function applyAdminUI(){
+	      const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
+	      document.body.classList.toggle('admin-logged-in', isAdmin);
       const btn = document.getElementById('login-logout-btn');
       if (btn) {
         btn.textContent = isAdmin ? 'ログアウト' : '管理者ログイン';
         // 見た目も切り替え（赤ボタン=ログアウト状態）
         if (btn.classList) btn.classList.toggle('logout', isAdmin);
-      }
-      try { updateNotificationSettingsUI(); } catch(_){}
-    }
-    function forceSohmuOffAfterLogout(){
-      const tgl = document.getElementById('sohmu-toggle');
+	      }
+	      try { updateNotificationSettingsUI(); } catch(_){}
+	    }
+	    function setAdminAuthBusy(busy, label){
+	      try {
+	        window.__adminAuthBusy = !!busy;
+	        document.body.classList.toggle('admin-auth-busy', !!busy);
+	        const overlay = document.getElementById('loading-overlay');
+	        if (overlay) {
+	          const text = overlay.querySelector('div');
+	          if (text) text.textContent = busy ? (label || 'ログイン中...') : '読み込み中...';
+	          overlay.style.display = busy ? 'flex' : 'none';
+	        }
+	        const loginBtn = document.getElementById('login-logout-btn');
+	        const logoutBtn = document.getElementById('admin-logout-btn');
+	        [loginBtn, logoutBtn].forEach(function(btn){
+	          if (!btn) return;
+	          btn.disabled = !!busy;
+	          if (busy) btn.setAttribute('aria-busy', 'true');
+	          else btn.removeAttribute('aria-busy');
+	        });
+	      } catch(_) {}
+	    }
+	    function forceSohmuOffAfterLogout(){
+	      const tgl = document.getElementById('sohmu-toggle');
       if (tgl) {
         tgl.disabled = false;
         tgl.checked = false;
@@ -9132,33 +9156,39 @@ function applySohmuUI(){
       try {
         dispatchEventCompat(tgl, 'change', true);
       } catch(_) {}
-    }
-    async function promptAdminLogin(){
-      const input = window.prompt('管理者パスワードを入力してください');
-      if (input == null) return; // cancel
-      try {
-        await Promise.race([
-          initAdminPassword(),
-          new Promise(resolve => setTimeout(resolve, 1200))
-        ]);
-      } catch(_){}
-      if (String(input) === String(ADMIN_PASSWORD)) {
-        try {
-          if (typeof auth !== 'undefined' && auth && typeof auth.signInAnonymously === 'function') {
-            await auth.signInAnonymously();
-          }
-        } catch(e) {
-          console.warn('auth signInAnonymously failed', e);
-        }
-        sessionStorage.setItem('isAdminLoggedIn', 'true');
-        applyAdminUI();
-        try { if (typeof updateLoginStatus === 'function') updateLoginStatus(); } catch(_){}
-        try { if (typeof rebuildAnnouncementList === 'function') rebuildAnnouncementList(); } catch(_){}
-        alert('管理者ログインしました。');
-      } else {
-        alert('パスワードが違います。');
-      }
-    }
+	    }
+	    async function promptAdminLogin(){
+	      if (window.__adminAuthBusy) return;
+	      const input = window.prompt('管理者パスワードを入力してください');
+	      if (input == null) return; // cancel
+	      setAdminAuthBusy(true, 'ログイン中...');
+	      try {
+	        await Promise.race([
+	          initAdminPassword(),
+	          new Promise(resolve => setTimeout(resolve, 1200))
+	        ]);
+	      } catch(_){}
+	      if (String(input) === String(ADMIN_PASSWORD)) {
+	        sessionStorage.setItem('isAdminLoggedIn', 'true');
+	        applyAdminUI();
+	        try { if (typeof updateLoginStatus === 'function') updateLoginStatus(); } catch(_){}
+	        try { if (typeof rebuildAnnouncementList === 'function') rebuildAnnouncementList(); } catch(_){}
+	        setAdminAuthBusy(false);
+	        try {
+	          if (typeof auth !== 'undefined' && auth && typeof auth.signInAnonymously === 'function') {
+	            auth.signInAnonymously().catch(function(e){
+	              console.warn('auth signInAnonymously failed', e);
+	            });
+	          }
+	        } catch(e) {
+	          console.warn('auth signInAnonymously failed', e);
+	        }
+	        alert('管理者ログインしました。');
+	      } else {
+	        setAdminAuthBusy(false);
+	        alert('パスワードが違います。');
+	      }
+	    }
     function populateSelfSelect(dormKey){
       const sel = document.getElementById('self-select');
       if (!sel) return;
@@ -9214,12 +9244,13 @@ function applySohmuUI(){
       }
     
       // 管理者ログイン/ログアウト（capture で競合回避）
-      const bindAdminAuthButton = (button) => {
-        if (!button || button.dataset.bound) return;
-        button.dataset.bound = '1';
-        button.addEventListener('click', async (ev) => {
-          try { ev.preventDefault(); ev.stopImmediatePropagation(); } catch(_){}
-          const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
+	      const bindAdminAuthButton = (button) => {
+	        if (!button || button.dataset.bound) return;
+	        button.dataset.bound = '1';
+	        button.addEventListener('click', async (ev) => {
+	          try { ev.preventDefault(); ev.stopImmediatePropagation(); } catch(_){}
+	          if (window.__adminAuthBusy) return;
+	          const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
           if (isAdmin) {
             sessionStorage.removeItem('isAdminLoggedIn');
             forceSohmuOffAfterLogout();
@@ -9255,11 +9286,12 @@ function applySohmuUI(){
       if (d && !d.dataset.bound){ d.dataset.bound='1'; d.addEventListener('change', ()=>{ localStorage.setItem('show_dorm',     d.checked?'1':'0'); applyViewToggles(); }); }
     
       // クリック委譲（DOM再描画で直付けが外れても動く・保険）
-      document.addEventListener('click', async (ev) => {
-        const loginEl = ev.target && ev.target.closest && ev.target.closest('#login-logout-btn, #admin-logout-btn');
-        if (loginEl) {
-          try { ev.preventDefault(); ev.stopImmediatePropagation(); } catch(_){}
-          const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
+	      document.addEventListener('click', async (ev) => {
+	        const loginEl = ev.target && ev.target.closest && ev.target.closest('#login-logout-btn, #admin-logout-btn');
+	        if (loginEl) {
+	          try { ev.preventDefault(); ev.stopImmediatePropagation(); } catch(_){}
+	          if (window.__adminAuthBusy) return;
+	          const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
           if (isAdmin) {
             sessionStorage.removeItem('isAdminLoggedIn');
             forceSohmuOffAfterLogout();
@@ -12285,9 +12317,13 @@ if(elements.changePasswordForm){
             else login();
         }
 
-        function login() {
-            const password = prompt('管理者パスワードを入力してください:');
-            if (password === ADMIN_PASSWORD) {
+	        function login() {
+	            if (typeof promptAdminLogin === 'function') {
+	                promptAdminLogin();
+	                return;
+	            }
+	            const password = prompt('管理者パスワードを入力してください:');
+	            if (password === ADMIN_PASSWORD) {
                 auth.signInAnonymously().then(() => {
                     sessionStorage.setItem('isAdminLoggedIn', 'true');
                     alert('管理者としてログインしました。');
