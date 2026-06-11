@@ -1528,6 +1528,79 @@
       order:2;
     }
   }
+  .morning-reminder-banner{
+    display:none;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    margin:10px 0 14px;
+    padding:13px 15px;
+    border:1px solid rgba(185, 116, 0, 0.42);
+    border-radius:12px;
+    background:rgba(255, 248, 224, 0.96);
+    color:#5f4100;
+    box-shadow:0 8px 20px rgba(94,67,0,0.08);
+  }
+  .morning-reminder-banner.is-visible{
+    display:flex;
+  }
+  body.dark-theme .morning-reminder-banner{
+    background:rgba(70, 56, 20, 0.92);
+    border-color:rgba(255, 202, 86, 0.5);
+    color:#fff3c4;
+  }
+  .morning-reminder-main{
+    display:flex;
+    align-items:flex-start;
+    gap:10px;
+    min-width:0;
+  }
+  .morning-reminder-icon{
+    width:28px;
+    height:28px;
+    border-radius:50%;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    flex:0 0 auto;
+    background:#f39c12;
+    color:#fff;
+    font-weight:900;
+  }
+  .morning-reminder-title{
+    font-weight:900;
+    line-height:1.35;
+  }
+  .morning-reminder-text{
+    margin-top:2px;
+    font-size:0.9rem;
+    line-height:1.45;
+  }
+  .morning-reminder-close{
+    border:none;
+    border-radius:10px;
+    background:#fff;
+    color:#5f4100;
+    font-weight:800;
+    padding:8px 12px;
+    cursor:pointer;
+    flex:0 0 auto;
+    box-shadow:0 4px 12px rgba(94,67,0,0.10);
+  }
+  body.dark-theme .morning-reminder-close{
+    background:rgba(255,255,255,0.14);
+    color:#fff3c4;
+  }
+  @media (max-width:600px){
+    .morning-reminder-banner{
+      align-items:stretch;
+      flex-direction:column;
+    }
+    .morning-reminder-close{
+      width:100%;
+      min-height:42px;
+    }
+  }
   .pwa-hint{
     background:#fff3cd;
     border:1px solid #ffeeba;
@@ -2363,6 +2436,16 @@
     </div>
 
     <!-- ===== 朝の庶務バナー ===== -->
+    <div id="morning-reminder-banner" class="morning-reminder-banner" role="status" aria-live="polite">
+      <div class="morning-reminder-main">
+        <span class="morning-reminder-icon" aria-hidden="true">!</span>
+        <div>
+          <div class="morning-reminder-title">今日の朝の庶務がまだ完了していません</div>
+          <div class="morning-reminder-text">完了したら「朝の庶務」から変更を確定して終了してください。事情がある場合はこの警告を閉じられます。</div>
+        </div>
+      </div>
+      <button id="morning-reminder-close-btn" type="button" class="morning-reminder-close">今日は閉じる</button>
+    </div>
     <div id="morning-banner" class="morning-banner" style="display:none;">
       <div class="morning-banner-main">
         <span class="morning-banner-icon" aria-hidden="true">🌅</span>
@@ -2618,6 +2701,7 @@
       <div class="admin-message-toolbar">
         <input type="search" id="admin-message-search" placeholder="名前・部屋番号・ふりがなで絞り込み">
         <button type="button" id="admin-message-select-visible-btn" class="header-btn" style="background:#3498db;">表示中を選択</button>
+        <button type="button" id="admin-message-select-all-btn" class="header-btn" style="background:#27ae60;">全員を選択</button>
         <button type="button" id="admin-message-clear-btn" class="header-btn" style="background:#7f8c8d;">解除</button>
       </div>
       <div id="admin-message-summary" class="admin-message-summary">送信先を選択してください。</div>
@@ -3081,20 +3165,113 @@
     };
 
     firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-    try { window.db = db; } catch(_){ }
-    // Enable local persistence (multi-tab safe)
+	    const db = firebase.firestore();
+	    try { window.db = db; } catch(_){ }
+	    // Enable local persistence (multi-tab safe)
     try {
       if (db && typeof db.enablePersistence === 'function') {
         db.enablePersistence({ synchronizeTabs: true }).catch(function(e){
           console.warn('enablePersistence warning:', (e && (e.code || e.message)) || e);
         });
       }
-    } catch (e) {
-      console.warn('enablePersistence failed:', (e && (e.code || e.message)) || e);
+	    } catch (e) {
+	      console.warn('enablePersistence failed:', (e && (e.code || e.message)) || e);
+	    }
+
+    const MORNING_STATUS_DOC_ID = 'morning_status';
+    const MORNING_REMINDER_DISMISSED_KEY = 'morning_reminder_dismissed_date';
+    let morningCompletedDateKey = '';
+    let morningStatusUnsubscribe = null;
+
+    function getLocalDateKey(date){
+      const d = date instanceof Date ? date : new Date();
+      const y = d.getFullYear();
+      const monthNumber = d.getMonth() + 1;
+      const dateNumber = d.getDate();
+      const m = monthNumber < 10 ? '0' + monthNumber : String(monthNumber);
+      const day = dateNumber < 10 ? '0' + dateNumber : String(dateNumber);
+      return `${y}-${m}-${day}`;
     }
-    let messaging = null;
-    try {
+
+    function getTodayDateKey(){
+      return getLocalDateKey(new Date());
+    }
+
+    function getMorningReminderDismissedDate(){
+      try { return localStorage.getItem(MORNING_REMINDER_DISMISSED_KEY) || ''; } catch(_){ return ''; }
+    }
+
+    function setMorningReminderDismissedToday(){
+      try { localStorage.setItem(MORNING_REMINDER_DISMISSED_KEY, getTodayDateKey()); } catch(_){}
+      updateMorningReminderUI();
+    }
+
+    function isMorningCompletedToday(){
+      return morningCompletedDateKey === getTodayDateKey();
+    }
+
+    function updateMorningReminderUI(){
+      const banner = document.getElementById('morning-reminder-banner');
+      if (!banner) return;
+      const toggle = document.getElementById('sohmu-toggle');
+      const sohmuOn = !!(toggle && toggle.checked);
+      const hiddenForToday = getMorningReminderDismissedDate() === getTodayDateKey();
+      const inMorningMode = document.body && document.body.classList && document.body.classList.contains('morning-mode');
+      const visible = sohmuOn && !inMorningMode && !isMorningCompletedToday() && !hiddenForToday;
+      banner.classList.toggle('is-visible', visible);
+      banner.style.display = visible ? 'flex' : 'none';
+    }
+
+    function subscribeMorningStatus(){
+      if (morningStatusUnsubscribe || !db || typeof db.collection !== 'function') {
+        updateMorningReminderUI();
+        return;
+      }
+      try {
+        morningStatusUnsubscribe = db.collection('settings').doc(MORNING_STATUS_DOC_ID).onSnapshot(function(doc){
+          const data = doc && doc.exists ? (doc.data() || {}) : {};
+          morningCompletedDateKey = String(data.lastCompletedDate || '');
+          updateMorningReminderUI();
+        }, function(e){
+          console.warn('morning status listener failed:', (e && (e.code || e.message)) || e);
+          updateMorningReminderUI();
+        });
+      } catch(e) {
+        console.warn('subscribeMorningStatus failed:', (e && (e.code || e.message)) || e);
+        updateMorningReminderUI();
+      }
+    }
+
+    async function markMorningCompletedToday(){
+      const today = getTodayDateKey();
+      morningCompletedDateKey = today;
+      updateMorningReminderUI();
+      try {
+        await db.collection('settings').doc(MORNING_STATUS_DOC_ID).set({
+          lastCompletedDate: today,
+          lastCompletedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      } catch(e) {
+        console.warn('markMorningCompletedToday failed:', (e && (e.code || e.message)) || e);
+      }
+    }
+
+    (function bindMorningReminderUi(){
+      document.addEventListener('click', function(ev){
+        const btn = typeof closestEventTargetCompat === 'function'
+          ? closestEventTargetCompat(ev, '#morning-reminder-close-btn')
+          : (ev.target && ev.target.closest && ev.target.closest('#morning-reminder-close-btn'));
+        if (!btn) return;
+        ev.preventDefault();
+        setMorningReminderDismissedToday();
+      }, true);
+      document.addEventListener('DOMContentLoaded', function(){
+        subscribeMorningStatus();
+        updateMorningReminderUI();
+      });
+    })();
+	    let messaging = null;
+	    try {
       if (firebase.messaging && typeof firebase.messaging.isSupported === 'function') {
         if (firebase.messaging.isSupported()) {
           messaging = firebase.messaging();
@@ -7419,27 +7596,29 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       await Promise.all(commits);
     }
 
-    function showMorningBanner(){
-      const b = document.getElementById('morning-banner');
-      const l = document.getElementById('morning-banner-dorm');
-      if (b){
-        b.style.display = 'flex';
-        if (l) l.textContent = getMorningDormLabel(morningRef.dorm);
-      }
-    }
+	    function showMorningBanner(){
+	      const b = document.getElementById('morning-banner');
+	      const l = document.getElementById('morning-banner-dorm');
+	      if (b){
+	        b.style.display = 'flex';
+	        if (l) l.textContent = getMorningDormLabel(morningRef.dorm);
+	      }
+	      updateMorningReminderUI();
+	    }
 
-    function closeMorningModeUI(){
-      isMorningMode = false;
-      document.body.classList.remove('morning-mode');
+	    function closeMorningModeUI(){
+	      isMorningMode = false;
+	      document.body.classList.remove('morning-mode');
       try { window.__morningModeSuppressPush = false; } catch(_){}
       const b = document.getElementById('morning-banner');
       if (b) b.style.display = 'none';
       // 参照表示を消去
       try {
         document.querySelectorAll('.ref-line, .diff-badge').forEach(el => el.remove());
-      } catch(_){}
-      disconnectMorningObserver();
-    }
+	      } catch(_){}
+	      disconnectMorningObserver();
+	      updateMorningReminderUI();
+	    }
 
     function resumeResidentListenersAfterMorning(){
       try {
@@ -7467,9 +7646,10 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
           return;
         }
 
-        window.__morningFinishRequested = false;
-        closeMorningModeUI();
-        refreshMorningTable();
+	        window.__morningFinishRequested = false;
+	        await markMorningCompletedToday();
+	        closeMorningModeUI();
+	        refreshMorningTable();
         resumeResidentListenersAfterMorning();
         if (window.__morningLastNotificationError) {
           const notifyErr = window.__morningLastNotificationError;
@@ -7526,9 +7706,10 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 
         isMorningMode = true;
         window.__morningModeSuppressPush = true;
-        document.body.classList.add('morning-mode');
-        syncMorningTargetDormFromRef();
-        activateMorningViewMode();
+	        document.body.classList.add('morning-mode');
+	        syncMorningTargetDormFromRef();
+	        activateMorningViewMode();
+	        updateMorningReminderUI();
 
         try { addLog('朝の庶務開始', '[both] 参考＝開始直前の読込値、終了時にまとめて反映'); } catch(_){}
 
@@ -8043,16 +8224,24 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
           `;
         }).join('');
       }
-      if (summary) {
-        const selectedCount = adminMessageState.selectedIds.size;
-        const visibleCount = residents.length;
-        summary.textContent = selectedCount
-          ? `${selectedCount}人を選択中（表示中 ${visibleCount}人）`
-          : `送信先を選択してください（表示中 ${visibleCount}人）`;
-      }
-      const sendBtn = document.getElementById('admin-message-send-btn');
-      if (sendBtn) sendBtn.disabled = adminMessageState.selectedIds.size === 0;
-    }
+	      if (summary) {
+	        const selectedCount = adminMessageState.selectedIds.size;
+	        const visibleCount = residents.length;
+	        const totalCount = adminMessageState.residents.length;
+	        const allSelected = totalCount > 0 && selectedCount === totalCount;
+	        summary.textContent = selectedCount
+	          ? (allSelected ? `全員（${selectedCount}人）を選択中` : `${selectedCount}人を選択中（表示中 ${visibleCount}人）`)
+	          : `送信先を選択してください（表示中 ${visibleCount}人）`;
+	      }
+	      const sendBtn = document.getElementById('admin-message-send-btn');
+	      if (sendBtn) {
+	        const selectedCount = adminMessageState.selectedIds.size;
+	        const totalCount = adminMessageState.residents.length;
+	        const allSelected = totalCount > 0 && selectedCount === totalCount;
+	        sendBtn.disabled = selectedCount === 0;
+	        sendBtn.textContent = allSelected ? '全員へ送信' : '選択した寮生へ送信';
+	      }
+	    }
 
     async function openAdminMessageModal(){
       if (sessionStorage.getItem('isAdminLoggedIn') !== 'true') {
@@ -8100,17 +8289,21 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       const bodyEl = document.getElementById('admin-message-body');
       const sendBtn = document.getElementById('admin-message-send-btn');
       const title = String(titleEl && titleEl.value || '').trim();
-      const body = String(bodyEl && bodyEl.value || '').trim();
-      const selectedResidents = adminMessageState.residents.filter(function(r){ return adminMessageState.selectedIds.has(r.id); });
-      if (!selectedResidents.length) {
-        setAdminMessageStatus('送信先を1人以上選択してください。', 'error');
-        return;
+	      const body = String(bodyEl && bodyEl.value || '').trim();
+	      const selectedResidents = adminMessageState.residents.filter(function(r){ return adminMessageState.selectedIds.has(r.id); });
+	      const allSelected = adminMessageState.residents.length > 0 && selectedResidents.length === adminMessageState.residents.length;
+	      if (!selectedResidents.length) {
+	        setAdminMessageStatus('送信先を1人以上選択してください。', 'error');
+	        return;
       }
       if (!title || !body) {
-        setAdminMessageStatus('タイトルと本文を入力してください。', 'error');
-        return;
-      }
-      if (!confirm(`${selectedResidents.length}人の寮生へメッセージを送信します。よろしいですか？`)) return;
+	        setAdminMessageStatus('タイトルと本文を入力してください。', 'error');
+	        return;
+	      }
+	      const confirmText = allSelected
+	        ? `全員（${selectedResidents.length}人）へメッセージを送信します。よろしいですか？`
+	        : `${selectedResidents.length}人の寮生へメッセージを送信します。よろしいですか？`;
+	      if (!confirm(confirmText)) return;
       if (sendBtn) {
         sendBtn.disabled = true;
         sendBtn.textContent = '送信依頼中...';
@@ -8125,19 +8318,20 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
             roomNumber: r.roomNumber || ''
           };
         });
-        await db.collection('admin_message_requests').add({
-          type: 'admin_direct_message',
-          title,
-          body,
-          targetResidentIds: targetResidents.map(function(r){ return r.residentId; }),
-          targetResidents,
+	        await db.collection('admin_message_requests').add({
+	          type: 'admin_direct_message',
+	          title,
+	          body,
+	          targetScope: allSelected ? 'all' : 'selected',
+	          targetResidentIds: targetResidents.map(function(r){ return r.residentId; }),
+	          targetResidents,
           status: 'queued',
           createdBy: 'admin',
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        try {
-          await addLog('個別メッセージ送信', `${selectedResidents.length}人へ「${title}」を送信依頼`);
-        } catch(_){}
+	        });
+	        try {
+	          await addLog('個別メッセージ送信', `${allSelected ? '全員' : selectedResidents.length + '人'}へ「${title}」を送信依頼`);
+	        } catch(_){}
         setAdminMessageStatus('送信依頼を登録しました。数秒後に対象端末へ通知されます。', 'success');
         adminMessageState.selectedIds.clear();
         renderAdminMessageTargets();
@@ -8145,13 +8339,12 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
         console.error('submitAdminMessage failed', e);
         const detail = e && (e.code || e.message) ? ` (${e.code || e.message})` : '';
         setAdminMessageStatus('送信依頼の登録に失敗しました。権限や通信状態を確認してください。' + detail, 'error');
-      } finally {
-        if (sendBtn) {
-          sendBtn.textContent = '選択した寮生へ送信';
-          sendBtn.disabled = adminMessageState.selectedIds.size === 0;
-        }
-      }
-    }
+	      } finally {
+	        if (sendBtn) {
+	          renderAdminMessageTargets();
+	        }
+	      }
+	    }
 
     (function bindAdminMessageUi(){
       document.addEventListener('click', function(ev){
@@ -8186,15 +8379,24 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
         }
       });
       document.addEventListener('DOMContentLoaded', function(){
-        const selectVisibleBtn = document.getElementById('admin-message-select-visible-btn');
-        const clearBtn = document.getElementById('admin-message-clear-btn');
-        if (selectVisibleBtn) {
-          selectVisibleBtn.addEventListener('click', function(){
+	        const selectVisibleBtn = document.getElementById('admin-message-select-visible-btn');
+	        const selectAllBtn = document.getElementById('admin-message-select-all-btn');
+	        const clearBtn = document.getElementById('admin-message-clear-btn');
+	        if (selectVisibleBtn) {
+	          selectVisibleBtn.addEventListener('click', function(){
             adminMessageState.visibleIds.forEach(function(id){ adminMessageState.selectedIds.add(id); });
-            renderAdminMessageTargets();
-          });
-        }
-        if (clearBtn) {
+	            renderAdminMessageTargets();
+	          });
+	        }
+	        if (selectAllBtn) {
+	          selectAllBtn.addEventListener('click', function(){
+	            adminMessageState.residents.forEach(function(r){
+	              if (r && r.id) adminMessageState.selectedIds.add(r.id);
+	            });
+	            renderAdminMessageTargets();
+	          });
+	        }
+	        if (clearBtn) {
           clearBtn.addEventListener('click', function(){
             adminMessageState.selectedIds.clear();
             renderAdminMessageTargets();
@@ -8839,10 +9041,13 @@ function applySohmuUI(){
   if (typeof updateAnnouncementVisibility === 'function') {
     try { updateAnnouncementVisibility(); } catch(_) {}
   }
-  if (typeof updateNotificationSettingsUI === 'function') {
-    try { updateNotificationSettingsUI(); } catch(_) {}
-  }
-}
+      if (typeof updateNotificationSettingsUI === 'function') {
+        try { updateNotificationSettingsUI(); } catch(_) {}
+      }
+      if (typeof updateMorningReminderUI === 'function') {
+        try { updateMorningReminderUI(); } catch(_) {}
+      }
+	}
 
     // ===== ensureDormSelectionOnBoot (override: 既定は「両方」) =====
     async function ensureDormSelectionOnBoot(){
@@ -11210,11 +11415,14 @@ if(elements.changePasswordForm){
             try { window.renderTable(); } catch(_) {}
           }
           // 庶務モードONの時だけ「朝の庶務」ボタンを表示
-          if (elements.morningRunBtn) {
-            const on = !!(elements.sohmuToggle && elements.sohmuToggle.checked);
-            elements.morningRunBtn.style.display = on ? 'inline-block' : 'none';
-          }
-        }
+	          if (elements.morningRunBtn) {
+	            const on = !!(elements.sohmuToggle && elements.sohmuToggle.checked);
+	            elements.morningRunBtn.style.display = on ? 'inline-block' : 'none';
+	          }
+	          if (typeof updateMorningReminderUI === 'function') {
+	            try { updateMorningReminderUI(); } catch(_) {}
+	          }
+	        }
         // 初期適用 & 変更監視（renderTable未定義の段階でも例外を出さない）
         applySohmuUI();
         if (elements.sohmuToggle) {
