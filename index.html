@@ -2043,16 +2043,76 @@
     border-color:rgba(221,236,255,0.24);
     color:#eef6ff;
   }
-  .dorm-selector button.active{
-    color:#fff;
-    border-bottom-color:transparent;
-    background:var(--accent-blue);
-    box-shadow:0 10px 22px rgba(47,142,229,0.22);
-  }
-  #search-input,
-  .form-group input,
-  .form-group select,
-  .form-group textarea,
+	  .dorm-selector button.active{
+	    color:#fff;
+	    border-bottom-color:transparent;
+	    background:var(--accent-blue);
+	    box-shadow:0 10px 22px rgba(47,142,229,0.22);
+	  }
+	  .cross-dorm-search-hint{
+	    display:none;
+	    align-items:center;
+	    justify-content:space-between;
+	    gap:12px;
+	    margin:10px 0 12px;
+	    padding:12px 14px;
+	    border-radius:18px;
+	    border:1px solid rgba(38,119,190,0.28);
+	    background:rgba(235,247,255,0.92);
+	    color:var(--text-color);
+	    box-shadow:0 8px 20px rgba(31,78,121,0.08);
+	  }
+	  .cross-dorm-search-hint.is-visible{
+	    display:flex;
+	  }
+	  .cross-dorm-search-text{
+	    display:flex;
+	    flex-direction:column;
+	    gap:2px;
+	    min-width:0;
+	  }
+	  .cross-dorm-search-title{
+	    font-weight:800;
+	    color:#1f5f99;
+	  }
+	  .cross-dorm-search-sub{
+	    font-size:12px;
+	    color:var(--muted-text);
+	  }
+	  .cross-dorm-search-btn{
+	    flex:0 0 auto;
+	    border:none;
+	    border-radius:999px;
+	    padding:10px 14px;
+	    font-weight:800;
+	    color:#fff;
+	    background:var(--accent-blue);
+	    box-shadow:0 8px 18px rgba(47,142,229,0.22);
+	    cursor:pointer;
+	  }
+	  .cross-dorm-search-btn:active{
+	    transform:translateY(1px);
+	  }
+	  body.dark-theme .cross-dorm-search-hint{
+	    background:rgba(32,52,72,0.92);
+	    border-color:rgba(131,190,255,0.34);
+	  }
+	  body.dark-theme .cross-dorm-search-title{
+	    color:#cde8ff;
+	  }
+	  @media (max-width:600px){
+	    .cross-dorm-search-hint{
+	      align-items:stretch;
+	      flex-direction:column;
+	    }
+	    .cross-dorm-search-btn{
+	      width:100%;
+	    }
+	  }
+	  #search-input,
+	  .form-group input,
+	  .form-group select,
+	  .form-group textarea,
   .resident-note-input,
   .ocr-textarea,
   #theme-selector,
@@ -2498,11 +2558,13 @@
           <span class="sub">この内容で完了</span>
         </button>
       </div>
-    </div>
-    <!-- ===== 朝の庶務バナーここまで ===== -->
+	    </div>
+	    <!-- ===== 朝の庶務バナーここまで ===== -->
+	
+	    <div id="cross-dorm-search-hint" class="cross-dorm-search-hint" aria-live="polite"></div>
 
-    <div class="table-container">
-        <table id="resident-table">
+	    <div class="table-container">
+	        <table id="resident-table">
             <thead>
                 <tr>
                     <th class="checkbox-col"><div class="cell-content"><input type="checkbox" id="select-all-checkbox"></div></th>
@@ -12064,12 +12126,13 @@ if(elements.changePasswordForm){
                 return;
             }
             if (unsubscribe) unsubscribe();
-            unsubscribe = db.collection(collectionName).onSnapshot(snapshot => {
-                if (document.body.classList.contains('morning-mode')) return;
-                const dormKey = collectionName.split('_')[1];
-                allResidents = snapshot.docs.map(doc => mergeResidentDocData(doc, dormKey));
-                // Show self-select modal if first visit
-                if (!getStoredResidentId()) {
+	            unsubscribe = db.collection(collectionName).onSnapshot(snapshot => {
+	                if (document.body.classList.contains('morning-mode')) return;
+	                const dormKey = collectionName.split('_')[1];
+	                allResidents = snapshot.docs.map(doc => mergeResidentDocData(doc, dormKey));
+	                setCrossDormSearchCache(dormKey, allResidents);
+	                // Show self-select modal if first visit
+	                if (!getStoredResidentId()) {
                   const selectModal = document.getElementById('self-select-modal');
                   (async () => {
                     const select = document.getElementById('self-select');
@@ -12148,15 +12211,19 @@ if(elements.changePasswordForm){
             let shofuDocs = [];
             let meizenDocs = [];
 
-            const renderMerged = () => {
-                if (document.body.classList.contains('morning-mode')) return;
-                allResidents = shofuDocs.map(function(doc){
-                    return mergeResidentDocData(doc, 'shofu');
-                }).concat(meizenDocs.map(function(doc){
-                    return mergeResidentDocData(doc, 'meizen');
-                }));
-                renderTable();
-            };
+	            const renderMerged = () => {
+	                if (document.body.classList.contains('morning-mode')) return;
+	                const shofuResidents = shofuDocs.map(function(doc){
+	                    return mergeResidentDocData(doc, 'shofu');
+	                });
+	                const meizenResidents = meizenDocs.map(function(doc){
+	                    return mergeResidentDocData(doc, 'meizen');
+	                });
+	                setCrossDormSearchCache('shofu', shofuResidents);
+	                setCrossDormSearchCache('meizen', meizenResidents);
+	                allResidents = shofuResidents.concat(meizenResidents);
+	                renderTable();
+	            };
 
             const unsubShofu = shofuRef.onSnapshot(snap => {
                 shofuDocs = snap.docs;
@@ -12178,25 +12245,117 @@ if(elements.changePasswordForm){
             unsubscribe = () => { try { unsubShofu(); } catch(_){} try { unsubMeizen(); } catch(_){} };
         }
 
-        function normalizeDormSelectionValue(value) {
-            const raw = (value || '').toString();
-            if (raw === 'all' || raw === 'residents_all') return 'all';
-            if (raw === 'shofu' || raw === 'residents_shofu') return 'shofu';
-            if (raw === 'meizen' || raw === 'residents_meizen') return 'meizen';
-            return 'all';
-        }
+	        function normalizeDormSelectionValue(value) {
+	            const raw = (value || '').toString();
+	            if (raw === 'all' || raw === 'residents_all') return 'all';
+	            if (raw === 'shofu' || raw === 'residents_shofu') return 'shofu';
+	            if (raw === 'meizen' || raw === 'residents_meizen') return 'meizen';
+	            return 'all';
+	        }
 
-        function switchDorm(dorm) {
-            dorm = normalizeDormSelectionValue(dorm);
-            try { localStorage.setItem('currentDorm', dorm === 'all' ? 'all' : `residents_${dorm}`); } catch(_) {}
+	        const crossDormSearchCache = {
+	            shofu: { loaded: false, residents: [] },
+	            meizen: { loaded: false, residents: [] }
+	        };
+	        let crossDormSearchRequestId = 0;
+
+	        function getDormLabel(dormKey) {
+	            return dormKey === 'shofu' ? '松風寮' : (dormKey === 'meizen' ? '明善寮' : '別の寮');
+	        }
+
+	        function getCurrentSingleDormKey() {
+	            if (currentCollectionName === 'residents_shofu') return 'shofu';
+	            if (currentCollectionName === 'residents_meizen') return 'meizen';
+	            return '';
+	        }
+
+	        function getOppositeDormKey(dormKey) {
+	            if (dormKey === 'shofu') return 'meizen';
+	            if (dormKey === 'meizen') return 'shofu';
+	            return '';
+	        }
+
+	        function setCrossDormSearchCache(dormKey, residents) {
+	            if (!crossDormSearchCache[dormKey]) return;
+	            crossDormSearchCache[dormKey] = {
+	                loaded: true,
+	                residents: Array.isArray(residents) ? residents.slice() : []
+	            };
+	        }
+
+	        function hideCrossDormSearchHint() {
+	            const hint = document.getElementById('cross-dorm-search-hint');
+	            if (!hint) return;
+	            hint.classList.remove('is-visible');
+	            hint.style.display = 'none';
+	            hint.innerHTML = '';
+	        }
+
+	        async function loadCrossDormSearchResidents(dormKey) {
+	            const cached = crossDormSearchCache[dormKey];
+	            if (cached && cached.loaded) return cached.residents;
+	            const snap = await db.collection(`residents_${dormKey}`).get();
+	            const residents = snap.docs.map(doc => mergeResidentDocData(doc, dormKey));
+	            setCrossDormSearchCache(dormKey, residents);
+	            return residents;
+	        }
+
+	        function showCrossDormSearchHint(otherDormKey, matchCount) {
+	            const hint = document.getElementById('cross-dorm-search-hint');
+	            if (!hint) return;
+	            const dormLabel = getDormLabel(otherDormKey);
+	            const countText = matchCount > 1 ? `${matchCount}名` : '1名';
+	            hint.innerHTML = `
+	                <div class="cross-dorm-search-text">
+	                    <span class="cross-dorm-search-title">${dormLabel}にも該当者がいます</span>
+	                    <span class="cross-dorm-search-sub">現在の一覧には表示していません。${countText}見つかりました。</span>
+	                </div>
+	                <button type="button" id="cross-dorm-search-switch-btn" class="cross-dorm-search-btn">両方表示に切り替え</button>
+	            `;
+	            hint.style.display = 'flex';
+	            hint.classList.add('is-visible');
+	        }
+
+	        async function updateCrossDormSearchHint(searchTerm) {
+	            const requestId = ++crossDormSearchRequestId;
+	            const term = String(searchTerm || '').trim();
+	            const currentDormKey = getCurrentSingleDormKey();
+	            if (!term || !currentDormKey || currentCollectionName === 'all' || !elements.sohmuToggle.checked) {
+	                hideCrossDormSearchHint();
+	                return;
+	            }
+	            const otherDormKey = getOppositeDormKey(currentDormKey);
+	            if (!otherDormKey || !db || typeof db.collection !== 'function') {
+	                hideCrossDormSearchHint();
+	                return;
+	            }
+	            try {
+	                const residents = await loadCrossDormSearchResidents(otherDormKey);
+	                if (requestId !== crossDormSearchRequestId) return;
+	                const matches = residents.filter(r => residentMatchesSearch(r, term));
+	                if (matches.length > 0) {
+	                    showCrossDormSearchHint(otherDormKey, matches.length);
+	                } else {
+	                    hideCrossDormSearchHint();
+	                }
+	            } catch (error) {
+	                console.warn('cross dorm search hint failed', error);
+	                if (requestId === crossDormSearchRequestId) hideCrossDormSearchHint();
+	            }
+	        }
+
+	        function switchDorm(dorm) {
+	            dorm = normalizeDormSelectionValue(dorm);
+	            try { localStorage.setItem('currentDorm', dorm === 'all' ? 'all' : `residents_${dorm}`); } catch(_) {}
             // Update active button UI
             document.querySelectorAll('#dorm-selector button').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.dorm === dorm);
             });
             // Handle "all" separately
-            if (dorm === 'all') {
-                currentCollectionName = 'all'; 
-                listenToAllCollections();
+	            if (dorm === 'all') {
+	                hideCrossDormSearchHint();
+	                currentCollectionName = 'all'; 
+	                listenToAllCollections();
             } else {
                 currentCollectionName = `residents_${dorm}`;
                 listenToCollection(currentCollectionName);
@@ -12225,9 +12384,10 @@ if(elements.changePasswordForm){
               ? allResidents
               : allResidents.filter(r => r.id === myId);
             const currentSortOrder = normalizeResidentSortOrder(window.__residentSortOrderState || getResidentSortOrder());
-            const baseList = sortResidentsByPreference(sourceResidents, { pinResidentId: sohmuOn ? '' : myId, sortOrder: currentSortOrder });
-            const filteredResidents = baseList.filter(r => residentMatchesSearch(r, searchTerm));
-            elements.tableBody.innerHTML = ''; 
+	            const baseList = sortResidentsByPreference(sourceResidents, { pinResidentId: sohmuOn ? '' : myId, sortOrder: currentSortOrder });
+	            const filteredResidents = baseList.filter(r => residentMatchesSearch(r, searchTerm));
+	            updateCrossDormSearchHint(searchTerm);
+	            elements.tableBody.innerHTML = ''; 
             if (filteredResidents.length === 0) {
                 elements.tableBody.innerHTML = '<tr><td colspan="6">該当する寮生が見つかりません。</td></tr>';
             } else {
@@ -12764,11 +12924,21 @@ if(elements.changePasswordForm){
         const savedDorm = normalizeDormSelectionValue(localStorage.getItem('currentDorm') || 'all');
         switchDorm(savedDorm);
         
-        elements.dormSelector.addEventListener('click', (e) => {
-            if(e.target.tagName === 'BUTTON') switchDorm(e.target.dataset.dorm);
-        });
-        
-        elements.modeSelectors.forEach(input => 
+	        elements.dormSelector.addEventListener('click', (e) => {
+	            if(e.target.tagName === 'BUTTON') switchDorm(e.target.dataset.dorm);
+	        });
+
+	        document.addEventListener('click', function(e) {
+	            const btn = closestEventTargetCompat(e, '#cross-dorm-search-switch-btn');
+	            if (!btn) return;
+	            e.preventDefault();
+	            switchDorm('all');
+	            setTimeout(function(){
+	                try { elements.searchInput.focus(); } catch(_) {}
+	            }, 0);
+	        }, false);
+	        
+	        elements.modeSelectors.forEach(input => 
           input.addEventListener('change', () => {
             if (input.checked) setMode(input.id);
           })
