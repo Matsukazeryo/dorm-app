@@ -8958,7 +8958,15 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 	      const body = escapeHtml(note).replace(/\n/g, '<br>');
 	      const editBtn = `<button type="button" class="self-note-edit-btn" data-resident-id="${safeResidentId}" aria-label="自分の備考を編集">編集</button>`;
 	      if (!note) {
-	        return `<div class="self-note-empty-action">${editBtn}</div>`;
+	        return `
+	          <div class="off-note self-note-display" data-resident-id="${safeResidentId}">
+	            <div class="self-note-display-head">
+	              <span class="off-note-label">備考</span>
+	              ${editBtn}
+	            </div>
+	            <span class="resident-note is-empty">なし</span>
+	          </div>
+	        `;
 	      }
 	      return `
 	        <div class="off-note self-note-display" data-resident-id="${safeResidentId}">
