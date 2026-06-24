@@ -378,12 +378,73 @@
           font-weight:700;
           color:#7f8c8d;
         }
-        body.dark-theme .off-note-label{
-          color:#bdc3c7;
-        }
-        body.show-furigana .furigana-text{
-            display:block;
-        }
+	        body.dark-theme .off-note-label{
+	          color:#bdc3c7;
+	        }
+	        .self-note-editor{
+	          margin:16px auto 0;
+	          max-width:460px;
+	          padding:14px;
+	          border-radius:14px;
+	          border:1px solid var(--border-color);
+	          background:var(--controls-bg);
+	          text-align:left;
+	        }
+	        .self-note-label{
+	          display:block;
+	          margin-bottom:8px;
+	          font-size:0.84rem;
+	          font-weight:800;
+	          color:var(--text-color);
+	        }
+	        .self-note-input{
+	          width:100%;
+	          min-height:78px;
+	          padding:10px 12px;
+	          border:1px solid var(--border-color);
+	          border-radius:12px;
+	          box-sizing:border-box;
+	          background-color:var(--mode-label-bg);
+	          color:var(--text-color);
+	          font-family:inherit;
+	          font-size:0.95rem;
+	          line-height:1.5;
+	          resize:vertical;
+	        }
+	        .self-note-actions{
+	          display:flex;
+	          align-items:center;
+	          justify-content:flex-end;
+	          gap:10px;
+	          margin-top:10px;
+	        }
+	        .self-note-save-btn{
+	          border:none;
+	          border-radius:999px;
+	          padding:9px 14px;
+	          background:#2980b9;
+	          color:#fff;
+	          font-weight:800;
+	          cursor:pointer;
+	        }
+	        .self-note-save-btn:disabled{
+	          opacity:0.62;
+	          cursor:not-allowed;
+	        }
+	        .self-note-status{
+	          min-height:1.2em;
+	          font-size:0.82rem;
+	          color:#7f8c8d;
+	        }
+	        .self-note-status.is-success{
+	          color:#1e8449;
+	        }
+	        .self-note-status.is-error{
+	          color:#c0392b;
+	        }
+	        body.show-furigana .furigana-text{
+	            display:block;
+	        }
         /* --- 文字数が多いふりがなを小さく表示 --- */
         .furigana-small{
             font-size:0.6em;
@@ -8837,11 +8898,11 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       `;
     }
 
-    function renderResidentNoteEditorHtml(residentId, value){
-      const draft = getResidentInlineNoteDraft(residentId);
-      const sourceValue = draft != null ? draft : value;
-      const body = escapeHtml(sourceValue == null ? '' : String(sourceValue));
-      return `
+	    function renderResidentNoteEditorHtml(residentId, value){
+	      const draft = getResidentInlineNoteDraft(residentId);
+	      const sourceValue = draft != null ? draft : value;
+	      const body = escapeHtml(sourceValue == null ? '' : String(sourceValue));
+	      return `
         <div class="resident-note-editor">
           <textarea class="resident-note-input" data-resident-id="${residentId}" rows="1" maxlength="120" placeholder="備考を入力" oninput="updateResidentInlineNoteDraft('${residentId}', this.value)">${body}</textarea>
           <div class="resident-note-editor-actions">
@@ -8849,10 +8910,25 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
           </div>
           <span class="resident-note-status" data-resident-note-status="${residentId}" aria-live="polite"></span>
         </div>
-      `;
-    }
+	      `;
+	    }
 
-    function setCircleOptions(selectEl, dorm, includeEmpty = true){
+	    function renderSelfResidentNoteEditorHtml(residentId, value){
+	      const safeResidentId = escapeHtml(residentId || '');
+	      const body = escapeHtml(normalizeResidentNote(value));
+	      return `
+	        <div class="self-note-editor" data-resident-id="${safeResidentId}">
+	          <label class="self-note-label">自分の備考</label>
+	          <textarea class="self-note-input" data-resident-id="${safeResidentId}" rows="3" maxlength="120" placeholder="備考を入力">${body}</textarea>
+	          <div class="self-note-actions">
+	            <span class="self-note-status" data-resident-id="${safeResidentId}" aria-live="polite"></span>
+	            <button type="button" class="self-note-save-btn" data-resident-id="${safeResidentId}">備考を保存</button>
+	          </div>
+	        </div>
+	      `;
+	    }
+
+	    function setCircleOptions(selectEl, dorm, includeEmpty = true){
         if (!selectEl) return;
         const opts = CIRCLE_OPTIONS[dorm] || [];
         const head = includeEmpty ? '<option value="">(未選択)</option>' : '';
@@ -11085,6 +11161,62 @@ function setResidentInlineNoteStatus(residentId, message, tone) {
   if (tone === 'error') statusEl.classList.add('is-error');
   if (editorEl) {
     editorEl.classList.toggle('has-status', !!message);
+	  }
+	}
+
+function findSelfResidentNoteElement(selector, residentId) {
+  const list = document.querySelectorAll(selector);
+  const id = String(residentId || '');
+  for (let i = 0; i < list.length; i++) {
+    const el = list[i];
+    if (el && el.dataset && String(el.dataset.residentId || '') === id) return el;
+  }
+  return null;
+}
+
+function setSelfResidentNoteStatus(residentId, message, tone) {
+  const statusEl = findSelfResidentNoteElement('.self-note-status', residentId);
+  if (!statusEl) return;
+  statusEl.textContent = message || '';
+  statusEl.classList.remove('is-success', 'is-error');
+  if (tone === 'success') statusEl.classList.add('is-success');
+  if (tone === 'error') statusEl.classList.add('is-error');
+}
+
+async function saveSelfResidentNote(residentId) {
+  const id = String(residentId || '').trim();
+  const myId = String(getStoredResidentId() || '').trim();
+  const textarea = findSelfResidentNoteElement('.self-note-input', id);
+  const saveBtn = findSelfResidentNoteElement('.self-note-save-btn', id);
+  if (!id || !textarea) return;
+  if (!myId || id !== myId) {
+    setSelfResidentNoteStatus(id, '自分の備考だけ編集できます。', 'error');
+    return;
+  }
+
+  const targetCollection = resolveResidentCollectionName(id);
+  if (!targetCollection) {
+    setSelfResidentNoteStatus(id, '保存先を特定できません。', 'error');
+    return;
+  }
+
+  const nextNote = normalizeResidentNote(textarea.value);
+  if (saveBtn) saveBtn.disabled = true;
+  textarea.disabled = true;
+  setSelfResidentNoteStatus(id, '保存中...', '');
+
+  try {
+    await db.collection(targetCollection).doc(id).update({ note: nextNote });
+    const resident = getResidentById(id);
+    if (resident) resident.note = nextNote;
+    textarea.value = nextNote;
+    setSelfResidentNoteStatus(id, '保存しました。', 'success');
+  } catch (e) {
+    console.error('saveSelfResidentNote failed', e);
+    setSelfResidentNoteStatus(id, '保存に失敗しました。', 'error');
+  } finally {
+    textarea.disabled = false;
+    if (saveBtn) saveBtn.disabled = false;
   }
 }
 
@@ -11603,6 +11735,18 @@ document.addEventListener('click', (ev) => {
   ev.preventDefault();
   openReceiveModal(receiveBtn.dataset.residentId);
 }, true);
+document.addEventListener('click', (ev) => {
+  const btn = closestEventTargetCompat(ev, '.self-note-save-btn');
+  if (!btn) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  saveSelfResidentNote(btn.dataset.residentId);
+}, true);
+document.addEventListener('input', (ev) => {
+  const textarea = closestEventTargetCompat(ev, '.self-note-input');
+  if (!textarea) return;
+  setSelfResidentNoteStatus(textarea.dataset.residentId, '', '');
+}, false);
 document.addEventListener('click', (ev) => {
   const target = ev.target;
   const row = closestElementCompat(target, 'tr.resident-main-row[data-resident-id]');
@@ -12419,12 +12563,15 @@ if(elements.changePasswordForm){
                     if (!elements.sohmuToggle.checked) {
                         // 庶務モード OFF のときのレイアウト
                         const dormMarker = resident.dorm === 'shofu' ? '松' : (resident.dorm === 'meizen' ? '明' : '');
-                        const luggageCount = Math.max(0, parseInt(resident.luggage, 10) || 0);
-                        const mailCount = Math.max(0, parseInt(resident.mail, 10) || 0);
-                        const hasReceivableItems = (luggageCount + mailCount) > 0;
-                        row.innerHTML = `
-                          <td colspan="6" style="border:none; padding:20px; text-align:center;">
-                            <div class="off-mode-container">
+	                        const luggageCount = Math.max(0, parseInt(resident.luggage, 10) || 0);
+	                        const mailCount = Math.max(0, parseInt(resident.mail, 10) || 0);
+	                        const hasReceivableItems = (luggageCount + mailCount) > 0;
+	                        const offNoteAreaHtml = String(resident.id || '') === String(myId || '')
+	                          ? renderSelfResidentNoteEditorHtml(resident.id, residentNoteValue)
+	                          : residentOffNoteHtml;
+	                        row.innerHTML = `
+	                          <td colspan="6" style="border:none; padding:20px; text-align:center;">
+	                            <div class="off-mode-container">
                               <div class="off-name"><span class="dorm-marker">${dormMarker}</span>${resident.name}</div>
                               <div class="off-counts">
                                 <div class="off-count-card">
@@ -12435,12 +12582,12 @@ if(elements.changePasswordForm){
                                 <div class="off-count-card">
                                   <span class="off-count-label">郵便</span>
                                   <span class="off-count-number" data-resident-id="${residentIdAttr}" data-count-type="mail">${mailCount}</span>
-                                  ${mailHistoryButton}
-                                </div>
-                              </div>
-                              ${residentOffNoteHtml}
-                              <div class="off-mode-actions">
-                                <button type="button" class="off-receive-btn" data-resident-id="${resident.id}" ${hasReceivableItems ? '' : 'disabled'}>受け取る</button>
+	                                  ${mailHistoryButton}
+	                                </div>
+	                              </div>
+	                              ${offNoteAreaHtml}
+	                              <div class="off-mode-actions">
+	                                <button type="button" class="off-receive-btn" data-resident-id="${resident.id}" ${hasReceivableItems ? '' : 'disabled'}>受け取る</button>
                               </div>
                             </div>
                           </td>
