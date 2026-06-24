@@ -381,25 +381,46 @@
 	        body.dark-theme .off-note-label{
 	          color:#bdc3c7;
 	        }
-	        .self-note-editor{
-	          margin:16px auto 0;
-	          max-width:460px;
-	          padding:14px;
-	          border-radius:14px;
-	          border:1px solid var(--border-color);
-	          background:var(--controls-bg);
-	          text-align:left;
-	        }
-	        .self-note-label{
-	          display:block;
-	          margin-bottom:8px;
-	          font-size:0.84rem;
-	          font-weight:800;
-	          color:var(--text-color);
-	        }
-	        .self-note-input{
-	          width:100%;
-	          min-height:78px;
+		        .self-note-display-head{
+		          display:flex;
+		          align-items:center;
+		          justify-content:space-between;
+		          gap:8px;
+		          margin-bottom:4px;
+		        }
+		        .self-note-display-head .off-note-label{
+		          margin-bottom:0;
+		        }
+		        .self-note-empty-action{
+		          margin:10px auto 0;
+		          text-align:center;
+		        }
+		        .self-note-edit-btn{
+		          border:1px solid var(--border-color);
+		          border-radius:999px;
+		          padding:4px 9px;
+		          background:var(--mode-label-bg);
+		          color:var(--text-color);
+		          font-size:0.72rem;
+		          font-weight:800;
+		          cursor:pointer;
+		        }
+		        .self-note-edit-btn:active{
+		          transform:translateY(1px);
+		        }
+		        .self-note-modal-content{
+		          max-width:420px;
+		        }
+		        .self-note-label{
+		          display:block;
+		          margin-bottom:8px;
+		          font-size:0.86rem;
+		          font-weight:800;
+		          color:var(--text-color);
+		        }
+		        .self-note-input{
+		          width:100%;
+		          min-height:78px;
 	          padding:10px 12px;
 	          border:1px solid var(--border-color);
 	          border-radius:12px;
@@ -411,13 +432,13 @@
 	          line-height:1.5;
 	          resize:vertical;
 	        }
-	        .self-note-actions{
-	          display:flex;
-	          align-items:center;
-	          justify-content:flex-end;
-	          gap:10px;
-	          margin-top:10px;
-	        }
+		        .self-note-actions{
+		          display:flex;
+		          align-items:center;
+		          justify-content:flex-end;
+		          gap:10px;
+		          margin-top:10px;
+		        }
 	        .self-note-save-btn{
 	          border:none;
 	          border-radius:999px;
@@ -2723,6 +2744,25 @@
   </div>
 </div>
 <!-- ==== 寮生受け取りモーダル ここまで ==== -->
+
+<!-- ==== 自分の備考編集モーダル ==== -->
+<div id="self-note-modal" class="modal-overlay">
+  <div class="modal-content self-note-modal-content">
+    <div class="modal-header">
+      <h2>備考編集</h2>
+      <button id="self-note-modal-close-btn" class="modal-close-btn">&times;</button>
+    </div>
+    <div id="self-note-modal-name" style="font-size:1.05rem; font-weight:700; margin-bottom:10px;"></div>
+    <label class="self-note-label" for="self-note-modal-input">自分の備考</label>
+    <textarea id="self-note-modal-input" class="self-note-input" rows="3" maxlength="120" placeholder="備考を入力"></textarea>
+    <div class="self-note-actions">
+      <span id="self-note-modal-status" class="self-note-status" aria-live="polite"></span>
+      <button id="self-note-modal-save-btn" type="button" class="self-note-save-btn">保存</button>
+      <button id="self-note-modal-cancel-btn" type="button" class="header-btn" style="background:#7f8c8d;">閉じる</button>
+    </div>
+  </div>
+</div>
+<!-- ==== 自分の備考編集モーダル ここまで ==== -->
 
 <!-- ==== スマホ用 個数編集モーダル ==== -->
 <div id="mobile-count-edit-modal" class="modal-overlay">
@@ -8914,15 +8954,19 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 
 	    function renderSelfResidentNoteEditorHtml(residentId, value){
 	      const safeResidentId = escapeHtml(residentId || '');
-	      const body = escapeHtml(normalizeResidentNote(value));
+	      const note = normalizeResidentNote(value);
+	      const body = escapeHtml(note).replace(/\n/g, '<br>');
+	      const editBtn = `<button type="button" class="self-note-edit-btn" data-resident-id="${safeResidentId}" aria-label="自分の備考を編集">編集</button>`;
+	      if (!note) {
+	        return `<div class="self-note-empty-action">${editBtn}</div>`;
+	      }
 	      return `
-	        <div class="self-note-editor" data-resident-id="${safeResidentId}">
-	          <label class="self-note-label">自分の備考</label>
-	          <textarea class="self-note-input" data-resident-id="${safeResidentId}" rows="3" maxlength="120" placeholder="備考を入力">${body}</textarea>
-	          <div class="self-note-actions">
-	            <span class="self-note-status" data-resident-id="${safeResidentId}" aria-live="polite"></span>
-	            <button type="button" class="self-note-save-btn" data-resident-id="${safeResidentId}">備考を保存</button>
+	        <div class="off-note self-note-display" data-resident-id="${safeResidentId}">
+	          <div class="self-note-display-head">
+	            <span class="off-note-label">備考</span>
+	            ${editBtn}
 	          </div>
+	          <span class="resident-note">${body}</span>
 	        </div>
 	      `;
 	    }
@@ -11173,6 +11217,58 @@ function findSelfResidentNoteElement(selector, residentId) {
   return null;
 }
 
+function getSelfNoteModalElements() {
+  return {
+    modal: document.getElementById('self-note-modal'),
+    name: document.getElementById('self-note-modal-name'),
+    input: document.getElementById('self-note-modal-input'),
+    status: document.getElementById('self-note-modal-status'),
+    saveBtn: document.getElementById('self-note-modal-save-btn')
+  };
+}
+
+function closeSelfResidentNoteModal() {
+  const refs = getSelfNoteModalElements();
+  if (!refs.modal) return;
+  refs.modal.classList.remove('active');
+  refs.modal.style.display = 'none';
+  [refs.input, refs.status, refs.saveBtn].forEach(function(el){
+    if (el && el.dataset) delete el.dataset.residentId;
+  });
+  if (refs.status) {
+    refs.status.textContent = '';
+    refs.status.classList.remove('is-success', 'is-error');
+  }
+}
+
+function openSelfResidentNoteModal(residentId) {
+  const id = String(residentId || '').trim();
+  const myId = String(getStoredResidentId() || '').trim();
+  if (!id || !myId || id !== myId) return;
+  const resident = getResidentById(id);
+  if (!resident) {
+    alert('寮生情報の読み込みが終わってからもう一度お試しください。');
+    return;
+  }
+  const refs = getSelfNoteModalElements();
+  if (!refs.modal || !refs.input) return;
+  const room = resident.roomNumber ? `${resident.roomNumber} ` : '';
+  if (refs.name) refs.name.textContent = `${room}${resident.name || ''}`.trim();
+  refs.input.value = normalizeResidentNote(resident.note || resident.memo || resident.notes || '');
+  [refs.input, refs.status, refs.saveBtn].forEach(function(el){
+    if (el && el.dataset) el.dataset.residentId = id;
+  });
+  if (refs.status) {
+    refs.status.textContent = '';
+    refs.status.classList.remove('is-success', 'is-error');
+  }
+  if (refs.saveBtn) refs.saveBtn.disabled = false;
+  refs.input.disabled = false;
+  refs.modal.style.display = 'flex';
+  refs.modal.classList.add('active');
+  setTimeout(function(){ try { refs.input.focus(); } catch(_) {} }, 0);
+}
+
 function setSelfResidentNoteStatus(residentId, message, tone) {
   const statusEl = findSelfResidentNoteElement('.self-note-status', residentId);
   if (!statusEl) return;
@@ -11206,11 +11302,15 @@ async function saveSelfResidentNote(residentId) {
 
   try {
     await db.collection(targetCollection).doc(id).update({ note: nextNote });
-    const resident = getResidentById(id);
-    if (resident) resident.note = nextNote;
-    textarea.value = nextNote;
-    setSelfResidentNoteStatus(id, '保存しました。', 'success');
-  } catch (e) {
+	    const resident = getResidentById(id);
+	    if (resident) resident.note = nextNote;
+	    textarea.value = nextNote;
+	    setSelfResidentNoteStatus(id, '保存しました。', 'success');
+	    try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_) {}
+	    setTimeout(function(){
+	      closeSelfResidentNoteModal();
+	    }, 260);
+	  } catch (e) {
     console.error('saveSelfResidentNote failed', e);
     setSelfResidentNoteStatus(id, '保存に失敗しました。', 'error');
   } finally {
@@ -11735,11 +11835,28 @@ document.addEventListener('click', (ev) => {
   openReceiveModal(receiveBtn.dataset.residentId);
 }, true);
 document.addEventListener('click', (ev) => {
+  const btn = closestEventTargetCompat(ev, '.self-note-edit-btn');
+  if (!btn) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  openSelfResidentNoteModal(btn.dataset.residentId);
+}, true);
+document.addEventListener('click', (ev) => {
   const btn = closestEventTargetCompat(ev, '.self-note-save-btn');
   if (!btn) return;
   ev.preventDefault();
   ev.stopPropagation();
   saveSelfResidentNote(btn.dataset.residentId);
+}, true);
+document.addEventListener('click', (ev) => {
+  const closeBtn = closestEventTargetCompat(ev, '#self-note-modal-close-btn, #self-note-modal-cancel-btn');
+  if (!closeBtn) return;
+  ev.preventDefault();
+  closeSelfResidentNoteModal();
+}, true);
+document.addEventListener('click', (ev) => {
+  const modal = document.getElementById('self-note-modal');
+  if (modal && ev.target === modal) closeSelfResidentNoteModal();
 }, true);
 document.addEventListener('input', (ev) => {
   const textarea = closestEventTargetCompat(ev, '.self-note-input');
