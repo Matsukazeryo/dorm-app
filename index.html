@@ -115,7 +115,70 @@
         .dorm-selector button.active { color: var(--header-text); border-bottom-color: var(--header-border); }
         
         .top-controls { display: flex; align-items: center; width: 100%; gap: 15px; flex-wrap: wrap;}
-        #search-input { flex-grow: 1; min-width: 150px; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 16px; background-color: var(--mode-label-bg); color: var(--text-color); }
+        .search-box{
+            position:relative;
+            flex:1 1 220px;
+            min-width:150px;
+        }
+        #search-input { width:100%; flex-grow: 1; min-width: 0; padding: 10px; padding-right:40px !important; border: 1px solid var(--border-color); border-radius: 6px; font-size: 16px; background-color: var(--mode-label-bg); color: var(--text-color); box-sizing:border-box; }
+        #search-input::-webkit-search-cancel-button{
+            -webkit-appearance:none;
+            appearance:none;
+        }
+        .search-clear-btn{
+            position:absolute;
+            right:8px;
+            top:50%;
+            transform:translateY(-50%);
+            display:none;
+            align-items:center;
+            justify-content:center;
+            width:24px;
+            height:24px;
+            padding:0;
+            border:1px solid var(--border-color);
+            border-radius:999px;
+            background:var(--controls-bg);
+            color:var(--text-color);
+            font-size:16px;
+            line-height:1;
+            font-weight:700;
+            cursor:pointer;
+        }
+        .search-box.has-value .search-clear-btn{
+            display:flex;
+        }
+        .item-filter-toggle{
+            position:relative;
+            display:inline-flex;
+            align-items:center;
+            flex:0 0 auto;
+            cursor:pointer;
+            user-select:none;
+        }
+        .item-filter-toggle input{
+            position:absolute;
+            opacity:0;
+            pointer-events:none;
+        }
+        .item-filter-toggle span{
+            display:inline-flex;
+            align-items:center;
+            min-height:34px;
+            padding:7px 12px;
+            border:1px solid var(--mode-selector-border);
+            border-radius:999px;
+            background:var(--mode-label-bg);
+            color:var(--mode-label-text);
+            font-size:13px;
+            font-weight:700;
+            white-space:nowrap;
+        }
+        .item-filter-toggle input:checked + span{
+            background:var(--mode-label-checked-bg);
+            border-color:var(--mode-label-checked-bg);
+            color:var(--mode-label-checked-text);
+        }
         .mode-selector { display: flex; border-radius: 6px; overflow: hidden; border: 1px solid var(--mode-selector-border); flex-shrink: 0; }
         body:not(.admin-logged-in) .mode-selector { display: none; }
         body.admin-logged-in .mode-selector { display: flex; }
@@ -2548,12 +2611,23 @@
       justify-content:center;
       width:100%;
     }
-    .header-btn{
-      min-height:34px;
-    }
-    .mode-selector{
-      width:100%;
-    }
+	    .header-btn{
+	      min-height:34px;
+	    }
+	    .top-controls{
+	      gap:8px;
+	    }
+	    .search-box{
+	      flex-basis:100%;
+	    }
+	    .item-filter-toggle span{
+	      min-height:32px;
+	      padding:6px 10px;
+	      font-size:12px;
+	    }
+	    .mode-selector{
+	      width:100%;
+	    }
     .mode-selector label{
       flex:1;
       text-align:center;
@@ -2605,15 +2679,22 @@
     </div>
     
     <div class="controls-container">
-        <div id="dorm-selector" class="dorm-selector">
-            <button data-dorm="all" class="active">両方</button>
-            <button data-dorm="shofu">松風寮</button>
-            <button data-dorm="meizen">明善寮</button>
-        </div>
-        <div class="top-controls">
-            <input type="search" id="search-input" placeholder="部屋番号, 名前, ふりがなで検索...">
-            <div class="mode-selector">
-                <input type="radio" id="view-mode" name="mode" checked style="display:none;">
+	        <div id="dorm-selector" class="dorm-selector">
+	            <button data-dorm="all" class="active">両方</button>
+	            <button data-dorm="shofu">松風寮</button>
+	            <button data-dorm="meizen">明善寮</button>
+	        </div>
+	        <div class="top-controls">
+	            <div class="search-box" id="search-box">
+	                <input type="search" id="search-input" placeholder="部屋番号, 名前, ふりがなで検索...">
+	                <button type="button" id="search-clear-btn" class="search-clear-btn" aria-label="検索文字を消す">×</button>
+	            </div>
+	            <label class="item-filter-toggle" title="検索中は絞り込みに関係なく全員から検索します">
+	                <input type="checkbox" id="item-filter-toggle">
+	                <span>届いている人</span>
+	            </label>
+	            <div class="mode-selector">
+	                <input type="radio" id="view-mode" name="mode" checked style="display:none;">
                 <label for="view-mode" id="view-mode-label">通常</label>
                 <input type="radio" id="count-edit-mode" name="mode" style="display:none;">
                 <input type="radio" id="resident-edit-mode" name="mode">
@@ -9985,9 +10066,12 @@ function applySohmuUI(){
           newPwdInput: document.getElementById('new-password'),
           confirmPwdInput: document.getElementById('confirm-password'),
 
-          tableBody: document.querySelector("#resident-table tbody"),
-          searchInput: document.getElementById('search-input'),
-          addResidentBtn: document.getElementById('add-resident-btn'),
+	          tableBody: document.querySelector("#resident-table tbody"),
+	          searchInput: document.getElementById('search-input'),
+	          searchBox: document.getElementById('search-box'),
+	          searchClearBtn: document.getElementById('search-clear-btn'),
+	          itemFilterToggle: document.getElementById('item-filter-toggle'),
+	          addResidentBtn: document.getElementById('add-resident-btn'),
           addBulkBtn: document.getElementById('add-bulk-btn'),
           deleteSelectedBtn: document.getElementById('delete-selected-btn'),
           resetAllBtn: document.getElementById('reset-all-btn'),
@@ -12771,25 +12855,34 @@ if(elements.changePasswordForm){
             }
         }
 
-        window.renderTable = async () => {
-            const searchTerm = elements.searchInput.value;
-            const sohmuOn = elements.sohmuToggle.checked;
-            const morningInlineEdit = isMorningMode || document.body.classList.contains('morning-mode');
-            const myId = getStoredResidentId();
-            // Hide table header when 庶務モード is OFF
-            const tableHead = document.querySelector('#resident-table thead');
-            tableHead.style.display = sohmuOn ? '' : 'none';
-            const sourceResidents = sohmuOn
-              ? allResidents
-              : allResidents.filter(r => r.id === myId);
-            const currentSortOrder = normalizeResidentSortOrder(window.__residentSortOrderState || getResidentSortOrder());
-	            const baseList = sortResidentsByPreference(sourceResidents, { pinResidentId: sohmuOn ? '' : myId, sortOrder: currentSortOrder });
-	            const filteredResidents = baseList.filter(r => residentMatchesSearch(r, searchTerm));
-	            updateCrossDormSearchHint(searchTerm);
-	            elements.tableBody.innerHTML = ''; 
-            if (filteredResidents.length === 0) {
-                elements.tableBody.innerHTML = '<tr><td colspan="6">該当する寮生が見つかりません。</td></tr>';
-            } else {
+	        window.renderTable = async () => {
+	            const searchTerm = elements.searchInput.value;
+	            updateSearchAssistControls();
+	            const sohmuOn = elements.sohmuToggle.checked;
+	            const morningInlineEdit = isMorningMode || document.body.classList.contains('morning-mode');
+	            const myId = getStoredResidentId();
+	            const hasSearchTerm = String(searchTerm || '').trim().length > 0;
+	            const itemFilterActive = !!(sohmuOn && elements.itemFilterToggle && elements.itemFilterToggle.checked && !hasSearchTerm);
+	            // Hide table header when 庶務モード is OFF
+	            const tableHead = document.querySelector('#resident-table thead');
+	            tableHead.style.display = sohmuOn ? '' : 'none';
+	            const sourceResidents = sohmuOn
+	              ? allResidents
+	              : allResidents.filter(r => r.id === myId);
+	            const currentSortOrder = normalizeResidentSortOrder(window.__residentSortOrderState || getResidentSortOrder());
+		            const baseList = sortResidentsByPreference(sourceResidents, { pinResidentId: sohmuOn ? '' : myId, sortOrder: currentSortOrder });
+		            const searchedResidents = baseList.filter(r => residentMatchesSearch(r, searchTerm));
+		            const filteredResidents = itemFilterActive
+		              ? searchedResidents.filter(r => hasResidentReceivableItems(r))
+		              : searchedResidents;
+		            updateCrossDormSearchHint(searchTerm);
+		            elements.tableBody.innerHTML = ''; 
+	            if (filteredResidents.length === 0) {
+	                const emptyMessage = itemFilterActive
+	                  ? '荷物または郵便が届いている寮生はいません。'
+	                  : '該当する寮生が見つかりません。';
+	                elements.tableBody.innerHTML = `<tr><td colspan="6">${emptyMessage}</td></tr>`;
+	            } else {
                 filteredResidents.forEach(resident => {
                     const dorm = resident.dorm || currentCollectionName.split('_')[1];
                     const dormMarker = dorm === 'shofu' ? '松' : '明';
@@ -13312,9 +13405,22 @@ if(elements.changePasswordForm){
             window.applyResidentSortPreference(savedSort);
         }
 
-        let renderTableFrameId = 0;
-        function scheduleRenderTable() {
-            if (renderTableFrameId) return;
+	        let renderTableFrameId = 0;
+	        function hasResidentReceivableItems(resident) {
+	            const luggage = Math.max(0, parseInt(resident && resident.luggage, 10) || 0);
+	            const mail = Math.max(0, parseInt(resident && resident.mail, 10) || 0);
+	            return (luggage + mail) > 0;
+	        }
+	        function updateSearchAssistControls() {
+	            const hasValue = !!(elements.searchInput && String(elements.searchInput.value || '').length);
+	            if (elements.searchBox) elements.searchBox.classList.toggle('has-value', hasValue);
+	            if (elements.searchClearBtn) {
+	                elements.searchClearBtn.setAttribute('aria-hidden', hasValue ? 'false' : 'true');
+	                elements.searchClearBtn.tabIndex = hasValue ? 0 : -1;
+	            }
+	        }
+	        function scheduleRenderTable() {
+	            if (renderTableFrameId) return;
             const run = () => {
                 renderTableFrameId = 0;
                 renderTable();
@@ -13347,10 +13453,30 @@ if(elements.changePasswordForm){
         );
         elements.tableBody.addEventListener('change', e => { if (e.target.classList.contains('resident-checkbox')) updateDeleteButtonState(); });
         setMode('view-mode');
-        updateLoginStatus();
-        repositionAnnouncement(sessionStorage.getItem('isAdminLoggedIn')==='true');
-        elements.searchInput.addEventListener('input', scheduleRenderTable);
-        elements.addResidentBtn.addEventListener('click', showAddResidentModal);
+	        updateLoginStatus();
+	        repositionAnnouncement(sessionStorage.getItem('isAdminLoggedIn')==='true');
+	        updateSearchAssistControls();
+	        elements.searchInput.addEventListener('input', () => {
+	            updateSearchAssistControls();
+	            scheduleRenderTable();
+	        });
+	        if (elements.searchClearBtn) {
+	            elements.searchClearBtn.addEventListener('click', () => {
+	                if (!elements.searchInput) return;
+	                if (!elements.searchInput.value) {
+	                    updateSearchAssistControls();
+	                    return;
+	                }
+	                elements.searchInput.value = '';
+	                updateSearchAssistControls();
+	                scheduleRenderTable();
+	                try { elements.searchInput.focus(); } catch(_) {}
+	            });
+	        }
+	        if (elements.itemFilterToggle) {
+	            elements.itemFilterToggle.addEventListener('change', scheduleRenderTable);
+	        }
+	        elements.addResidentBtn.addEventListener('click', showAddResidentModal);
         elements.addBulkBtn.addEventListener('click', showBulkAddModal);
         elements.deleteSelectedBtn.addEventListener('click', deleteSelectedResidents);
         // 全リセットボタンのイベント登録
