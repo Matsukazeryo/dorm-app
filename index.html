@@ -390,12 +390,15 @@
           gap:4px;
           white-space:nowrap;
         }
-        body.workflow-home .sohmu-switch-wrap{
+        .workflow-sohmu-switch-wrap{
           position:fixed;
           top:calc(12px + env(safe-area-inset-top, 0px));
           right:14px;
           z-index:2701;
-          display:inline-flex !important;
+          display:inline-flex;
+          align-items:center;
+          gap:4px;
+          white-space:nowrap;
           padding:9px 12px 9px 8px;
           border:1px solid rgba(18,51,80,.18);
           border-radius:999px;
@@ -404,10 +407,15 @@
           backdrop-filter:blur(14px) saturate(1.12);
           -webkit-backdrop-filter:blur(14px) saturate(1.12);
         }
-        body.workflow-home .sohmu-switch-wrap .switch{
+        .workflow-sohmu-switch-wrap .switch{
           margin-left:0 !important;
         }
-        body.dark-theme.workflow-home .sohmu-switch-wrap{
+        .workflow-sohmu-label{
+          font-weight:900;
+          color:var(--header-text);
+          font-size:.9rem;
+        }
+        body.dark-theme .workflow-sohmu-switch-wrap{
           background:rgba(28,42,56,.84);
           border-color:rgba(255,255,255,.16);
         }
@@ -2907,6 +2915,13 @@
 </div>
 
 <div id="workflow-home-screen" class="workflow-home-screen" aria-live="polite">
+  <div class="workflow-sohmu-switch-wrap">
+    <label class="switch">
+      <input type="checkbox" id="workflow-sohmu-toggle" checked>
+      <span class="slider round"></span>
+    </label>
+    <span class="workflow-sohmu-label">庶務</span>
+  </div>
   <div class="workflow-home-card">
     <div class="workflow-choice-grid">
       <button id="workflow-receive-btn" type="button" class="workflow-choice-btn primary">受け取る</button>
@@ -10430,6 +10445,7 @@ function applySohmuUI(){
 		          workflowRegisterBtn: document.getElementById('workflow-register-btn'),
 		          workflowHomeBtn: document.getElementById('workflow-home-btn'),
 		          workflowHomeCountdown: document.getElementById('workflow-home-countdown'),
+		          workflowSohmuToggle: document.getElementById('workflow-sohmu-toggle'),
 
 			          tableBody: document.querySelector("#resident-table tbody"),
 	          searchInput: document.getElementById('search-input'),
@@ -10699,23 +10715,31 @@ function closeWorkflowTransientViews() {
   try { closeItemHistoryModal(); } catch(_) {}
 }
 
-function setWorkflowSohmuOn() {
-  if (!elements.sohmuToggle) return;
-  if (!elements.sohmuToggle.checked) {
-    elements.sohmuToggle.checked = true;
+	function setWorkflowSohmuOn() {
+	  if (!elements.sohmuToggle) return;
+	  if (!elements.sohmuToggle.checked) {
+	    elements.sohmuToggle.checked = true;
     try { setSohmuOn(true); } catch(_) {}
     try { applySohmuUI(); } catch(_) {}
     try { dispatchEventCompat(elements.sohmuToggle, 'change', true); } catch(_) {}
-  }
-}
+	  }
+	}
 
-function updateWorkflowBodyClasses() {
-  const enabled = isWorkflowFeatureEnabled();
-  document.body.classList.toggle('workflow-disabled', !enabled);
-  document.body.classList.toggle('workflow-home', enabled && workflowState.mode === 'home');
-  document.body.classList.toggle('workflow-receive-mode', enabled && workflowState.mode === 'receive');
-  document.body.classList.toggle('workflow-register-mode', enabled && workflowState.mode === 'register');
-}
+	function syncWorkflowSohmuToggle() {
+	  if (!elements.workflowSohmuToggle) return;
+	  const sourceToggle = elements.sohmuToggle;
+	  elements.workflowSohmuToggle.checked = !!(sourceToggle && sourceToggle.checked);
+	  elements.workflowSohmuToggle.disabled = !!(sourceToggle && sourceToggle.disabled);
+	}
+
+	function updateWorkflowBodyClasses() {
+	  const enabled = isWorkflowFeatureEnabled();
+	  document.body.classList.toggle('workflow-disabled', !enabled);
+	  document.body.classList.toggle('workflow-home', enabled && workflowState.mode === 'home');
+	  document.body.classList.toggle('workflow-receive-mode', enabled && workflowState.mode === 'receive');
+	  document.body.classList.toggle('workflow-register-mode', enabled && workflowState.mode === 'register');
+	  syncWorkflowSohmuToggle();
+	}
 
 function applyWorkflowMode(mode, options) {
   const nextMode = mode === 'receive' || mode === 'register' ? mode : 'home';
@@ -10782,14 +10806,26 @@ function initializeWorkflowMode() {
       applyWorkflowMode('register');
     });
   }
-  if (elements.workflowHomeBtn) {
-    elements.workflowHomeBtn.addEventListener('click', function(){
-      applyWorkflowMode('home');
-    });
-  }
-  if (elements.sohmuToggle) {
-    elements.sohmuToggle.addEventListener('change', syncWorkflowAvailability);
-  }
+	  if (elements.workflowHomeBtn) {
+	    elements.workflowHomeBtn.addEventListener('click', function(){
+	      applyWorkflowMode('home');
+	    });
+	  }
+	  if (elements.workflowSohmuToggle) {
+	    elements.workflowSohmuToggle.addEventListener('change', function(){
+	      if (!elements.sohmuToggle) return;
+	      elements.sohmuToggle.checked = !!elements.workflowSohmuToggle.checked;
+	      try { setSohmuOn(elements.sohmuToggle.checked); } catch(_) {}
+	      try { dispatchEventCompat(elements.sohmuToggle, 'change', true); } catch(_) {}
+	      syncWorkflowAvailability();
+	    });
+	  }
+	  if (elements.sohmuToggle) {
+	    elements.sohmuToggle.addEventListener('change', function(){
+	      syncWorkflowSohmuToggle();
+	      syncWorkflowAvailability();
+	    });
+	  }
   ['pointerdown', 'keydown', 'input', 'scroll', 'touchstart'].forEach(function(eventName){
     document.addEventListener(eventName, handleWorkflowActivity, { passive: true, capture: true });
   });
