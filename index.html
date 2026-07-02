@@ -4,6 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>荷物管理アプリ</title>
     <!-- ===== アプリアイコン設定 ===== -->
     <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png">
@@ -227,6 +230,10 @@
 	        }
         body.workflow-disabled .workflow-home-screen,
         body.workflow-disabled .workflow-home-btn{
+            display:none !important;
+        }
+        body.morning-mode .workflow-home-screen,
+        body.morning-mode .workflow-home-btn{
             display:none !important;
         }
 	        body.dark-theme .workflow-home-screen{
@@ -5878,7 +5885,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
             console.warn('Firebase Messaging instance is not available; skip getToken');
             return null;
           }
-          const swUrl = '/firebase-messaging-sw.js?v=20250928';
+          const swUrl = '/firebase-messaging-sw.js?v=20260702-workflow-cache';
           const registration = await navigator.serviceWorker.register(swUrl, { scope: '/' });
 
           // Use the registration we just created for getToken (avoid waiting on controller SW)
@@ -8480,20 +8487,26 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       } catch(_) {}
     }
 
-    function activateMorningViewMode(){
-      try {
-        const viewRadio = document.getElementById('view-mode');
-        const countRadio = document.getElementById('count-edit-mode');
+	    function activateMorningViewMode(){
+	      try {
+	        const viewRadio = document.getElementById('view-mode');
+	        const countRadio = document.getElementById('count-edit-mode');
         const residentRadio = document.getElementById('resident-edit-mode');
         if (viewRadio) viewRadio.checked = true;
         if (countRadio) countRadio.checked = false;
-        if (residentRadio) residentRadio.checked = false;
-        document.body.classList.remove('count-edit-mode');
-        document.body.classList.remove('resident-edit-mode');
-        if (typeof setMode === 'function') setMode('view-mode');
-        document.body.classList.add('morning-mode');
-      } catch(_) {}
-    }
+	        if (residentRadio) residentRadio.checked = false;
+	        document.body.classList.remove('count-edit-mode');
+	        document.body.classList.remove('resident-edit-mode');
+		        if (typeof setMode === 'function') setMode('view-mode');
+		        document.body.classList.add('morning-mode');
+		        if (typeof setItemFilterEnabled === 'function') {
+		          try { setItemFilterEnabled(false); } catch(_) {}
+		        }
+		        if (typeof syncWorkflowAvailability === 'function') {
+		          try { syncWorkflowAvailability(); } catch(_) {}
+		        }
+	      } catch(_) {}
+	    }
 
     async function snapshotDormToFirestore(dormKey){
       // runId 例: 20251004T083012_shofu
@@ -8586,10 +8599,13 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 	      updateMorningReminderUI();
 	    }
 
-	    function closeMorningModeUI(){
-	      isMorningMode = false;
-	      document.body.classList.remove('morning-mode');
-      try { window.__morningModeSuppressPush = false; } catch(_){}
+		    function closeMorningModeUI(){
+		      isMorningMode = false;
+		      document.body.classList.remove('morning-mode');
+		      if (typeof syncWorkflowAvailability === 'function') {
+		        try { syncWorkflowAvailability(); } catch(_) {}
+		      }
+	      try { window.__morningModeSuppressPush = false; } catch(_){}
       const b = document.getElementById('morning-banner');
       if (b) b.style.display = 'none';
       // 参照表示を消去
@@ -10684,9 +10700,19 @@ function isWorkflowRegisterMode() {
   return workflowState.mode === 'register';
 }
 
-function isWorkflowFeatureEnabled() {
-  return !!(elements.sohmuToggle && elements.sohmuToggle.checked);
-}
+	function isWorkflowFeatureEnabled() {
+	  return !!(elements.sohmuToggle && elements.sohmuToggle.checked && !isWorkflowSuppressedByMorning());
+	}
+
+	function isWorkflowSuppressedByMorning() {
+	  try {
+	    if (document.body && document.body.classList && document.body.classList.contains('morning-mode')) return true;
+	  } catch(_) {}
+	  try {
+	    if (typeof isMorningMode !== 'undefined' && isMorningMode) return true;
+	  } catch(_) {}
+	  return false;
+	}
 
 	function clearWorkflowHomeTimer() {
 	  if (workflowState.timerId) window.clearTimeout(workflowState.timerId);
@@ -13606,7 +13632,7 @@ if(elements.changePasswordForm){
 	            const morningInlineEdit = isMorningMode || document.body.classList.contains('morning-mode');
 	            const myId = getStoredResidentId();
 		            const hasSearchTerm = String(searchTerm || '').trim().length > 0;
-		            const itemFilterActive = !!(sohmuOn && getItemFilterEnabled() && !hasSearchTerm);
+		            const itemFilterActive = !!(sohmuOn && !isMorningDisplayLocked() && getItemFilterEnabled() && !hasSearchTerm);
 	            // Hide table header when 庶務モード is OFF
 	            const tableHead = document.querySelector('#resident-table thead');
 	            tableHead.style.display = sohmuOn ? '' : 'none';
@@ -14160,40 +14186,53 @@ if(elements.changePasswordForm){
         }
 
 	        let renderTableFrameId = 0;
-		        function hasResidentReceivableItems(resident) {
-		            const luggage = Math.max(0, parseInt(resident && resident.luggage, 10) || 0);
-		            const mail = Math.max(0, parseInt(resident && resident.mail, 10) || 0);
-		            return (luggage + mail) > 0;
-		        }
-		        function getItemFilterEnabled() {
-		            return !!(elements.itemFilterToggle && elements.itemFilterToggle.classList.contains('is-active'));
-		        }
-			        function updateItemFilterControls() {
-				            const filterEnabled = getItemFilterEnabled();
-			            const sohmuOn = !!(elements.sohmuToggle && elements.sohmuToggle.checked);
-			            const hasSearchTerm = !!(elements.searchInput && String(elements.searchInput.value || '').trim());
-			            if (elements.itemFilterAllBtn) {
-			                elements.itemFilterAllBtn.classList.toggle('is-active', !filterEnabled);
-			                elements.itemFilterAllBtn.setAttribute('aria-pressed', filterEnabled ? 'false' : 'true');
-			                elements.itemFilterAllBtn.disabled = !sohmuOn;
-			            }
-			            if (elements.itemFilterToggle) {
-			                elements.itemFilterToggle.classList.toggle('is-active', filterEnabled);
-			                elements.itemFilterToggle.setAttribute('aria-pressed', filterEnabled ? 'true' : 'false');
-				                elements.itemFilterToggle.disabled = !sohmuOn;
-				                elements.itemFilterToggle.title = hasSearchTerm && filterEnabled
+			        function hasResidentReceivableItems(resident) {
+			            const luggage = Math.max(0, parseInt(resident && resident.luggage, 10) || 0);
+			            const mail = Math.max(0, parseInt(resident && resident.mail, 10) || 0);
+			            return (luggage + mail) > 0;
+			        }
+			        function isMorningDisplayLocked() {
+			            try {
+			                if (document.body && document.body.classList && document.body.classList.contains('morning-mode')) return true;
+			            } catch(_) {}
+			            try {
+			                if (typeof isMorningMode !== 'undefined' && isMorningMode) return true;
+			            } catch(_) {}
+			            return false;
+			        }
+			        function getItemFilterEnabled() {
+			            if (isMorningDisplayLocked()) return false;
+			            return !!(elements.itemFilterToggle && elements.itemFilterToggle.classList.contains('is-active'));
+			        }
+				        function updateItemFilterControls() {
+				            const morningLocked = isMorningDisplayLocked();
+				            const filterEnabled = morningLocked ? false : getItemFilterEnabled();
+				            const sohmuOn = !!(elements.sohmuToggle && elements.sohmuToggle.checked);
+				            const hasSearchTerm = !!(elements.searchInput && String(elements.searchInput.value || '').trim());
+				            if (elements.itemFilterAllBtn) {
+				                elements.itemFilterAllBtn.classList.toggle('is-active', !filterEnabled);
+				                elements.itemFilterAllBtn.setAttribute('aria-pressed', filterEnabled ? 'false' : 'true');
+				                elements.itemFilterAllBtn.disabled = !sohmuOn || morningLocked;
+				            }
+				            if (elements.itemFilterToggle) {
+				                elements.itemFilterToggle.classList.toggle('is-active', filterEnabled);
+				                elements.itemFilterToggle.setAttribute('aria-pressed', filterEnabled ? 'true' : 'false');
+				                elements.itemFilterToggle.disabled = !sohmuOn || morningLocked;
+				                elements.itemFilterToggle.title = morningLocked
+				                    ? '朝の庶務中は全員表示で固定します'
+				                    : hasSearchTerm && filterEnabled
 				                    ? '検索中は全員から検索します'
 				                    : '荷物または郵便が届いている寮生だけ表示';
-			            }
-			            if (elements.displayFilterToggle) {
+				            }
+				            if (elements.displayFilterToggle) {
 				                elements.displayFilterToggle.classList.toggle('is-searching', hasSearchTerm && filterEnabled);
-				                elements.displayFilterToggle.classList.remove('is-locked');
-			                elements.displayFilterToggle.setAttribute('aria-disabled', sohmuOn ? 'false' : 'true');
-			            }
-			        }
-			        function setItemFilterEnabled(enabled) {
+				                elements.displayFilterToggle.classList.toggle('is-locked', morningLocked);
+				                elements.displayFilterToggle.setAttribute('aria-disabled', (!sohmuOn || morningLocked) ? 'true' : 'false');
+				            }
+				        }
+				        function setItemFilterEnabled(enabled) {
 				            if (!elements.itemFilterToggle || !elements.itemFilterAllBtn) return;
-				            const nextEnabled = !!enabled;
+				            const nextEnabled = isMorningDisplayLocked() ? false : !!enabled;
 			            elements.itemFilterToggle.classList.toggle('is-active', nextEnabled);
 			            elements.itemFilterAllBtn.classList.toggle('is-active', !nextEnabled);
 			            updateItemFilterControls();
