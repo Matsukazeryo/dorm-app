@@ -120,7 +120,7 @@
             flex:1 1 220px;
             min-width:150px;
         }
-        #search-input { width:100%; flex-grow: 1; min-width: 0; padding: 10px; padding-right:40px !important; border: 1px solid var(--border-color); border-radius: 6px; font-size: 16px; background-color: var(--mode-label-bg); color: var(--text-color); box-sizing:border-box; }
+        #search-input { width:100%; flex-grow: 1; min-width: 0; padding: 10px; padding-right:76px !important; border: 1px solid var(--border-color); border-radius: 6px; font-size: 16px; background-color: var(--mode-label-bg); color: var(--text-color); box-sizing:border-box; }
         #search-input::-webkit-search-cancel-button{
             -webkit-appearance:none;
             appearance:none;
@@ -144,6 +144,7 @@
             line-height:1;
             font-weight:700;
             cursor:pointer;
+            z-index:3;
         }
         .search-box.has-value .search-clear-btn{
             display:flex;
@@ -156,6 +157,16 @@
             cursor:pointer;
             user-select:none;
         }
+        .search-box .item-filter-toggle{
+            position:absolute;
+            right:8px;
+            top:50%;
+            transform:translateY(-50%);
+            z-index:2;
+        }
+        .search-box.has-value .item-filter-toggle{
+            right:38px;
+        }
         .item-filter-toggle input{
             position:absolute;
             opacity:0;
@@ -164,13 +175,16 @@
         .item-filter-toggle span{
             display:inline-flex;
             align-items:center;
-            min-height:34px;
-            padding:7px 12px;
+            justify-content:center;
+            width:26px;
+            height:26px;
+            min-height:0;
+            padding:0;
             border:1px solid var(--mode-selector-border);
             border-radius:999px;
             background:var(--mode-label-bg);
             color:var(--mode-label-text);
-            font-size:13px;
+            font-size:12px;
             font-weight:700;
             white-space:nowrap;
         }
@@ -2621,8 +2635,10 @@
 	      flex-basis:100%;
 	    }
 	    .item-filter-toggle span{
-	      min-height:32px;
-	      padding:6px 10px;
+	      width:26px;
+	      height:26px;
+	      min-height:0;
+	      padding:0;
 	      font-size:12px;
 	    }
 	    .mode-selector{
@@ -2687,12 +2703,12 @@
 	        <div class="top-controls">
 	            <div class="search-box" id="search-box">
 	                <input type="search" id="search-input" placeholder="部屋番号, 名前, ふりがなで検索...">
+	                <label class="item-filter-toggle" title="荷物・郵便が届いている人だけ表示" aria-label="荷物・郵便が届いている人だけ表示">
+	                    <input type="checkbox" id="item-filter-toggle">
+	                    <span aria-hidden="true">届</span>
+	                </label>
 	                <button type="button" id="search-clear-btn" class="search-clear-btn" aria-label="検索文字を消す">×</button>
 	            </div>
-	            <label class="item-filter-toggle" title="検索中は絞り込みに関係なく全員から検索します">
-	                <input type="checkbox" id="item-filter-toggle">
-	                <span>届いている人</span>
-	            </label>
 	            <div class="mode-selector">
 	                <input type="radio" id="view-mode" name="mode" checked style="display:none;">
                 <label for="view-mode" id="view-mode-label">通常</label>
