@@ -117,10 +117,10 @@
         .top-controls { display: flex; align-items: center; width: 100%; gap: 15px; flex-wrap: wrap;}
         .search-box{
             position:relative;
-            flex:1 1 220px;
+            flex:1 1 260px;
             min-width:150px;
         }
-        #search-input { width:100%; flex-grow: 1; min-width: 0; padding: 10px; padding-right:76px !important; border: 1px solid var(--border-color); border-radius: 6px; font-size: 16px; background-color: var(--mode-label-bg); color: var(--text-color); box-sizing:border-box; }
+        #search-input { width:100%; flex-grow: 1; min-width: 0; padding: 10px; padding-right:42px !important; border: 1px solid var(--border-color); border-radius: 6px; font-size: 16px; background-color: var(--mode-label-bg); color: var(--text-color); box-sizing:border-box; }
         #search-input::-webkit-search-cancel-button{
             -webkit-appearance:none;
             appearance:none;
@@ -149,49 +149,49 @@
         .search-box.has-value .search-clear-btn{
             display:flex;
         }
-        .item-filter-toggle{
-            position:relative;
-            display:inline-flex;
+        .display-filter-toggle{
+            display:flex;
             align-items:center;
+            gap:7px;
             flex:0 0 auto;
-            cursor:pointer;
-            user-select:none;
+            min-width:0;
         }
-        .search-box .item-filter-toggle{
-            position:absolute;
-            right:8px;
-            top:50%;
-            transform:translateY(-50%);
-            z-index:2;
+        .display-filter-label{
+            color:var(--mode-label-text);
+            font-size:0.82rem;
+            font-weight:800;
+            white-space:nowrap;
         }
-        .search-box.has-value .item-filter-toggle{
-            right:38px;
-        }
-        .item-filter-toggle input{
-            position:absolute;
-            opacity:0;
-            pointer-events:none;
-        }
-        .item-filter-toggle span{
+        .display-filter-options{
             display:inline-flex;
             align-items:center;
-            justify-content:center;
-            width:26px;
-            height:26px;
-            min-height:0;
-            padding:0;
+            overflow:hidden;
             border:1px solid var(--mode-selector-border);
             border-radius:999px;
             background:var(--mode-label-bg);
-            color:var(--mode-label-text);
-            font-size:12px;
-            font-weight:700;
-            white-space:nowrap;
         }
-        .item-filter-toggle input:checked + span{
+        .display-filter-btn{
+            min-height:34px;
+            padding:0 12px;
+            border:none;
+            border-left:1px solid var(--mode-selector-border);
+            background:transparent;
+            color:var(--mode-label-text);
+            font-size:0.82rem;
+            font-weight:800;
+            white-space:nowrap;
+            cursor:pointer;
+        }
+        .display-filter-btn:first-child{
+            border-left:none;
+        }
+        .display-filter-btn.is-active{
             background:var(--mode-label-checked-bg);
-            border-color:var(--mode-label-checked-bg);
             color:var(--mode-label-checked-text);
+        }
+        .display-filter-btn:disabled{
+            cursor:not-allowed;
+            opacity:.55;
         }
         .mode-selector { display: flex; border-radius: 6px; overflow: hidden; border: 1px solid var(--mode-selector-border); flex-shrink: 0; }
         body:not(.admin-logged-in) .mode-selector { display: none; }
@@ -2676,13 +2676,18 @@
 	    .search-box{
 	      flex-basis:100%;
 	    }
-	    .item-filter-toggle span{
-	      width:26px;
-	      height:26px;
-	      min-height:0;
-	      padding:0;
-	      font-size:12px;
-	    }
+		    .display-filter-toggle{
+		      width:100%;
+		    }
+		    .display-filter-options{
+		      flex:1;
+		    }
+		    .display-filter-btn{
+		      flex:1;
+		      min-width:0;
+		      padding:0 8px;
+		      font-size:0.78rem;
+		    }
 	    .mode-selector{
 	      width:100%;
 	    }
@@ -2742,16 +2747,19 @@
 	            <button data-dorm="shofu">松風寮</button>
 	            <button data-dorm="meizen">明善寮</button>
 	        </div>
-	        <div class="top-controls">
-	            <div class="search-box" id="search-box">
-	                <input type="search" id="search-input" placeholder="部屋番号, 名前, ふりがなで検索...">
-	                <label class="item-filter-toggle" title="荷物・郵便が届いている人だけ表示" aria-label="荷物・郵便が届いている人だけ表示">
-	                    <input type="checkbox" id="item-filter-toggle">
-	                    <span aria-hidden="true">届</span>
-	                </label>
-	                <button type="button" id="search-clear-btn" class="search-clear-btn" aria-label="検索文字を消す">×</button>
-	            </div>
-	            <div class="mode-selector">
+		        <div class="top-controls">
+		            <div class="search-box" id="search-box">
+		                <input type="search" id="search-input" placeholder="部屋番号, 名前, ふりがなで検索...">
+		                <button type="button" id="search-clear-btn" class="search-clear-btn" aria-label="検索文字を消す">×</button>
+		            </div>
+		            <div id="display-filter-toggle" class="display-filter-toggle" role="group" aria-label="表示切り替え">
+		                <span class="display-filter-label">表示</span>
+		                <div class="display-filter-options">
+		                    <button type="button" id="item-filter-all-btn" class="display-filter-btn is-active" aria-pressed="true">全員</button>
+		                    <button type="button" id="item-filter-toggle" class="display-filter-btn" aria-pressed="false">荷物・郵便あり</button>
+		                </div>
+		            </div>
+		            <div class="mode-selector">
 	                <input type="radio" id="view-mode" name="mode" checked style="display:none;">
                 <label for="view-mode" id="view-mode-label">通常</label>
                 <input type="radio" id="count-edit-mode" name="mode" style="display:none;">
@@ -10216,7 +10224,9 @@ function applySohmuUI(){
 	          searchInput: document.getElementById('search-input'),
 	          searchBox: document.getElementById('search-box'),
 	          searchClearBtn: document.getElementById('search-clear-btn'),
+	          itemFilterAllBtn: document.getElementById('item-filter-all-btn'),
 	          itemFilterToggle: document.getElementById('item-filter-toggle'),
+	          displayFilterToggle: document.getElementById('display-filter-toggle'),
 	          addResidentBtn: document.getElementById('add-resident-btn'),
           addBulkBtn: document.getElementById('add-bulk-btn'),
           deleteSelectedBtn: document.getElementById('delete-selected-btn'),
@@ -13106,7 +13116,7 @@ if(elements.changePasswordForm){
 	            const morningInlineEdit = isMorningMode || document.body.classList.contains('morning-mode');
 	            const myId = getStoredResidentId();
 	            const hasSearchTerm = String(searchTerm || '').trim().length > 0;
-	            const itemFilterActive = !!(sohmuOn && elements.itemFilterToggle && elements.itemFilterToggle.checked && !hasSearchTerm);
+		            const itemFilterActive = !!(sohmuOn && getItemFilterEnabled() && !hasSearchTerm);
 	            // Hide table header when 庶務モード is OFF
 	            const tableHead = document.querySelector('#resident-table thead');
 	            tableHead.style.display = sohmuOn ? '' : 'none';
@@ -13650,19 +13660,52 @@ if(elements.changePasswordForm){
         }
 
 	        let renderTableFrameId = 0;
-	        function hasResidentReceivableItems(resident) {
-	            const luggage = Math.max(0, parseInt(resident && resident.luggage, 10) || 0);
-	            const mail = Math.max(0, parseInt(resident && resident.mail, 10) || 0);
-	            return (luggage + mail) > 0;
-	        }
-	        function updateSearchAssistControls() {
-	            const hasValue = !!(elements.searchInput && String(elements.searchInput.value || '').length);
-	            if (elements.searchBox) elements.searchBox.classList.toggle('has-value', hasValue);
-	            if (elements.searchClearBtn) {
-	                elements.searchClearBtn.setAttribute('aria-hidden', hasValue ? 'false' : 'true');
-	                elements.searchClearBtn.tabIndex = hasValue ? 0 : -1;
-	            }
-	        }
+		        function hasResidentReceivableItems(resident) {
+		            const luggage = Math.max(0, parseInt(resident && resident.luggage, 10) || 0);
+		            const mail = Math.max(0, parseInt(resident && resident.mail, 10) || 0);
+		            return (luggage + mail) > 0;
+		        }
+		        function getItemFilterEnabled() {
+		            return !!(elements.itemFilterToggle && elements.itemFilterToggle.classList.contains('is-active'));
+		        }
+		        function updateItemFilterControls() {
+		            const filterEnabled = getItemFilterEnabled();
+		            const sohmuOn = !!(elements.sohmuToggle && elements.sohmuToggle.checked);
+		            const hasSearchTerm = !!(elements.searchInput && String(elements.searchInput.value || '').trim());
+		            if (elements.itemFilterAllBtn) {
+		                elements.itemFilterAllBtn.classList.toggle('is-active', !filterEnabled);
+		                elements.itemFilterAllBtn.setAttribute('aria-pressed', filterEnabled ? 'false' : 'true');
+		                elements.itemFilterAllBtn.disabled = !sohmuOn;
+		            }
+		            if (elements.itemFilterToggle) {
+		                elements.itemFilterToggle.classList.toggle('is-active', filterEnabled);
+		                elements.itemFilterToggle.setAttribute('aria-pressed', filterEnabled ? 'true' : 'false');
+		                elements.itemFilterToggle.disabled = !sohmuOn;
+		                elements.itemFilterToggle.title = hasSearchTerm && filterEnabled
+		                    ? '検索中は全員から検索します'
+		                    : '荷物または郵便が届いている寮生だけ表示';
+		            }
+		            if (elements.displayFilterToggle) {
+		                elements.displayFilterToggle.classList.toggle('is-searching', hasSearchTerm && filterEnabled);
+		                elements.displayFilterToggle.setAttribute('aria-disabled', sohmuOn ? 'false' : 'true');
+		            }
+		        }
+		        function setItemFilterEnabled(enabled) {
+		            if (!elements.itemFilterToggle || !elements.itemFilterAllBtn) return;
+		            elements.itemFilterToggle.classList.toggle('is-active', !!enabled);
+		            elements.itemFilterAllBtn.classList.toggle('is-active', !enabled);
+		            updateItemFilterControls();
+		            scheduleRenderTable();
+		        }
+		        function updateSearchAssistControls() {
+		            const hasValue = !!(elements.searchInput && String(elements.searchInput.value || '').length);
+		            if (elements.searchBox) elements.searchBox.classList.toggle('has-value', hasValue);
+		            if (elements.searchClearBtn) {
+		                elements.searchClearBtn.setAttribute('aria-hidden', hasValue ? 'false' : 'true');
+		                elements.searchClearBtn.tabIndex = hasValue ? 0 : -1;
+		            }
+		            updateItemFilterControls();
+		        }
 	        function scheduleRenderTable() {
 	            if (renderTableFrameId) return;
             const run = () => {
@@ -13717,9 +13760,12 @@ if(elements.changePasswordForm){
 	                try { elements.searchInput.focus(); } catch(_) {}
 	            });
 	        }
-	        if (elements.itemFilterToggle) {
-	            elements.itemFilterToggle.addEventListener('change', scheduleRenderTable);
-	        }
+		        if (elements.itemFilterAllBtn) {
+		            elements.itemFilterAllBtn.addEventListener('click', () => setItemFilterEnabled(false));
+		        }
+		        if (elements.itemFilterToggle) {
+		            elements.itemFilterToggle.addEventListener('click', () => setItemFilterEnabled(true));
+		        }
 	        elements.addResidentBtn.addEventListener('click', showAddResidentModal);
         elements.addBulkBtn.addEventListener('click', showBulkAddModal);
         elements.deleteSelectedBtn.addEventListener('click', deleteSelectedResidents);
