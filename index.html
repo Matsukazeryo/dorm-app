@@ -388,7 +388,7 @@
         .resident-note-input{
             width:100%;
             min-height:38px;
-            padding:6px 48px 6px 8px;
+            padding:6px 8px;
             border:1px solid var(--border-color);
             border-radius:6px;
             background-color:var(--mode-label-bg);
@@ -422,6 +422,11 @@
             border-radius:999px;
             cursor:pointer;
             flex-shrink:0;
+        }
+        .resident-note-save-btn,
+        .self-note-save-btn,
+        #mobile-count-note-save-btn{
+            display:none !important;
         }
         .resident-note-status{
             position:absolute;
@@ -524,7 +529,7 @@
 		        .self-note-actions{
 		          display:flex;
 		          align-items:center;
-		          justify-content:flex-end;
+		          justify-content:space-between;
 		          gap:10px;
 		          margin-top:10px;
 		        }
@@ -9135,14 +9140,100 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       }catch(_){ }
     }
 
-    function clearResidentInlineNoteDraft(residentId){
-      try{
-        if (!residentId || !window.__residentNoteDrafts) return;
-        delete window.__residentNoteDrafts[residentId];
-      }catch(_){ }
-    }
+	    function clearResidentInlineNoteDraft(residentId){
+	      try{
+	        if (!residentId || !window.__residentNoteDrafts) return;
+	        delete window.__residentNoteDrafts[residentId];
+	      }catch(_){ }
+	    }
 
-    function renderResidentNoteHtml(value, emptyLabel){
+	    const NOTE_AUTOSAVE_DELAY_MS = 700;
+	    const residentInlineNoteAutosaveTimers = {};
+	    let selfResidentNoteAutosaveTimer = null;
+	    let mobileCountNoteAutosaveTimer = null;
+
+	    function getCurrentResidentNoteValue(residentId){
+	      const resident = getResidentById(residentId);
+	      return resident ? normalizeResidentNote(resident.note || resident.memo || resident.notes || '') : null;
+	    }
+
+	    function clearResidentInlineNoteAutosaveTimer(residentId){
+	      const id = String(residentId || '').trim();
+	      if (!id || !residentInlineNoteAutosaveTimers[id]) return;
+	      window.clearTimeout(residentInlineNoteAutosaveTimers[id]);
+	      delete residentInlineNoteAutosaveTimers[id];
+	    }
+
+	    function scheduleResidentInlineNoteAutosave(residentId, delay){
+	      const id = String(residentId || '').trim();
+	      if (!id) return;
+	      clearResidentInlineNoteAutosaveTimer(id);
+	      setResidentInlineNoteStatus(id, '自動保存します...', '');
+	      residentInlineNoteAutosaveTimers[id] = window.setTimeout(function(){
+	        delete residentInlineNoteAutosaveTimers[id];
+	        saveResidentInlineNote(id, { auto: true });
+	      }, typeof delay === 'number' ? delay : NOTE_AUTOSAVE_DELAY_MS);
+	    }
+
+	    function flushResidentInlineNoteAutosave(residentId){
+	      const id = String(residentId || '').trim();
+	      if (!id) return null;
+	      clearResidentInlineNoteAutosaveTimer(id);
+	      return saveResidentInlineNote(id, { auto: true });
+	    }
+
+	    function handleResidentInlineNoteInput(residentId, value){
+	      updateResidentInlineNoteDraft(residentId, value);
+	      scheduleResidentInlineNoteAutosave(residentId);
+	    }
+
+	    function clearSelfResidentNoteAutosaveTimer(){
+	      if (!selfResidentNoteAutosaveTimer) return;
+	      window.clearTimeout(selfResidentNoteAutosaveTimer);
+	      selfResidentNoteAutosaveTimer = null;
+	    }
+
+	    function scheduleSelfResidentNoteAutosave(residentId, delay){
+	      const id = String(residentId || '').trim();
+	      if (!id) return;
+	      clearSelfResidentNoteAutosaveTimer();
+	      setSelfResidentNoteStatus(id, '自動保存します...', '');
+	      selfResidentNoteAutosaveTimer = window.setTimeout(function(){
+	        selfResidentNoteAutosaveTimer = null;
+	        saveSelfResidentNote(id, { auto: true });
+	      }, typeof delay === 'number' ? delay : NOTE_AUTOSAVE_DELAY_MS);
+	    }
+
+	    function flushSelfResidentNoteAutosave(residentId){
+	      const id = String(residentId || '').trim();
+	      if (!id) return null;
+	      clearSelfResidentNoteAutosaveTimer();
+	      return saveSelfResidentNote(id, { auto: true });
+	    }
+
+	    function clearMobileCountNoteAutosaveTimer(){
+	      if (!mobileCountNoteAutosaveTimer) return;
+	      window.clearTimeout(mobileCountNoteAutosaveTimer);
+	      mobileCountNoteAutosaveTimer = null;
+	    }
+
+	    function scheduleMobileCountEditNoteAutosave(delay){
+	      if (!mobileCountEditState.residentId) return;
+	      clearMobileCountNoteAutosaveTimer();
+	      setMobileCountNoteStatus('自動保存します...', '');
+	      mobileCountNoteAutosaveTimer = window.setTimeout(function(){
+	        mobileCountNoteAutosaveTimer = null;
+	        saveMobileCountEditNote({ auto: true });
+	      }, typeof delay === 'number' ? delay : NOTE_AUTOSAVE_DELAY_MS);
+	    }
+
+	    function flushMobileCountEditNoteAutosave(){
+	      if (!mobileCountEditState.residentId || !mobileCountEditState.noteDirty) return null;
+	      clearMobileCountNoteAutosaveTimer();
+	      return saveMobileCountEditNote({ auto: true });
+	    }
+
+	    function renderResidentNoteHtml(value, emptyLabel){
       const note = normalizeResidentNote(value);
       if (!note) {
         if (!emptyLabel) return '';
@@ -9171,7 +9262,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 	      const body = escapeHtml(sourceValue == null ? '' : String(sourceValue));
 	      return `
         <div class="resident-note-editor">
-          <textarea class="resident-note-input" data-resident-id="${residentId}" rows="1" maxlength="120" placeholder="備考を入力" oninput="updateResidentInlineNoteDraft('${residentId}', this.value)">${body}</textarea>
+	          <textarea class="resident-note-input" data-resident-id="${residentId}" rows="1" maxlength="120" placeholder="備考を入力" oninput="handleResidentInlineNoteInput('${residentId}', this.value)">${body}</textarea>
           <div class="resident-note-editor-actions">
             <button type="button" class="resident-note-save-btn" data-resident-id="${residentId}" onclick="saveResidentInlineNote('${residentId}')" aria-label="備考を保存" title="備考を保存">保存</button>
           </div>
@@ -11466,11 +11557,13 @@ function getSelfNoteModalElements() {
   };
 }
 
-function closeSelfResidentNoteModal() {
-  const refs = getSelfNoteModalElements();
-  if (!refs.modal) return;
-  refs.modal.classList.remove('active');
-  refs.modal.style.display = 'none';
+	function closeSelfResidentNoteModal() {
+	  const refs = getSelfNoteModalElements();
+	  if (!refs.modal) return;
+	  const pendingId = refs.input && refs.input.dataset ? refs.input.dataset.residentId : '';
+	  if (pendingId) flushSelfResidentNoteAutosave(pendingId);
+	  refs.modal.classList.remove('active');
+	  refs.modal.style.display = 'none';
   [refs.input, refs.status, refs.saveBtn].forEach(function(el){
     if (el && el.dataset) delete el.dataset.residentId;
   });
@@ -11480,8 +11573,9 @@ function closeSelfResidentNoteModal() {
   }
 }
 
-function openSelfResidentNoteModal(residentId) {
-  const id = String(residentId || '').trim();
+	function openSelfResidentNoteModal(residentId) {
+	  clearSelfResidentNoteAutosaveTimer();
+	  const id = String(residentId || '').trim();
   const myId = String(getStoredResidentId() || '').trim();
   if (!id || !myId || id !== myId) return;
   const resident = getResidentById(id);
@@ -11517,10 +11611,11 @@ function setSelfResidentNoteStatus(residentId, message, tone) {
   if (tone === 'error') statusEl.classList.add('is-error');
 }
 
-async function saveSelfResidentNote(residentId) {
-  const id = String(residentId || '').trim();
-  const myId = String(getStoredResidentId() || '').trim();
-  const textarea = findSelfResidentNoteElement('.self-note-input', id);
+	async function saveSelfResidentNote(residentId, options) {
+	  const autoMode = !!(options && options.auto);
+	  const id = String(residentId || '').trim();
+	  const myId = String(getStoredResidentId() || '').trim();
+	  const textarea = findSelfResidentNoteElement('.self-note-input', id);
   const saveBtn = findSelfResidentNoteElement('.self-note-save-btn', id);
   if (!id || !textarea) return;
   if (!myId || id !== myId) {
@@ -11534,60 +11629,89 @@ async function saveSelfResidentNote(residentId) {
     return;
   }
 
-  const nextNote = normalizeResidentNote(textarea.value);
-  if (saveBtn) saveBtn.disabled = true;
-  textarea.disabled = true;
-  setSelfResidentNoteStatus(id, '保存中...', '');
+	  const nextNote = normalizeResidentNote(textarea.value);
+	  const currentNote = getCurrentResidentNoteValue(id);
+	  if (currentNote !== null && nextNote === currentNote) {
+	    setSelfResidentNoteStatus(id, autoMode ? '保存済みです。' : '保存しました。', 'success');
+	    if (!autoMode) {
+	      setTimeout(function(){
+	        closeSelfResidentNoteModal();
+	      }, 260);
+	    }
+	    return;
+	  }
+	  if (saveBtn) saveBtn.disabled = true;
+	  if (!autoMode) textarea.disabled = true;
+	  setSelfResidentNoteStatus(id, '保存中...', '');
 
-  try {
-    await db.collection(targetCollection).doc(id).update({ note: nextNote });
+	  try {
+	    await db.collection(targetCollection).doc(id).update({ note: nextNote });
+		    const resident = getResidentById(id);
+		    if (resident) resident.note = nextNote;
+		    if (!autoMode || normalizeResidentNote(textarea.value) === nextNote) {
+		      textarea.value = nextNote;
+		      setSelfResidentNoteStatus(id, '保存しました。', 'success');
+		    } else {
+		      scheduleSelfResidentNoteAutosave(id);
+		    }
+		    try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_) {}
+		    if (!autoMode) {
+		      setTimeout(function(){
+		        closeSelfResidentNoteModal();
+		      }, 260);
+		    }
+		  } catch (e) {
+	    console.error('saveSelfResidentNote failed', e);
+	    setSelfResidentNoteStatus(id, '保存に失敗しました。', 'error');
+	  } finally {
+	    if (!autoMode) textarea.disabled = false;
+	    if (saveBtn) saveBtn.disabled = false;
+	  }
+	}
+
+	async function saveResidentInlineNote(residentId, options) {
+	  const autoMode = !!(options && options.auto);
+	  const id = String(residentId || '').trim();
+	  const textarea = findResidentNoteEditorElement('.resident-note-input', id);
+	  const saveBtn = findResidentNoteEditorElement('.resident-note-save-btn', id);
+	  if (!textarea || !id) return;
+
+	  const nextNote = normalizeResidentNote(textarea.value);
+	  const targetCollection = resolveResidentCollectionName(id);
+	  if (!targetCollection) {
+	    setResidentInlineNoteStatus(id, '保存先を特定できません。', 'error');
+	    return;
+	  }
+	  const currentNote = getCurrentResidentNoteValue(id);
+	  if (currentNote !== null && nextNote === currentNote) {
+	    clearResidentInlineNoteDraft(id);
+	    setResidentInlineNoteStatus(id, '保存済みです。', 'success');
+	    return;
+	  }
+
+	  if (saveBtn) saveBtn.disabled = true;
+	  if (!autoMode) textarea.disabled = true;
+	  setResidentInlineNoteStatus(id, '保存中...', '');
+
+	  try {
+	    await db.collection(targetCollection).doc(id).update({ note: nextNote });
 	    const resident = getResidentById(id);
 	    if (resident) resident.note = nextNote;
-	    textarea.value = nextNote;
-	    setSelfResidentNoteStatus(id, '保存しました。', 'success');
-	    try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_) {}
-	    setTimeout(function(){
-	      closeSelfResidentNoteModal();
-	    }, 260);
+	    if (normalizeResidentNote(textarea.value) === nextNote) {
+	      clearResidentInlineNoteDraft(id);
+	      setResidentInlineNoteStatus(id, '保存しました。', 'success');
+	    } else {
+	      updateResidentInlineNoteDraft(id, textarea.value);
+	      scheduleResidentInlineNoteAutosave(id);
+	    }
 	  } catch (e) {
-    console.error('saveSelfResidentNote failed', e);
-    setSelfResidentNoteStatus(id, '保存に失敗しました。', 'error');
-  } finally {
-    textarea.disabled = false;
-    if (saveBtn) saveBtn.disabled = false;
-  }
-}
-
-async function saveResidentInlineNote(residentId) {
-  const textarea = findResidentNoteEditorElement('.resident-note-input', residentId);
-  const saveBtn = findResidentNoteEditorElement('.resident-note-save-btn', residentId);
-  if (!textarea || !residentId) return;
-
-  const nextNote = normalizeResidentNote(textarea.value);
-  const targetCollection = resolveResidentCollectionName(residentId);
-  if (!targetCollection) {
-    setResidentInlineNoteStatus(residentId, '保存先を特定できません。', 'error');
-    return;
-  }
-
-  if (saveBtn) saveBtn.disabled = true;
-  textarea.disabled = true;
-  setResidentInlineNoteStatus(residentId, '保存中...', '');
-
-  try {
-    await db.collection(targetCollection).doc(residentId).update({ note: nextNote });
-    const resident = getResidentById(residentId);
-    if (resident) resident.note = nextNote;
-    clearResidentInlineNoteDraft(residentId);
-    setResidentInlineNoteStatus(residentId, '保存しました。', 'success');
-  } catch (e) {
-    console.error('saveResidentInlineNote failed', e);
-    setResidentInlineNoteStatus(residentId, '保存に失敗しました。', 'error');
-  } finally {
-    textarea.disabled = false;
-    if (saveBtn) saveBtn.disabled = false;
-  }
-}
+	    console.error('saveResidentInlineNote failed', e);
+	    setResidentInlineNoteStatus(id, '保存に失敗しました。', 'error');
+	  } finally {
+	    if (!autoMode) textarea.disabled = false;
+	    if (saveBtn) saveBtn.disabled = false;
+	  }
+	}
 
 function formatReceiveSummary(luggage, mail) {
   return `現在: 荷物 ${luggage} 件 / 郵便 ${mail} 件`;
@@ -11623,9 +11747,10 @@ function syncMobileCountEditModalUI() {
   if (elements.mobileCountNoteSaveBtn) elements.mobileCountNoteSaveBtn.disabled = !resident || mobileCountEditState.noteSaving;
 }
 
-function closeMobileCountEditModal() {
-  if (!elements.mobileCountEditModal) return;
-  elements.mobileCountEditModal.classList.remove('active');
+	function closeMobileCountEditModal() {
+	  if (!elements.mobileCountEditModal) return;
+	  flushMobileCountEditNoteAutosave();
+	  elements.mobileCountEditModal.classList.remove('active');
   elements.mobileCountEditModal.style.display = 'none';
   mobileCountEditState.residentId = null;
   mobileCountEditState.noteDirty = false;
@@ -11676,36 +11801,60 @@ function setMobileCountNoteStatus(message, tone) {
   if (tone === 'error') elements.mobileCountNoteStatus.classList.add('is-error');
 }
 
-async function saveMobileCountEditNote() {
-  const residentId = mobileCountEditState.residentId;
-  if (!residentId || !elements.mobileCountNoteInput) return;
-  const targetCollection = resolveResidentCollectionName(residentId);
+	async function saveMobileCountEditNote(options) {
+	  const autoMode = !!(options && options.auto);
+	  if (mobileCountEditState.noteSaving) {
+	    if (autoMode) scheduleMobileCountEditNoteAutosave(350);
+	    return;
+	  }
+	  const residentId = mobileCountEditState.residentId;
+	  if (!residentId || !elements.mobileCountNoteInput) return;
+	  const isSameModalResident = function(){
+	    return String(mobileCountEditState.residentId || '') === String(residentId || '');
+	  };
+	  const targetCollection = resolveResidentCollectionName(residentId);
   if (!targetCollection) {
     setMobileCountNoteStatus('保存先を特定できません。', 'error');
     return;
-  }
-  const nextNote = normalizeResidentNote(elements.mobileCountNoteInput.value);
-  mobileCountEditState.noteSaving = true;
-  if (elements.mobileCountNoteSaveBtn) elements.mobileCountNoteSaveBtn.disabled = true;
-  elements.mobileCountNoteInput.disabled = true;
-  setMobileCountNoteStatus('保存中...', '');
-  try {
-    await db.collection(targetCollection).doc(residentId).update({ note: nextNote });
-    const resident = getResidentById(residentId);
-    if (resident) resident.note = nextNote;
-    mobileCountEditState.noteDirty = false;
-    setMobileCountNoteStatus('保存しました。', 'success');
-    try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_) {}
-    syncMobileCountEditModalUI();
-  } catch (e) {
-    console.error('saveMobileCountEditNote failed', e);
-    setMobileCountNoteStatus('保存に失敗しました。', 'error');
-  } finally {
-    mobileCountEditState.noteSaving = false;
-    elements.mobileCountNoteInput.disabled = false;
-    if (elements.mobileCountNoteSaveBtn) elements.mobileCountNoteSaveBtn.disabled = false;
-  }
-}
+	  }
+	  const nextNote = normalizeResidentNote(elements.mobileCountNoteInput.value);
+	  const currentNote = getCurrentResidentNoteValue(residentId);
+	  if (currentNote !== null && nextNote === currentNote) {
+	    if (isSameModalResident()) {
+	      mobileCountEditState.noteDirty = false;
+	      setMobileCountNoteStatus('保存済みです。', 'success');
+	      syncMobileCountEditModalUI();
+	    }
+	    return;
+	  }
+	  mobileCountEditState.noteSaving = true;
+	  if (elements.mobileCountNoteSaveBtn) elements.mobileCountNoteSaveBtn.disabled = true;
+	  if (!autoMode) elements.mobileCountNoteInput.disabled = true;
+	  setMobileCountNoteStatus('保存中...', '');
+	  try {
+	    await db.collection(targetCollection).doc(residentId).update({ note: nextNote });
+	    const resident = getResidentById(residentId);
+	    if (resident) resident.note = nextNote;
+	    if (isSameModalResident() && normalizeResidentNote(elements.mobileCountNoteInput.value) === nextNote) {
+	      mobileCountEditState.noteDirty = false;
+	      setMobileCountNoteStatus('保存しました。', 'success');
+	    } else if (isSameModalResident()) {
+	      mobileCountEditState.noteDirty = true;
+	      scheduleMobileCountEditNoteAutosave();
+	    }
+	    try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_) {}
+	    if (isSameModalResident()) syncMobileCountEditModalUI();
+	  } catch (e) {
+	    console.error('saveMobileCountEditNote failed', e);
+	    if (isSameModalResident()) setMobileCountNoteStatus('保存に失敗しました。', 'error');
+	  } finally {
+	    if (isSameModalResident()) {
+	      mobileCountEditState.noteSaving = false;
+	      if (!autoMode) elements.mobileCountNoteInput.disabled = false;
+	      if (elements.mobileCountNoteSaveBtn) elements.mobileCountNoteSaveBtn.disabled = false;
+	    }
+	  }
+	}
 
 function syncReceiveModalUI() {
   if (!elements.receiveModal) return;
@@ -11981,14 +12130,17 @@ if (elements.mobileCountMailMinus) {
 if (elements.mobileCountMailPlus) {
   elements.mobileCountMailPlus.addEventListener('click', () => adjustMobileCountEdit('mail', 1));
 }
-if (elements.mobileCountNoteInput) {
-  elements.mobileCountNoteInput.addEventListener('input', () => {
-    mobileCountEditState.noteDirty = true;
-    setMobileCountNoteStatus('', '');
-  });
-}
-if (elements.mobileCountNoteSaveBtn) {
-  elements.mobileCountNoteSaveBtn.addEventListener('click', () => {
+	if (elements.mobileCountNoteInput) {
+	  elements.mobileCountNoteInput.addEventListener('input', () => {
+	    mobileCountEditState.noteDirty = true;
+	    scheduleMobileCountEditNoteAutosave();
+	  });
+	  elements.mobileCountNoteInput.addEventListener('blur', () => {
+	    flushMobileCountEditNoteAutosave();
+	  });
+	}
+	if (elements.mobileCountNoteSaveBtn) {
+	  elements.mobileCountNoteSaveBtn.addEventListener('click', () => {
     saveMobileCountEditNote();
   });
 }
@@ -12097,12 +12249,21 @@ document.addEventListener('click', (ev) => {
   const modal = document.getElementById('self-note-modal');
   if (modal && ev.target === modal) closeSelfResidentNoteModal();
 }, true);
-document.addEventListener('input', (ev) => {
-  const textarea = closestEventTargetCompat(ev, '.self-note-input');
-  if (!textarea) return;
-  setSelfResidentNoteStatus(textarea.dataset.residentId, '', '');
-}, false);
-document.addEventListener('click', (ev) => {
+	document.addEventListener('input', (ev) => {
+	  const textarea = closestEventTargetCompat(ev, '.self-note-input');
+	  if (!textarea) return;
+	  scheduleSelfResidentNoteAutosave(textarea.dataset.residentId);
+	}, false);
+	document.addEventListener('blur', (ev) => {
+	  const selfTextarea = closestEventTargetCompat(ev, '.self-note-input');
+	  if (selfTextarea) {
+	    flushSelfResidentNoteAutosave(selfTextarea.dataset.residentId);
+	    return;
+	  }
+	  const inlineTextarea = closestEventTargetCompat(ev, '.resident-note-input');
+	  if (inlineTextarea) flushResidentInlineNoteAutosave(inlineTextarea.dataset.residentId);
+	}, true);
+	document.addEventListener('click', (ev) => {
   const target = ev.target;
   const row = closestElementCompat(target, 'tr.resident-main-row[data-resident-id]');
   if (!row) return;
