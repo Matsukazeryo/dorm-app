@@ -924,9 +924,28 @@
         .receive-modal-content {
           max-width: 560px;
         }
-        .mobile-count-edit-modal-content {
-          max-width: 560px;
-        }
+	        .mobile-count-edit-modal-content {
+	          max-width: 560px;
+	        }
+	        .mobile-count-edit-actions {
+	          justify-content: flex-end;
+	          margin-top: 18px;
+	        }
+	        .mobile-count-edit-done-btn {
+	          min-width: 148px;
+	          padding: 13px 24px !important;
+	          border: none;
+	          border-radius: 999px;
+	          background: linear-gradient(135deg, #2980b9, #27ae60);
+	          color: #fff;
+	          font-size: 1rem;
+	          font-weight: 800;
+	          cursor: pointer;
+	          box-shadow: 0 12px 22px rgba(39, 174, 96, 0.2);
+	        }
+	        .mobile-count-edit-done-btn:active {
+	          transform: translateY(1px);
+	        }
         .mobile-count-edit-summary {
           margin: 0 0 14px 0;
           font-size: 0.95rem;
@@ -2892,11 +2911,10 @@
 
 <!-- ==== スマホ用 個数編集モーダル ==== -->
 <div id="mobile-count-edit-modal" class="modal-overlay">
-  <div class="modal-content mobile-count-edit-modal-content">
-    <div class="modal-header">
-      <h2>個数・備考編集</h2>
-      <button id="mobile-count-edit-close-btn" class="modal-close-btn">&times;</button>
-    </div>
+	  <div class="modal-content mobile-count-edit-modal-content">
+	    <div class="modal-header">
+	      <h2>個数・備考編集</h2>
+	    </div>
     <div id="mobile-count-edit-name" style="font-size:1.15rem; font-weight:700; margin-bottom:6px;"></div>
     <p class="mobile-count-edit-summary">現在の個数</p>
     <div class="receive-custom-panel">
@@ -2929,11 +2947,11 @@
         <span id="mobile-count-note-status" class="mobile-count-note-status" aria-live="polite"></span>
       </div>
     </div>
-    <div class="form-actions">
-      <button id="mobile-count-edit-cancel-btn" type="button" class="header-btn" style="background:#7f8c8d;">閉じる</button>
-    </div>
-  </div>
-</div>
+	    <div class="form-actions mobile-count-edit-actions">
+	      <button id="mobile-count-edit-done-btn" type="button" class="mobile-count-edit-done-btn">完了</button>
+	    </div>
+	  </div>
+	</div>
 <!-- ==== スマホ用 個数編集モーダル ここまで ==== -->
 
 <!-- ==== 荷物・郵便 個別履歴モーダル ==== -->
@@ -10226,11 +10244,10 @@ function applySohmuUI(){
           receiveMailValue: document.getElementById('receive-mail-value'),
           receiveMailPlus: document.getElementById('receive-mail-plus'),
           receiveCustomConfirmBtn: document.getElementById('receive-custom-confirm-btn'),
-          receiveCancelBtn: document.getElementById('receive-cancel-btn'),
-          mobileCountEditModal: document.getElementById('mobile-count-edit-modal'),
-          mobileCountEditCloseBtn: document.getElementById('mobile-count-edit-close-btn'),
-          mobileCountEditCancelBtn: document.getElementById('mobile-count-edit-cancel-btn'),
-          mobileCountEditName: document.getElementById('mobile-count-edit-name'),
+	          receiveCancelBtn: document.getElementById('receive-cancel-btn'),
+	          mobileCountEditModal: document.getElementById('mobile-count-edit-modal'),
+	          mobileCountEditDoneBtn: document.getElementById('mobile-count-edit-done-btn'),
+	          mobileCountEditName: document.getElementById('mobile-count-edit-name'),
           mobileCountLuggageMinus: document.getElementById('mobile-count-luggage-minus'),
           mobileCountLuggageValue: document.getElementById('mobile-count-luggage-value'),
           mobileCountLuggagePlus: document.getElementById('mobile-count-luggage-plus'),
@@ -12107,12 +12124,9 @@ if (elements.receiveCustomConfirmBtn) {
     confirmReceiveAction(receiveModalState.customLuggage, receiveModalState.customMail);
   });
 }
-if (elements.mobileCountEditCloseBtn) {
-  elements.mobileCountEditCloseBtn.addEventListener('click', closeMobileCountEditModal);
-}
-if (elements.mobileCountEditCancelBtn) {
-  elements.mobileCountEditCancelBtn.addEventListener('click', closeMobileCountEditModal);
-}
+	if (elements.mobileCountEditDoneBtn) {
+	  elements.mobileCountEditDoneBtn.addEventListener('click', closeMobileCountEditModal);
+	}
 if (elements.mobileCountEditModal) {
   elements.mobileCountEditModal.addEventListener('click', (ev) => {
     if (ev.target === elements.mobileCountEditModal) closeMobileCountEditModal();
