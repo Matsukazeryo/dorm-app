@@ -193,6 +193,137 @@
             cursor:not-allowed;
             opacity:.55;
         }
+        .display-filter-toggle.is-locked{
+            opacity:.86;
+            pointer-events:none;
+        }
+        .workflow-home-screen{
+            position:fixed;
+            inset:0;
+            z-index:2500;
+            display:none;
+            align-items:center;
+            justify-content:center;
+            padding:22px;
+            background:
+                radial-gradient(circle at 20% 10%, rgba(52,152,219,.22), transparent 34%),
+                radial-gradient(circle at 85% 20%, rgba(46,204,113,.20), transparent 34%),
+                rgba(244,248,252,.86);
+            backdrop-filter:blur(18px) saturate(1.12);
+            -webkit-backdrop-filter:blur(18px) saturate(1.12);
+            box-sizing:border-box;
+        }
+        body.workflow-home .workflow-home-screen{
+            display:flex;
+        }
+        body.workflow-disabled .workflow-home-screen,
+        body.workflow-disabled .workflow-home-btn{
+            display:none !important;
+        }
+        body.dark-theme .workflow-home-screen{
+            background:
+                radial-gradient(circle at 20% 10%, rgba(52,152,219,.24), transparent 34%),
+                radial-gradient(circle at 85% 20%, rgba(46,204,113,.18), transparent 34%),
+                rgba(15,25,36,.90);
+        }
+        .workflow-home-card{
+            width:min(560px, 100%);
+            padding:20px;
+            border:none;
+            border-radius:0;
+            background:transparent;
+            box-shadow:none;
+        }
+        .workflow-choice-grid{
+            display:grid;
+            grid-template-columns:repeat(2, minmax(0, 1fr));
+            gap:16px;
+        }
+        .workflow-choice-btn{
+            min-height:170px;
+            padding:20px;
+            border:1px solid rgba(18,51,80,.22);
+            border-radius:22px;
+            background:rgba(255,255,255,.82);
+            color:var(--text-color);
+            text-align:center;
+            cursor:pointer;
+            box-shadow:0 10px 28px rgba(31,78,121,.12);
+            font-size:1.45rem;
+            font-weight:900;
+        }
+        .workflow-choice-btn.primary{
+            background:linear-gradient(135deg, #3498db, #2ecc71);
+            color:#fff;
+        }
+        .workflow-choice-btn.secondary{
+            background:linear-gradient(135deg, rgba(255,255,255,.94), rgba(234,243,251,.88));
+        }
+        body.dark-theme .workflow-choice-btn.secondary{
+            background:rgba(255,255,255,.12);
+        }
+        .workflow-home-btn{
+            position:fixed;
+            left:16px;
+            bottom:16px;
+            z-index:2600;
+            min-width:58px;
+            min-height:64px;
+            padding:8px 10px 7px;
+            border:1px solid rgba(18,51,80,.22);
+            border-radius:18px;
+            background:rgba(255,255,255,.92);
+            color:var(--header-text);
+            font-weight:900;
+            box-shadow:0 12px 28px rgba(31,78,121,.18);
+            cursor:pointer;
+            display:flex;
+            flex-direction:column;
+            align-items:center;
+            justify-content:center;
+            gap:3px;
+            touch-action:manipulation;
+        }
+        .workflow-home-icon{
+            width:26px;
+            height:26px;
+            display:block;
+        }
+        .workflow-home-countdown{
+            font-size:.68rem;
+            line-height:1;
+            font-weight:900;
+            opacity:.78;
+            white-space:nowrap;
+        }
+        body.workflow-home .workflow-home-btn{
+            display:none;
+        }
+        body.dark-theme .workflow-home-btn{
+            background:rgba(255,255,255,.16);
+            color:#eef7ff;
+        }
+        .receive-modal-mini-actions{
+            display:flex;
+            justify-content:flex-end;
+            margin:-2px 0 12px;
+        }
+        .receive-mini-action-btn,
+        .mobile-count-receive-btn{
+            width:auto;
+            min-width:0;
+            min-height:34px;
+            padding:7px 12px;
+            font-size:.82rem;
+            font-weight:900;
+        }
+        .receive-mini-action-btn{
+            border:1px solid var(--mode-selector-border);
+            border-radius:999px;
+            background:var(--mode-label-bg);
+            color:var(--text-color);
+            cursor:pointer;
+        }
         .mode-selector { display: flex; border-radius: 6px; overflow: hidden; border: 1px solid var(--mode-selector-border); flex-shrink: 0; }
         body:not(.admin-logged-in) .mode-selector { display: none; }
         body.admin-logged-in .mode-selector { display: flex; }
@@ -948,18 +1079,19 @@
 	        .mobile-count-edit-done-btn:active {
 	          transform: translateY(1px);
 	        }
-	        .mobile-count-receive-actions {
-	          display: flex;
-	          justify-content: center;
-	          margin-top: 16px;
-	        }
-	        .mobile-count-receive-btn {
-	          width: 100%;
-	          min-height: 62px;
-	          padding: 17px 22px;
-	          font-size: 1.12rem;
-	          font-weight: 900;
-	        }
+		        .mobile-count-receive-actions {
+		          display: flex;
+		          justify-content: flex-end;
+		          margin-top: 10px;
+		        }
+		        .mobile-count-receive-btn {
+		          width: auto;
+		          min-width: 0;
+		          min-height: 34px;
+		          padding: 7px 12px;
+		          font-size: 0.82rem;
+		          font-weight: 900;
+		        }
         .mobile-count-edit-summary {
           margin: 0 0 14px 0;
           font-size: 0.95rem;
@@ -1031,6 +1163,22 @@
           cursor: pointer;
           font-size: 0.98rem;
           font-weight: 700;
+        }
+        #receive-all-btn {
+          min-height: 72px;
+          padding: 18px 18px;
+          border-radius: 18px;
+          font-size: 1.18rem;
+          font-weight: 900;
+          box-shadow: 0 14px 28px rgba(39, 174, 96, 0.22);
+        }
+        #receive-partial-toggle-btn {
+          min-height: 42px;
+          padding: 9px 14px;
+          border-radius: 14px;
+          font-size: 0.92rem;
+          font-weight: 800;
+          opacity: 0.9;
         }
         .item-history-modal-content {
           max-width: 560px;
@@ -2688,9 +2836,26 @@
 		      padding:0 8px;
 		      font-size:0.78rem;
 		    }
-	    .mode-selector{
-	      width:100%;
-	    }
+		    .workflow-home-card{
+		      padding:22px;
+		      border-radius:24px;
+		    }
+		    .workflow-choice-grid{
+		      grid-template-columns:1fr;
+		    }
+		    .workflow-choice-btn{
+		      min-height:132px;
+		    }
+			    .workflow-home-btn{
+			      left:12px;
+			      bottom:12px;
+			      min-width:54px;
+			      min-height:60px;
+			      border-radius:16px;
+			    }
+		    .mode-selector{
+		      width:100%;
+		    }
     .mode-selector label{
       flex:1;
       text-align:center;
@@ -2719,6 +2884,22 @@
 <div id="loading-overlay" style="display:none; position:fixed; inset:0; top:0; right:0; bottom:0; left:0; background:rgba(255,255,255,0.8); z-index:3000; align-items:center; justify-content:center;">
   <div>読み込み中...</div>
 </div>
+
+<div id="workflow-home-screen" class="workflow-home-screen" aria-live="polite">
+  <div class="workflow-home-card">
+    <div class="workflow-choice-grid">
+      <button id="workflow-receive-btn" type="button" class="workflow-choice-btn primary">受け取る</button>
+      <button id="workflow-register-btn" type="button" class="workflow-choice-btn secondary">登録する</button>
+    </div>
+  </div>
+</div>
+
+<button id="workflow-home-btn" type="button" class="workflow-home-btn" aria-label="ホームに戻る">
+  <svg class="workflow-home-icon" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1v-9.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+  </svg>
+  <span id="workflow-home-countdown" class="workflow-home-countdown">30</span>
+</button>
 
 <div class="container">
     <div class="header-area">
@@ -2867,10 +3048,13 @@
     <div class="modal-header">
       <h2>受け取り</h2>
       <button id="receive-modal-close-btn" class="modal-close-btn">&times;</button>
-    </div>
-    <div id="receive-resident-name" style="font-size:1.15rem; font-weight:700; margin-bottom:6px;"></div>
-    <p id="receive-summary" class="receive-summary"></p>
-    <div class="receive-primary-actions">
+	    </div>
+	    <div id="receive-resident-name" style="font-size:1.15rem; font-weight:700; margin-bottom:6px;"></div>
+	    <p id="receive-summary" class="receive-summary"></p>
+	    <div class="receive-modal-mini-actions">
+	      <button id="receive-open-register-btn" type="button" class="receive-mini-action-btn">登録(数を増やす)</button>
+	    </div>
+	    <div class="receive-primary-actions">
       <button id="receive-all-btn" type="button" class="receive-action-btn primary">全て受け取る</button>
       <button id="receive-partial-toggle-btn" type="button" class="receive-action-btn secondary">一部だけ受け取る</button>
     </div>
@@ -2977,7 +3161,7 @@
       </div>
     </div>
 	    <div class="form-actions mobile-count-edit-actions">
-	      <button id="mobile-count-edit-done-btn" type="button" class="mobile-count-edit-done-btn">完了</button>
+		      <button id="mobile-count-edit-done-btn" type="button" class="mobile-count-edit-done-btn">登録</button>
 	    </div>
 	  </div>
 	</div>
@@ -9589,9 +9773,9 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
     }
 
     // 荷物/郵便の個数を ±1（即時にUI反映し、バックグラウンドで保存）
-    function updateCount(residentId, residentName, type, value, dormHint) {
-      let nextValue = null;
-      let previousValue = null;
+	    function updateCount(residentId, residentName, type, value, dormHint) {
+	      let nextValue = null;
+	      let previousValue = null;
       // 1) 楽観的にメモリ上のデータとUIを即反映
       try {
         const idx = Array.isArray(allResidents) ? allResidents.findIndex(r => r.id === residentId) : -1;
@@ -9600,15 +9784,16 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
             ? allResidents[idx][type]
             : (parseInt(allResidents[idx][type]) || 0);
           const next = Math.max(0, cur + value);
-          if (next !== cur) {
-            previousValue = cur;
-            allResidents[idx][type] = next;
-            nextValue = next;
-            syncDisplayedResidentCount(residentId, type, next);
-          } else {
-            // 変化なしならサーバー更新も不要
-            return;
-          }
+	          if (next !== cur) {
+	            previousValue = cur;
+	            allResidents[idx][type] = next;
+	            nextValue = next;
+	            syncDisplayedResidentCount(residentId, type, next);
+	            clearSearchInputAfterWorkflowAction({ render: true });
+	          } else {
+	            // 変化なしならサーバー更新も不要
+	            return;
+	          }
         }
       } catch (_) {}
 
@@ -9920,10 +10105,10 @@ function applySohmuUI(){
       if (typeof updateNotificationSettingsUI === 'function') {
         try { updateNotificationSettingsUI(); } catch(_) {}
       }
-      if (typeof updateMorningReminderUI === 'function') {
-        try { updateMorningReminderUI(); } catch(_) {}
-      }
-	}
+			          if (typeof updateMorningReminderUI === 'function') {
+			            try { updateMorningReminderUI(); } catch(_) {}
+			          }
+		        }
 
     // ===== ensureDormSelectionOnBoot (override: 既定は「両方」) =====
     async function ensureDormSelectionOnBoot(){
@@ -10214,13 +10399,18 @@ function applySohmuUI(){
           changePasswordBtn: document.getElementById('change-password-btn'),
           changePasswordModal: document.getElementById('change-password-modal'),
           pwdModalCloseBtn: document.getElementById('pwd-modal-close-btn'),
-          changePasswordForm: document.getElementById('change-password-form'),
-          pwdCancelBtn: document.getElementById('pwd-cancel-btn'),
-          currentPwdInput: document.getElementById('current-password'),
-          newPwdInput: document.getElementById('new-password'),
-          confirmPwdInput: document.getElementById('confirm-password'),
+	          changePasswordForm: document.getElementById('change-password-form'),
+	          pwdCancelBtn: document.getElementById('pwd-cancel-btn'),
+	          currentPwdInput: document.getElementById('current-password'),
+	          newPwdInput: document.getElementById('new-password'),
+	          confirmPwdInput: document.getElementById('confirm-password'),
+		          workflowHomeScreen: document.getElementById('workflow-home-screen'),
+		          workflowReceiveBtn: document.getElementById('workflow-receive-btn'),
+		          workflowRegisterBtn: document.getElementById('workflow-register-btn'),
+		          workflowHomeBtn: document.getElementById('workflow-home-btn'),
+		          workflowHomeCountdown: document.getElementById('workflow-home-countdown'),
 
-	          tableBody: document.querySelector("#resident-table tbody"),
+			          tableBody: document.querySelector("#resident-table tbody"),
 	          searchInput: document.getElementById('search-input'),
 	          searchBox: document.getElementById('search-box'),
 	          searchClearBtn: document.getElementById('search-clear-btn'),
@@ -10258,9 +10448,10 @@ function applySohmuUI(){
           receiveModal: document.getElementById('receive-modal'),
           receiveResidentName: document.getElementById('receive-resident-name'),
           receiveSummary: document.getElementById('receive-summary'),
-          receiveModalCloseBtn: document.getElementById('receive-modal-close-btn'),
-          receiveAllBtn: document.getElementById('receive-all-btn'),
-          receivePartialToggleBtn: document.getElementById('receive-partial-toggle-btn'),
+	          receiveModalCloseBtn: document.getElementById('receive-modal-close-btn'),
+	          receiveAllBtn: document.getElementById('receive-all-btn'),
+	          receiveOpenRegisterBtn: document.getElementById('receive-open-register-btn'),
+	          receivePartialToggleBtn: document.getElementById('receive-partial-toggle-btn'),
           receivePartialActions: document.getElementById('receive-partial-actions'),
           receiveLuggageBtn: document.getElementById('receive-luggage-btn'),
           receiveMailBtn: document.getElementById('receive-mail-btn'),
@@ -10427,6 +10618,162 @@ const mobileCountEditState = {
   noteDirty: false,
   noteSaving: false
 };
+
+	const WORKFLOW_HOME_TIMEOUT_MS = 30000;
+	const workflowState = {
+	  mode: 'home',
+	  timerId: 0,
+	  countdownIntervalId: 0,
+	  timerEndsAt: 0,
+	  initialized: false
+	};
+
+function isWorkflowReceiveMode() {
+  return workflowState.mode === 'receive';
+}
+
+function isWorkflowRegisterMode() {
+  return workflowState.mode === 'register';
+}
+
+function isWorkflowFeatureEnabled() {
+  return !!(elements.sohmuToggle && elements.sohmuToggle.checked);
+}
+
+	function clearWorkflowHomeTimer() {
+	  if (workflowState.timerId) window.clearTimeout(workflowState.timerId);
+	  if (workflowState.countdownIntervalId) window.clearInterval(workflowState.countdownIntervalId);
+	  workflowState.timerId = 0;
+	  workflowState.countdownIntervalId = 0;
+	  workflowState.timerEndsAt = 0;
+	  updateWorkflowHomeCountdown(WORKFLOW_HOME_TIMEOUT_MS);
+	}
+
+	function updateWorkflowHomeCountdown(remainingMs) {
+	  if (!elements.workflowHomeCountdown) return;
+	  const ms = typeof remainingMs === 'number'
+	    ? remainingMs
+	    : Math.max(0, workflowState.timerEndsAt - Date.now());
+	  const seconds = Math.max(0, Math.ceil(ms / 1000));
+	  elements.workflowHomeCountdown.textContent = String(seconds);
+	}
+
+	function resetWorkflowHomeTimer() {
+	  clearWorkflowHomeTimer();
+	  if (!isWorkflowFeatureEnabled()) return;
+	  if (workflowState.mode === 'home') return;
+	  workflowState.timerEndsAt = Date.now() + WORKFLOW_HOME_TIMEOUT_MS;
+	  updateWorkflowHomeCountdown(WORKFLOW_HOME_TIMEOUT_MS);
+	  workflowState.countdownIntervalId = window.setInterval(function(){
+	    updateWorkflowHomeCountdown();
+	  }, 1000);
+	  workflowState.timerId = window.setTimeout(function(){
+	    applyWorkflowMode('home', { reason: 'timeout' });
+	  }, WORKFLOW_HOME_TIMEOUT_MS);
+}
+
+function closeWorkflowTransientViews() {
+  try { closeReceiveModal(); } catch(_) {}
+  try { closeMobileCountEditModal(); } catch(_) {}
+  try { closeItemHistoryModal(); } catch(_) {}
+}
+
+function setWorkflowSohmuOn() {
+  if (!elements.sohmuToggle) return;
+  if (!elements.sohmuToggle.checked) {
+    elements.sohmuToggle.checked = true;
+    try { setSohmuOn(true); } catch(_) {}
+    try { applySohmuUI(); } catch(_) {}
+    try { dispatchEventCompat(elements.sohmuToggle, 'change', true); } catch(_) {}
+  }
+}
+
+function updateWorkflowBodyClasses() {
+  const enabled = isWorkflowFeatureEnabled();
+  document.body.classList.toggle('workflow-disabled', !enabled);
+  document.body.classList.toggle('workflow-home', enabled && workflowState.mode === 'home');
+  document.body.classList.toggle('workflow-receive-mode', enabled && workflowState.mode === 'receive');
+  document.body.classList.toggle('workflow-register-mode', enabled && workflowState.mode === 'register');
+}
+
+function applyWorkflowMode(mode, options) {
+  const nextMode = mode === 'receive' || mode === 'register' ? mode : 'home';
+  if (nextMode !== 'home') setWorkflowSohmuOn();
+  if (!isWorkflowFeatureEnabled()) {
+    workflowState.mode = 'off';
+    clearWorkflowHomeTimer();
+    closeWorkflowTransientViews();
+    updateWorkflowBodyClasses();
+    try { updateItemFilterControls(); } catch(_) {}
+    return;
+  }
+  workflowState.mode = nextMode;
+  updateWorkflowBodyClasses();
+  clearWorkflowHomeTimer();
+
+	  if (nextMode === 'home') {
+	    clearSearchInputAfterWorkflowAction({ render: true });
+	    closeWorkflowTransientViews();
+	    try { updateItemFilterControls(); } catch(_) {}
+	    return;
+	  }
+
+	  try { setMode('view-mode'); } catch(_) {}
+	  try { setItemFilterEnabled(nextMode === 'receive'); } catch(_) {}
+  try { updateItemFilterControls(); } catch(_) {}
+  resetWorkflowHomeTimer();
+}
+
+function handleWorkflowActivity() {
+  if (!isWorkflowFeatureEnabled()) return;
+  if (workflowState.mode === 'home') return;
+  resetWorkflowHomeTimer();
+}
+
+function syncWorkflowAvailability() {
+  if (!workflowState.initialized) return;
+  if (!isWorkflowFeatureEnabled()) {
+    workflowState.mode = 'off';
+    clearWorkflowHomeTimer();
+    closeWorkflowTransientViews();
+    updateWorkflowBodyClasses();
+    try { updateItemFilterControls(); } catch(_) {}
+    return;
+  }
+  if (workflowState.mode === 'off') {
+    workflowState.mode = 'home';
+  }
+  updateWorkflowBodyClasses();
+  if (workflowState.mode !== 'home') resetWorkflowHomeTimer();
+  try { updateItemFilterControls(); } catch(_) {}
+}
+
+function initializeWorkflowMode() {
+  if (workflowState.initialized) return;
+  workflowState.initialized = true;
+  if (elements.workflowReceiveBtn) {
+    elements.workflowReceiveBtn.addEventListener('click', function(){
+      applyWorkflowMode('receive');
+    });
+  }
+  if (elements.workflowRegisterBtn) {
+    elements.workflowRegisterBtn.addEventListener('click', function(){
+      applyWorkflowMode('register');
+    });
+  }
+  if (elements.workflowHomeBtn) {
+    elements.workflowHomeBtn.addEventListener('click', function(){
+      applyWorkflowMode('home');
+    });
+  }
+  if (elements.sohmuToggle) {
+    elements.sohmuToggle.addEventListener('change', syncWorkflowAvailability);
+  }
+  ['pointerdown', 'keydown', 'input', 'scroll', 'touchstart'].forEach(function(eventName){
+    document.addEventListener(eventName, handleWorkflowActivity, { passive: true, capture: true });
+  });
+  applyWorkflowMode('home');
+}
 
 function getResidentById(residentId) {
   return Array.isArray(allResidents) ? (allResidents.find(r => r.id === residentId) || null) : null;
@@ -11843,11 +12190,15 @@ function handleResidentRowCountEditTap(ev, residentId) {
   const target = ev && (ev.target || ev.srcElement);
   if (closestElementCompat(target, 'button, input, select, textarea, a, .favorite-star, .count-history-btn')) return;
   const id = String(residentId || '').trim();
-  if (!id) return;
-  if (ev && ev.preventDefault) ev.preventDefault();
-  if (ev && ev.stopPropagation) ev.stopPropagation();
-  openMobileCountEditModal(id);
-}
+	  if (!id) return;
+	  if (ev && ev.preventDefault) ev.preventDefault();
+	  if (ev && ev.stopPropagation) ev.stopPropagation();
+	  if (isWorkflowReceiveMode()) {
+	    openReceiveModal(id);
+	    return;
+	  }
+	  openMobileCountEditModal(id);
+	}
 
 	function adjustMobileCountEdit(type, delta) {
 	  const resident = getResidentById(mobileCountEditState.residentId);
@@ -11992,16 +12343,11 @@ function openReceiveModal(residentId) {
     return;
   }
 
-  const luggageAvailable = Math.max(0, parseInt(resident.luggage, 10) || 0);
-  const mailAvailable = Math.max(0, parseInt(resident.mail, 10) || 0);
-  if ((luggageAvailable + mailAvailable) === 0) {
-    alert('受け取る荷物・郵便はありません。');
-    return;
-  }
-
-  receiveModalState.residentId = resident.id;
-  receiveModalState.residentName = resident.name || '';
-  receiveModalState.luggageAvailable = luggageAvailable;
+	  const luggageAvailable = Math.max(0, parseInt(resident.luggage, 10) || 0);
+	  const mailAvailable = Math.max(0, parseInt(resident.mail, 10) || 0);
+	  receiveModalState.residentId = resident.id;
+	  receiveModalState.residentName = resident.name || '';
+	  receiveModalState.luggageAvailable = luggageAvailable;
   receiveModalState.mailAvailable = mailAvailable;
   receiveModalState.customLuggage = 0;
   receiveModalState.customMail = 0;
@@ -12017,6 +12363,40 @@ function adjustReceiveCustomCount(type, delta) {
   const current = receiveModalState[key];
   receiveModalState[key] = Math.max(0, Math.min(max, current + delta));
   syncReceiveModalUI();
+}
+
+function openRegisterFromReceiveModal() {
+  const residentId = receiveModalState.residentId;
+  if (!residentId) return;
+  const resident = getResidentById(residentId);
+  if (!resident) {
+    alert('寮生情報の読み込みが終わってからもう一度お試しください。');
+    return;
+  }
+  closeReceiveModal();
+  applyWorkflowMode('register');
+  window.setTimeout(function(){
+    openMobileCountEditModal(residentId);
+  }, 0);
+}
+
+async function maybeClearResidentNoteAfterReceive(residentId, targetCollection, dormKey) {
+  const resident = getResidentById(residentId);
+  const currentNote = normalizeResidentNote(resident && (resident.note || resident.memo || resident.notes || ''));
+  if (!resident || !currentNote) return;
+  const shouldClear = window.confirm('この寮生には備考があります。受け取り後に備考を消しますか？');
+  if (!shouldClear) return;
+  try {
+    await db.collection(targetCollection).doc(residentId).update({ note: '' });
+    resident.note = '';
+    resident.memo = '';
+    resident.notes = '';
+    try { if (typeof window.renderTable === 'function') window.renderTable(); } catch (_) {}
+    try { addLog('備考削除', `[${dormKey}] ${resident.name || ''} の備考を受け取り後に削除`); } catch (_) {}
+  } catch (error) {
+    console.error('clear resident note after receive failed', error);
+    alert('備考の削除に失敗しました。通信状態や権限をご確認ください。');
+  }
 }
 
 async function receiveResidentItems(residentId, requestedLuggage, requestedMail) {
@@ -12067,8 +12447,8 @@ async function receiveResidentItems(residentId, requestedLuggage, requestedMail)
     resident.mail = result.nextMail;
     try { if (typeof window.renderTable === 'function') window.renderTable(); } catch (_) {}
 
-    if (result.appliedLuggage || result.appliedMail) {
-      addLog('受け取り', `[${dormKey}] ${resident.name} ${formatReceiveLogDetails(result.appliedLuggage, result.appliedMail)}`, {
+	    if (result.appliedLuggage || result.appliedMail) {
+	      addLog('受け取り', `[${dormKey}] ${resident.name} ${formatReceiveLogDetails(result.appliedLuggage, result.appliedMail)}`, {
         residentId,
         residentName: resident.name || '',
         dorm: dormKey,
@@ -12084,9 +12464,10 @@ async function receiveResidentItems(residentId, requestedLuggage, requestedMail)
         nextValues: {
           luggage: result.nextLuggage,
           mail: result.nextMail
-        }
-      });
-    } else {
+	        }
+	      });
+	      await maybeClearResidentNoteAfterReceive(residentId, targetCollection, dormKey);
+	    } else {
       alert('受け取れる荷物・郵便がありませんでした。');
     }
   } catch (error) {
@@ -12101,12 +12482,13 @@ async function confirmReceiveAction(luggageCount, mailCount) {
   const residentId = receiveModalState.residentId;
   if (!residentId) return;
 
-  closeReceiveModal();
-  try {
-    await receiveResidentItems(residentId, luggageCount, mailCount);
-  } catch (error) {
-    console.error('receive action failed', error);
-    alert('受け取り処理に失敗しました。通信状態や権限をご確認ください。');
+	  closeReceiveModal();
+	  try {
+	    await receiveResidentItems(residentId, luggageCount, mailCount);
+	    clearSearchInputAfterWorkflowAction({ render: true });
+	  } catch (error) {
+	    console.error('receive action failed', error);
+	    alert('受け取り処理に失敗しました。通信状態や権限をご確認ください。');
   }
 }
 
@@ -12142,6 +12524,9 @@ if (elements.receiveAllBtn) {
   elements.receiveAllBtn.addEventListener('click', () => {
     confirmReceiveAction(receiveModalState.luggageAvailable, receiveModalState.mailAvailable);
   });
+}
+if (elements.receiveOpenRegisterBtn) {
+  elements.receiveOpenRegisterBtn.addEventListener('click', openRegisterFromReceiveModal);
 }
 if (elements.receivePartialToggleBtn) {
   elements.receivePartialToggleBtn.addEventListener('click', () => {
@@ -12567,10 +12952,13 @@ if(elements.changePasswordForm){
 	            const on = !!(elements.sohmuToggle && elements.sohmuToggle.checked);
 	            elements.morningRunBtn.style.display = on ? 'inline-block' : 'none';
 	          }
-	          if (typeof updateMorningReminderUI === 'function') {
-	            try { updateMorningReminderUI(); } catch(_) {}
-	          }
-	        }
+		          if (typeof updateMorningReminderUI === 'function') {
+		            try { updateMorningReminderUI(); } catch(_) {}
+		          }
+		          if (typeof syncWorkflowAvailability === 'function') {
+		            try { syncWorkflowAvailability(); } catch(_) {}
+		          }
+		        }
         // 初期適用 & 変更監視（renderTable未定義の段階でも例外を出さない）
         applySohmuUI();
         if (elements.sohmuToggle) {
@@ -13115,7 +13503,7 @@ if(elements.changePasswordForm){
 	            const sohmuOn = elements.sohmuToggle.checked;
 	            const morningInlineEdit = isMorningMode || document.body.classList.contains('morning-mode');
 	            const myId = getStoredResidentId();
-	            const hasSearchTerm = String(searchTerm || '').trim().length > 0;
+		            const hasSearchTerm = String(searchTerm || '').trim().length > 0;
 		            const itemFilterActive = !!(sohmuOn && getItemFilterEnabled() && !hasSearchTerm);
 	            // Hide table header when 庶務モード is OFF
 	            const tableHead = document.querySelector('#resident-table thead');
@@ -13132,8 +13520,8 @@ if(elements.changePasswordForm){
 		            updateCrossDormSearchHint(searchTerm);
 		            elements.tableBody.innerHTML = ''; 
 	            if (filteredResidents.length === 0) {
-	                const emptyMessage = itemFilterActive
-	                  ? '荷物または郵便が届いている寮生はいません。'
+		                const emptyMessage = itemFilterActive
+		                  ? '受け取る荷物・郵便がある寮生はいません。'
 	                  : '該当する寮生が見つかりません。';
 	                elements.tableBody.innerHTML = `<tr><td colspan="6">${emptyMessage}</td></tr>`;
 	            } else {
@@ -13612,6 +14000,10 @@ if(elements.changePasswordForm){
             const keepDorm     = document.body.classList.contains('show-dorm');
             const keepSohmuOff = document.body.classList.contains('sohmu-off') || !!(elements.sohmuToggle && !elements.sohmuToggle.checked);
             const keepMorning  = document.body.classList.contains('morning-mode');
+            const keepWorkflowHome = document.body.classList.contains('workflow-home');
+            const keepWorkflowReceive = document.body.classList.contains('workflow-receive-mode');
+            const keepWorkflowRegister = document.body.classList.contains('workflow-register-mode');
+            const keepWorkflowDisabled = document.body.classList.contains('workflow-disabled');
             document.body.className = sessionStorage.getItem('isAdminLoggedIn') === 'true' ? 'admin-logged-in' : '';
             document.body.classList.add(mode);
             const countRadio = document.getElementById('count-edit-mode');
@@ -13621,6 +14013,10 @@ if(elements.changePasswordForm){
             if (keepDorm)     document.body.classList.add('show-dorm');
             if (keepSohmuOff) document.body.classList.add('sohmu-off');
             if (keepMorning)  document.body.classList.add('morning-mode');
+            if (keepWorkflowHome) document.body.classList.add('workflow-home');
+            if (keepWorkflowReceive) document.body.classList.add('workflow-receive-mode');
+            if (keepWorkflowRegister) document.body.classList.add('workflow-register-mode');
+            if (keepWorkflowDisabled) document.body.classList.add('workflow-disabled');
             const currentTheme = localStorage.getItem('theme') || 'light';
             handleThemeChange(currentTheme);
             if (mode !== 'resident-edit-mode') elements.selectAllCheckbox.checked = false;
@@ -13668,35 +14064,37 @@ if(elements.changePasswordForm){
 		        function getItemFilterEnabled() {
 		            return !!(elements.itemFilterToggle && elements.itemFilterToggle.classList.contains('is-active'));
 		        }
-		        function updateItemFilterControls() {
-		            const filterEnabled = getItemFilterEnabled();
-		            const sohmuOn = !!(elements.sohmuToggle && elements.sohmuToggle.checked);
-		            const hasSearchTerm = !!(elements.searchInput && String(elements.searchInput.value || '').trim());
-		            if (elements.itemFilterAllBtn) {
-		                elements.itemFilterAllBtn.classList.toggle('is-active', !filterEnabled);
-		                elements.itemFilterAllBtn.setAttribute('aria-pressed', filterEnabled ? 'false' : 'true');
-		                elements.itemFilterAllBtn.disabled = !sohmuOn;
-		            }
-		            if (elements.itemFilterToggle) {
-		                elements.itemFilterToggle.classList.toggle('is-active', filterEnabled);
-		                elements.itemFilterToggle.setAttribute('aria-pressed', filterEnabled ? 'true' : 'false');
-		                elements.itemFilterToggle.disabled = !sohmuOn;
-		                elements.itemFilterToggle.title = hasSearchTerm && filterEnabled
-		                    ? '検索中は全員から検索します'
-		                    : '荷物または郵便が届いている寮生だけ表示';
-		            }
-		            if (elements.displayFilterToggle) {
-		                elements.displayFilterToggle.classList.toggle('is-searching', hasSearchTerm && filterEnabled);
-		                elements.displayFilterToggle.setAttribute('aria-disabled', sohmuOn ? 'false' : 'true');
-		            }
-		        }
-		        function setItemFilterEnabled(enabled) {
-		            if (!elements.itemFilterToggle || !elements.itemFilterAllBtn) return;
-		            elements.itemFilterToggle.classList.toggle('is-active', !!enabled);
-		            elements.itemFilterAllBtn.classList.toggle('is-active', !enabled);
-		            updateItemFilterControls();
-		            scheduleRenderTable();
-		        }
+			        function updateItemFilterControls() {
+				            const filterEnabled = getItemFilterEnabled();
+			            const sohmuOn = !!(elements.sohmuToggle && elements.sohmuToggle.checked);
+			            const hasSearchTerm = !!(elements.searchInput && String(elements.searchInput.value || '').trim());
+			            if (elements.itemFilterAllBtn) {
+			                elements.itemFilterAllBtn.classList.toggle('is-active', !filterEnabled);
+			                elements.itemFilterAllBtn.setAttribute('aria-pressed', filterEnabled ? 'false' : 'true');
+			                elements.itemFilterAllBtn.disabled = !sohmuOn;
+			            }
+			            if (elements.itemFilterToggle) {
+			                elements.itemFilterToggle.classList.toggle('is-active', filterEnabled);
+			                elements.itemFilterToggle.setAttribute('aria-pressed', filterEnabled ? 'true' : 'false');
+				                elements.itemFilterToggle.disabled = !sohmuOn;
+				                elements.itemFilterToggle.title = hasSearchTerm && filterEnabled
+				                    ? '検索中は全員から検索します'
+				                    : '荷物または郵便が届いている寮生だけ表示';
+			            }
+			            if (elements.displayFilterToggle) {
+				                elements.displayFilterToggle.classList.toggle('is-searching', hasSearchTerm && filterEnabled);
+				                elements.displayFilterToggle.classList.remove('is-locked');
+			                elements.displayFilterToggle.setAttribute('aria-disabled', sohmuOn ? 'false' : 'true');
+			            }
+			        }
+			        function setItemFilterEnabled(enabled) {
+				            if (!elements.itemFilterToggle || !elements.itemFilterAllBtn) return;
+				            const nextEnabled = !!enabled;
+			            elements.itemFilterToggle.classList.toggle('is-active', nextEnabled);
+			            elements.itemFilterAllBtn.classList.toggle('is-active', !nextEnabled);
+			            updateItemFilterControls();
+			            scheduleRenderTable();
+			        }
 		        function updateSearchAssistControls() {
 		            const hasValue = !!(elements.searchInput && String(elements.searchInput.value || '').length);
 		            if (elements.searchBox) elements.searchBox.classList.toggle('has-value', hasValue);
@@ -13708,13 +14106,25 @@ if(elements.changePasswordForm){
 		        }
 	        function scheduleRenderTable() {
 	            if (renderTableFrameId) return;
-            const run = () => {
-                renderTableFrameId = 0;
-                renderTable();
+	            const run = () => {
+	                renderTableFrameId = 0;
+	                renderTable();
             };
-            if (window.requestAnimationFrame) renderTableFrameId = window.requestAnimationFrame(run);
-            else renderTableFrameId = setTimeout(run, 16);
-        }
+	            if (window.requestAnimationFrame) renderTableFrameId = window.requestAnimationFrame(run);
+	            else renderTableFrameId = setTimeout(run, 16);
+	        }
+
+	        function clearSearchInputAfterWorkflowAction(options) {
+	            if (!elements.searchInput) return false;
+	            if (!elements.searchInput.value) {
+	                updateSearchAssistControls();
+	                return false;
+	            }
+	            elements.searchInput.value = '';
+	            updateSearchAssistControls();
+	            if (options && options.render) scheduleRenderTable();
+	            return true;
+	        }
         
         const savedDorm = normalizeDormSelectionValue(localStorage.getItem('currentDorm') || 'all');
         switchDorm(savedDorm);
@@ -13747,19 +14157,12 @@ if(elements.changePasswordForm){
 	            updateSearchAssistControls();
 	            scheduleRenderTable();
 	        });
-	        if (elements.searchClearBtn) {
-	            elements.searchClearBtn.addEventListener('click', () => {
-	                if (!elements.searchInput) return;
-	                if (!elements.searchInput.value) {
-	                    updateSearchAssistControls();
-	                    return;
-	                }
-	                elements.searchInput.value = '';
-	                updateSearchAssistControls();
-	                scheduleRenderTable();
-	                try { elements.searchInput.focus(); } catch(_) {}
-	            });
-	        }
+		        if (elements.searchClearBtn) {
+		            elements.searchClearBtn.addEventListener('click', () => {
+		                if (!clearSearchInputAfterWorkflowAction({ render: true })) return;
+		                try { elements.searchInput.focus(); } catch(_) {}
+		            });
+		        }
 		        if (elements.itemFilterAllBtn) {
 		            elements.itemFilterAllBtn.addEventListener('click', () => setItemFilterEnabled(false));
 		        }
@@ -13960,6 +14363,7 @@ if(elements.changePasswordForm){
         // ===== iOS Safari 対策：ユーザー操作で通知許可をリクエスト =====
         initializeTheme();
         initializeResidentSortSelector();
+        initializeWorkflowMode();
         // 30分ごとに lastSeen を更新
         setInterval(updateLastSeen, 30 * 60 * 1000);
         elements.addModalCloseBtn.addEventListener('click', hideAddResidentModal);
