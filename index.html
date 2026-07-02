@@ -37,6 +37,8 @@
 	        body { 
 	            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
 	            margin: 0; padding: 20px; background-color: var(--bg-color); color: var(--text-color);
+	            -webkit-overflow-scrolling: touch;
+	            -webkit-text-size-adjust: 100%;
 	        }
 	        button,
 	        [role="button"],
@@ -83,13 +85,14 @@
             z-index:2000;
         }
         .modal-overlay.active{ display:flex; }
-        .modal-content{
-            background:var(--container-bg);
-            max-width:480px; width:90%; max-height:80vh;
-            border-radius:8px; padding:20px; overflow-y:auto;
-            box-shadow:0 4px 14px rgba(0,0,0,.2);
-            color:var(--text-color);
-        }
+	        .modal-content{
+	            background:var(--container-bg);
+	            max-width:480px; width:90%; max-height:80vh;
+	            border-radius:8px; padding:20px; overflow-y:auto;
+	            -webkit-overflow-scrolling:touch;
+	            box-shadow:0 4px 14px rgba(0,0,0,.2);
+	            color:var(--text-color);
+	        }
         .modal-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
         .modal-close-btn{
             background:none; border:none; font-size:24px; cursor:pointer; color:var(--text-color);
@@ -197,39 +200,43 @@
             opacity:.86;
             pointer-events:none;
         }
-        .workflow-home-screen{
-            position:fixed;
-            inset:0;
-            z-index:2500;
-            display:none;
-            align-items:center;
-            justify-content:center;
-            padding:22px;
-            background:
-                radial-gradient(circle at 20% 10%, rgba(52,152,219,.22), transparent 34%),
-                radial-gradient(circle at 85% 20%, rgba(46,204,113,.20), transparent 34%),
-                rgba(244,248,252,.86);
-            backdrop-filter:blur(18px) saturate(1.12);
-            -webkit-backdrop-filter:blur(18px) saturate(1.12);
-            box-sizing:border-box;
-        }
-        body.workflow-home .workflow-home-screen{
-            display:flex;
-        }
+	        .workflow-home-screen{
+	            position:fixed;
+	            inset:0;
+	            top:0;
+	            right:0;
+	            bottom:0;
+	            left:0;
+	            z-index:2500;
+	            display:none;
+	            align-items:center;
+	            justify-content:center;
+	            padding:22px;
+	            background:rgba(244,248,252,.96);
+	            backdrop-filter:none;
+	            -webkit-backdrop-filter:none;
+	            box-sizing:border-box;
+	            overflow:auto;
+	            -webkit-overflow-scrolling:touch;
+	        }
+	        body.workflow-home .workflow-home-screen{
+	            display:flex;
+	        }
+	        body.workflow-home{
+	            overflow:hidden;
+	        }
         body.workflow-disabled .workflow-home-screen,
         body.workflow-disabled .workflow-home-btn{
             display:none !important;
         }
-        body.dark-theme .workflow-home-screen{
-            background:
-                radial-gradient(circle at 20% 10%, rgba(52,152,219,.24), transparent 34%),
-                radial-gradient(circle at 85% 20%, rgba(46,204,113,.18), transparent 34%),
-                rgba(15,25,36,.90);
-        }
-        .workflow-home-card{
-            width:min(560px, 100%);
-            padding:20px;
-            border:none;
+	        body.dark-theme .workflow-home-screen{
+	            background:rgba(15,25,36,.96);
+	        }
+	        .workflow-home-card{
+	            width:100%;
+	            max-width:560px;
+	            padding:20px;
+	            border:none;
             border-radius:0;
             background:transparent;
             box-shadow:none;
@@ -390,10 +397,11 @@
           gap:4px;
           white-space:nowrap;
         }
-        .workflow-sohmu-switch-wrap{
-          position:fixed;
-          top:calc(12px + env(safe-area-inset-top, 0px));
-          right:14px;
+	        .workflow-sohmu-switch-wrap{
+	          position:fixed;
+	          top:12px;
+	          top:calc(12px + env(safe-area-inset-top, 0px));
+	          right:14px;
           z-index:2701;
           display:inline-flex;
           align-items:center;
@@ -402,11 +410,11 @@
           padding:9px 12px 9px 8px;
           border:1px solid rgba(18,51,80,.18);
           border-radius:999px;
-          background:rgba(255,255,255,.92);
-          box-shadow:0 12px 28px rgba(31,78,121,.16);
-          backdrop-filter:blur(14px) saturate(1.12);
-          -webkit-backdrop-filter:blur(14px) saturate(1.12);
-        }
+	          background:rgba(255,255,255,.92);
+	          box-shadow:0 12px 28px rgba(31,78,121,.16);
+	          backdrop-filter:none;
+	          -webkit-backdrop-filter:none;
+	        }
         .workflow-sohmu-switch-wrap .switch{
           margin-left:0 !important;
         }
@@ -10657,11 +10665,14 @@ const mobileCountEditState = {
 };
 
 	const WORKFLOW_HOME_TIMEOUT_MS = 30000;
+	const WORKFLOW_ACTIVITY_THROTTLE_MS = 900;
 	const workflowState = {
 	  mode: 'home',
 	  timerId: 0,
 	  countdownIntervalId: 0,
 	  timerEndsAt: 0,
+	  activityTimerId: 0,
+	  lastTimerResetAt: 0,
 	  initialized: false
 	};
 
@@ -10680,8 +10691,10 @@ function isWorkflowFeatureEnabled() {
 	function clearWorkflowHomeTimer() {
 	  if (workflowState.timerId) window.clearTimeout(workflowState.timerId);
 	  if (workflowState.countdownIntervalId) window.clearInterval(workflowState.countdownIntervalId);
+	  if (workflowState.activityTimerId) window.clearTimeout(workflowState.activityTimerId);
 	  workflowState.timerId = 0;
 	  workflowState.countdownIntervalId = 0;
+	  workflowState.activityTimerId = 0;
 	  workflowState.timerEndsAt = 0;
 	  updateWorkflowHomeCountdown(WORKFLOW_HOME_TIMEOUT_MS);
 	}
@@ -10699,6 +10712,7 @@ function isWorkflowFeatureEnabled() {
 	  clearWorkflowHomeTimer();
 	  if (!isWorkflowFeatureEnabled()) return;
 	  if (workflowState.mode === 'home') return;
+	  workflowState.lastTimerResetAt = Date.now();
 	  workflowState.timerEndsAt = Date.now() + WORKFLOW_HOME_TIMEOUT_MS;
 	  updateWorkflowHomeCountdown(WORKFLOW_HOME_TIMEOUT_MS);
 	  workflowState.countdownIntervalId = window.setInterval(function(){
@@ -10734,11 +10748,29 @@ function closeWorkflowTransientViews() {
 
 	function updateWorkflowBodyClasses() {
 	  const enabled = isWorkflowFeatureEnabled();
-	  document.body.classList.toggle('workflow-disabled', !enabled);
-	  document.body.classList.toggle('workflow-home', enabled && workflowState.mode === 'home');
-	  document.body.classList.toggle('workflow-receive-mode', enabled && workflowState.mode === 'receive');
-	  document.body.classList.toggle('workflow-register-mode', enabled && workflowState.mode === 'register');
+	  setBodyClassCompat('workflow-disabled', !enabled);
+	  setBodyClassCompat('workflow-home', enabled && workflowState.mode === 'home');
+	  setBodyClassCompat('workflow-receive-mode', enabled && workflowState.mode === 'receive');
+	  setBodyClassCompat('workflow-register-mode', enabled && workflowState.mode === 'register');
 	  syncWorkflowSohmuToggle();
+	  forceWorkflowHomeVisibility();
+	}
+
+	function setBodyClassCompat(className, enabled) {
+	  if (!document.body || !document.body.classList) return;
+	  if (enabled) document.body.classList.add(className);
+	  else document.body.classList.remove(className);
+	}
+
+	function forceWorkflowHomeVisibility() {
+	  const enabled = isWorkflowFeatureEnabled();
+	  const homeActive = !!(enabled && workflowState.mode === 'home');
+	  if (elements.workflowHomeScreen) {
+	    elements.workflowHomeScreen.style.display = homeActive ? 'flex' : '';
+	  }
+	  if (elements.workflowHomeBtn) {
+	    elements.workflowHomeBtn.style.display = (!enabled || homeActive) ? 'none' : '';
+	  }
 	}
 
 function applyWorkflowMode(mode, options) {
@@ -10769,11 +10801,22 @@ function applyWorkflowMode(mode, options) {
   resetWorkflowHomeTimer();
 }
 
-function handleWorkflowActivity() {
-  if (!isWorkflowFeatureEnabled()) return;
-  if (workflowState.mode === 'home') return;
-  resetWorkflowHomeTimer();
-}
+	function handleWorkflowActivity() {
+	  if (!isWorkflowFeatureEnabled()) return;
+	  if (workflowState.mode === 'home') return;
+	  const now = Date.now();
+	  if ((now - workflowState.lastTimerResetAt) >= WORKFLOW_ACTIVITY_THROTTLE_MS) {
+	    resetWorkflowHomeTimer();
+	    return;
+	  }
+	  if (workflowState.activityTimerId) return;
+	  workflowState.activityTimerId = window.setTimeout(function(){
+	    workflowState.activityTimerId = 0;
+	    if (!isWorkflowFeatureEnabled()) return;
+	    if (workflowState.mode === 'home') return;
+	    resetWorkflowHomeTimer();
+	  }, WORKFLOW_ACTIVITY_THROTTLE_MS);
+	}
 
 function syncWorkflowAvailability() {
   if (!workflowState.initialized) return;
@@ -10826,11 +10869,13 @@ function initializeWorkflowMode() {
 	      syncWorkflowAvailability();
 	    });
 	  }
-  ['pointerdown', 'keydown', 'input', 'scroll', 'touchstart'].forEach(function(eventName){
-    document.addEventListener(eventName, handleWorkflowActivity, { passive: true, capture: true });
-  });
-  applyWorkflowMode('home');
-}
+	  ['pointerdown', 'mousedown', 'keydown', 'input', 'scroll', 'touchstart'].forEach(function(eventName){
+	    document.addEventListener(eventName, handleWorkflowActivity, true);
+	  });
+	  applyWorkflowMode('home');
+	  window.setTimeout(forceWorkflowHomeVisibility, 0);
+	  window.setTimeout(forceWorkflowHomeVisibility, 300);
+	}
 
 function getResidentById(residentId) {
   return Array.isArray(allResidents) ? (allResidents.find(r => r.id === residentId) || null) : null;
@@ -14083,7 +14128,9 @@ if(elements.changePasswordForm){
             renderTable();
         }
 
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
+	        const prefersDark = window.matchMedia
+	            ? window.matchMedia('(prefers-color-scheme: dark)')
+	            : { matches: false };
 
         function applyTheme(theme) {
             if (theme === 'dark') document.body.classList.add('dark-theme');
@@ -14200,11 +14247,13 @@ if(elements.changePasswordForm){
 	            }, 0);
 	        }, false);
 	        
-	        elements.modeSelectors.forEach(input => 
-          input.addEventListener('change', () => {
-            if (input.checked) setMode(input.id);
-          })
-        );
+		        for (var modeIndex = 0; modeIndex < elements.modeSelectors.length; modeIndex++) {
+		          (function(input){
+		            input.addEventListener('change', function(){
+		              if (input.checked) setMode(input.id);
+		            });
+		          })(elements.modeSelectors[modeIndex]);
+		        }
         elements.tableBody.addEventListener('change', e => { if (e.target.classList.contains('resident-checkbox')) updateDeleteButtonState(); });
         setMode('view-mode');
 	        updateLoginStatus();
@@ -14413,10 +14462,15 @@ if(elements.changePasswordForm){
                 window.applyResidentSortPreference(e && e.target ? e.target.value : RESIDENT_SORT_NAME);
             });
         }
-        prefersDark.addEventListener('change', () => {
-            const savedTheme = localStorage.getItem('theme') || 'light';
-            if (savedTheme === 'system') handleThemeChange('system');
-        });
+	        const handleSystemThemeChange = function(){
+	            const savedTheme = localStorage.getItem('theme') || 'light';
+	            if (savedTheme === 'system') handleThemeChange('system');
+	        };
+	        if (prefersDark && typeof prefersDark.addEventListener === 'function') {
+	            prefersDark.addEventListener('change', handleSystemThemeChange);
+	        } else if (prefersDark && typeof prefersDark.addListener === 'function') {
+	            prefersDark.addListener(handleSystemThemeChange);
+	        }
         // ===== iOS Safari 対策：ユーザー操作で通知許可をリクエスト =====
         initializeTheme();
         initializeResidentSortSelector();
