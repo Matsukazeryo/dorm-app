@@ -904,23 +904,25 @@
         .off-mode-actions {
           margin-top: 20px;
         }
-        .off-receive-btn {
-          min-width: 180px;
-          padding: 12px 18px;
-          border: none;
+	        .off-receive-btn,
+	        .mobile-count-receive-btn {
+	          min-width: 180px;
+	          padding: 12px 18px;
+	          border: none;
           border-radius: 999px;
           background: linear-gradient(135deg, #3498db, #2ecc71);
           color: #fff;
           font-size: 1rem;
           font-weight: 700;
-          cursor: pointer;
-          box-shadow: 0 10px 20px rgba(52, 152, 219, 0.18);
-        }
-        .off-receive-btn:disabled {
-          background: #bdc3c7;
-          box-shadow: none;
-          cursor: not-allowed;
-        }
+	          cursor: pointer;
+	          box-shadow: 0 10px 20px rgba(52, 152, 219, 0.18);
+	        }
+	        .off-receive-btn:disabled,
+	        .mobile-count-receive-btn:disabled {
+	          background: #bdc3c7;
+	          box-shadow: none;
+	          cursor: not-allowed;
+	        }
         .receive-modal-content {
           max-width: 560px;
         }
@@ -945,6 +947,11 @@
 	        }
 	        .mobile-count-edit-done-btn:active {
 	          transform: translateY(1px);
+	        }
+	        .mobile-count-receive-actions {
+	          display: flex;
+	          justify-content: center;
+	          margin-top: 14px;
 	        }
         .mobile-count-edit-summary {
           margin: 0 0 14px 0;
@@ -1583,9 +1590,10 @@
           .off-mode-container .off-count-number{
             font-size: 2.2em; /* 2.5em → 少しだけ縮小 */
           }
-          .off-receive-btn {
-            width: 100%;
-          }
+	          .off-receive-btn,
+	          .mobile-count-receive-btn {
+	            width: 100%;
+	          }
           .receive-secondary-actions {
             grid-template-columns: 1fr;
           }
@@ -2171,14 +2179,15 @@
   }
   .header-btn,
   .ops-container button,
-  .receive-action-btn,
-  .ocr-action-btn,
-  .ocr-file-label,
-  .edit-btn,
-  .delete-btn,
-  .resident-note-save-btn,
-  .off-receive-btn,
-  .morning-action-btn{
+	  .receive-action-btn,
+	  .ocr-action-btn,
+	  .ocr-file-label,
+	  .edit-btn,
+	  .delete-btn,
+	  .resident-note-save-btn,
+	  .off-receive-btn,
+	  .mobile-count-receive-btn,
+	  .morning-action-btn{
     border:1px solid rgba(18,51,80,0.22) !important;
     border-radius:999px !important;
     box-shadow:0 8px 20px rgba(31,78,121,0.14), 0 1px 0 rgba(255,255,255,0.40) inset;
@@ -2188,28 +2197,31 @@
   input:focus-visible,
   select:focus-visible,
   textarea:focus-visible,
-  .header-btn:focus-visible,
-  .count-history-btn:focus-visible,
-  .off-receive-btn:focus-visible{
+	  .header-btn:focus-visible,
+	  .count-history-btn:focus-visible,
+	  .off-receive-btn:focus-visible,
+	  .mobile-count-receive-btn:focus-visible{
     outline:3px solid rgba(18, 111, 190, 0.55);
     outline-offset:3px;
   }
   body.dark-theme button:focus-visible,
   body.dark-theme input:focus-visible,
   body.dark-theme select:focus-visible,
-  body.dark-theme textarea:focus-visible,
-  body.dark-theme .header-btn:focus-visible,
-  body.dark-theme .count-history-btn:focus-visible,
-  body.dark-theme .off-receive-btn:focus-visible{
+	  body.dark-theme textarea:focus-visible,
+	  body.dark-theme .header-btn:focus-visible,
+	  body.dark-theme .count-history-btn:focus-visible,
+	  body.dark-theme .off-receive-btn:focus-visible,
+	  body.dark-theme .mobile-count-receive-btn:focus-visible{
     outline-color:rgba(134, 200, 255, 0.78);
   }
   .header-btn:active,
   .ops-container button:active,
   .receive-action-btn:active,
-  .ocr-action-btn:active,
-  .edit-btn:active,
-  .delete-btn:active,
-  .morning-action-btn:active{
+	  .ocr-action-btn:active,
+	  .edit-btn:active,
+	  .delete-btn:active,
+	  .mobile-count-receive-btn:active,
+	  .morning-action-btn:active{
     transform:scale(0.98);
   }
   #login-logout-btn,
@@ -2867,9 +2879,9 @@
             <button id="receive-luggage-plus" type="button" class="receive-stepper-btn">+</button>
           </div>
         </div>
-        <div class="receive-stepper-row">
-          <div>
-            <span class="receive-stepper-label">郵便</span>
+	      <div class="receive-stepper-row">
+	        <div>
+	          <span class="receive-stepper-label">郵便</span>
             <span class="receive-stepper-sub">最大 <span id="receive-mail-max">0</span> 件</span>
           </div>
           <div class="receive-stepper-controls">
@@ -2936,11 +2948,14 @@
           <button id="mobile-count-mail-minus" type="button" class="receive-stepper-btn">-</button>
           <span id="mobile-count-mail-value" class="receive-stepper-value">0</span>
           <button id="mobile-count-mail-plus" type="button" class="receive-stepper-btn">+</button>
-        </div>
-      </div>
-    </div>
-    <div class="mobile-count-note-section">
-      <label for="mobile-count-note-input">備考</label>
+	        </div>
+	      </div>
+	    </div>
+	    <div class="mobile-count-receive-actions">
+	      <button id="mobile-count-receive-btn" type="button" class="mobile-count-receive-btn" disabled>受け取る</button>
+	    </div>
+	    <div class="mobile-count-note-section">
+	      <label for="mobile-count-note-input">備考</label>
       <textarea id="mobile-count-note-input" rows="3" maxlength="120" placeholder="備考を入力"></textarea>
       <div class="mobile-count-note-actions">
         <button id="mobile-count-note-save-btn" type="button" class="header-btn" style="background:#2980b9;">備考を保存</button>
@@ -10250,11 +10265,12 @@ function applySohmuUI(){
 	          mobileCountEditName: document.getElementById('mobile-count-edit-name'),
           mobileCountLuggageMinus: document.getElementById('mobile-count-luggage-minus'),
           mobileCountLuggageValue: document.getElementById('mobile-count-luggage-value'),
-          mobileCountLuggagePlus: document.getElementById('mobile-count-luggage-plus'),
-          mobileCountMailMinus: document.getElementById('mobile-count-mail-minus'),
-          mobileCountMailValue: document.getElementById('mobile-count-mail-value'),
-          mobileCountMailPlus: document.getElementById('mobile-count-mail-plus'),
-          mobileCountNoteInput: document.getElementById('mobile-count-note-input'),
+	          mobileCountLuggagePlus: document.getElementById('mobile-count-luggage-plus'),
+	          mobileCountMailMinus: document.getElementById('mobile-count-mail-minus'),
+	          mobileCountMailValue: document.getElementById('mobile-count-mail-value'),
+	          mobileCountMailPlus: document.getElementById('mobile-count-mail-plus'),
+	          mobileCountReceiveBtn: document.getElementById('mobile-count-receive-btn'),
+	          mobileCountNoteInput: document.getElementById('mobile-count-note-input'),
           mobileCountNoteSaveBtn: document.getElementById('mobile-count-note-save-btn'),
           mobileCountNoteStatus: document.getElementById('mobile-count-note-status'),
           addResidentModal: document.getElementById('add-resident-modal'),
@@ -10435,6 +10451,18 @@ function syncMobileCountEditValuesForResident(residentId) {
   if (elements.mobileCountMailMinus) elements.mobileCountMailMinus.disabled = !resident || mail <= 0;
   if (elements.mobileCountLuggagePlus) elements.mobileCountLuggagePlus.disabled = !resident;
   if (elements.mobileCountMailPlus) elements.mobileCountMailPlus.disabled = !resident;
+  syncMobileCountReceiveButton(resident, luggage, mail);
+}
+
+function syncMobileCountReceiveButton(resident, luggage, mail) {
+  if (!elements.mobileCountReceiveBtn) return;
+  const hasReceivableItems = !!resident && ((normalizeCountDisplayValue(luggage) + normalizeCountDisplayValue(mail)) > 0);
+  elements.mobileCountReceiveBtn.disabled = !hasReceivableItems;
+  if (resident && resident.id) {
+    elements.mobileCountReceiveBtn.dataset.residentId = resident.id;
+  } else if (elements.mobileCountReceiveBtn.dataset) {
+    delete elements.mobileCountReceiveBtn.dataset.residentId;
+  }
 }
 
 function syncDisplayedResidentCount(residentId, type, nextValue) {
@@ -11757,10 +11785,11 @@ function syncMobileCountEditModalUI() {
   if (elements.mobileCountLuggageMinus) elements.mobileCountLuggageMinus.disabled = !resident || luggage <= 0;
   if (elements.mobileCountMailMinus) elements.mobileCountMailMinus.disabled = !resident || mail <= 0;
   if (elements.mobileCountLuggagePlus) elements.mobileCountLuggagePlus.disabled = !resident;
-  if (elements.mobileCountMailPlus) elements.mobileCountMailPlus.disabled = !resident;
-  if (elements.mobileCountNoteInput && (!mobileCountEditState.noteDirty || document.activeElement !== elements.mobileCountNoteInput)) {
-    elements.mobileCountNoteInput.value = note;
-  }
+	  if (elements.mobileCountMailPlus) elements.mobileCountMailPlus.disabled = !resident;
+	  syncMobileCountReceiveButton(resident, luggage, mail);
+	  if (elements.mobileCountNoteInput && (!mobileCountEditState.noteDirty || document.activeElement !== elements.mobileCountNoteInput)) {
+	    elements.mobileCountNoteInput.value = note;
+	  }
   if (elements.mobileCountNoteSaveBtn) elements.mobileCountNoteSaveBtn.disabled = !resident || mobileCountEditState.noteSaving;
 }
 
@@ -11804,11 +11833,26 @@ function handleResidentRowCountEditTap(ev, residentId) {
   openMobileCountEditModal(id);
 }
 
-function adjustMobileCountEdit(type, delta) {
-  const resident = getResidentById(mobileCountEditState.residentId);
-  if (!resident) return;
-  updateCount(resident.id, resident.name || '', type === 'mail' ? 'mail' : 'luggage', delta);
-}
+	function adjustMobileCountEdit(type, delta) {
+	  const resident = getResidentById(mobileCountEditState.residentId);
+	  if (!resident) return;
+	  updateCount(resident.id, resident.name || '', type === 'mail' ? 'mail' : 'luggage', delta);
+	}
+
+	function openReceiveFromMobileCountEditModal() {
+	  const residentId = String(mobileCountEditState.residentId || '').trim();
+	  if (!residentId) return;
+	  const resident = getResidentById(residentId);
+	  const total = resident ? (normalizeCountDisplayValue(resident.luggage) + normalizeCountDisplayValue(resident.mail)) : 0;
+	  if (!resident || total <= 0) {
+	    syncMobileCountEditModalUI();
+	    return;
+	  }
+	  closeMobileCountEditModal();
+	  window.setTimeout(function(){
+	    openReceiveModal(residentId);
+	  }, 0);
+	}
 
 function setMobileCountNoteStatus(message, tone) {
   if (!elements.mobileCountNoteStatus) return;
@@ -12126,6 +12170,9 @@ if (elements.receiveCustomConfirmBtn) {
 }
 	if (elements.mobileCountEditDoneBtn) {
 	  elements.mobileCountEditDoneBtn.addEventListener('click', closeMobileCountEditModal);
+	}
+	if (elements.mobileCountReceiveBtn) {
+	  elements.mobileCountReceiveBtn.addEventListener('click', openReceiveFromMobileCountEditModal);
 	}
 if (elements.mobileCountEditModal) {
   elements.mobileCountEditModal.addEventListener('click', (ev) => {
