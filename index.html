@@ -10700,19 +10700,32 @@ function isWorkflowRegisterMode() {
   return workflowState.mode === 'register';
 }
 
-	function isWorkflowFeatureEnabled() {
-	  return !!(elements.sohmuToggle && elements.sohmuToggle.checked && !isWorkflowSuppressedByMorning());
-	}
+		function isWorkflowFeatureEnabled() {
+		  return !!(elements.sohmuToggle &&
+		    elements.sohmuToggle.checked &&
+		    !isWorkflowSuppressedByMorning() &&
+		    !isWorkflowSuppressedByAdmin());
+		}
 
-	function isWorkflowSuppressedByMorning() {
-	  try {
-	    if (document.body && document.body.classList && document.body.classList.contains('morning-mode')) return true;
+		function isWorkflowSuppressedByMorning() {
+		  try {
+		    if (document.body && document.body.classList && document.body.classList.contains('morning-mode')) return true;
 	  } catch(_) {}
 	  try {
 	    if (typeof isMorningMode !== 'undefined' && isMorningMode) return true;
 	  } catch(_) {}
-	  return false;
-	}
+		  return false;
+		}
+
+		function isWorkflowSuppressedByAdmin() {
+		  try {
+		    if (sessionStorage.getItem('isAdminLoggedIn') === 'true') return true;
+		  } catch(_) {}
+		  try {
+		    if (document.body && document.body.classList && document.body.classList.contains('admin-logged-in')) return true;
+		  } catch(_) {}
+		  return false;
+		}
 
 	function clearWorkflowHomeTimer() {
 	  if (workflowState.timerId) window.clearTimeout(workflowState.timerId);
@@ -14118,6 +14131,9 @@ if(elements.changePasswordForm){
                 elements.loginLogoutBtn.classList.remove('logout');
                 // 管理者ログアウト時はトグル有効化
                 elements.sohmuToggle.disabled = false;
+            }
+            if (typeof syncWorkflowAvailability === 'function') {
+                try { syncWorkflowAvailability(); } catch(_) {}
             }
         }
 
