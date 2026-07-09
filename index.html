@@ -313,6 +313,9 @@
         body.workflow-home .workflow-home-btn{
             display:none;
         }
+        body.workflow-detail-open .workflow-home-btn{
+            display:none !important;
+        }
         body.dark-theme .workflow-home-btn{
             background:rgba(255,255,255,.16);
             color:#eef7ff;
@@ -9849,7 +9852,6 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 	            allResidents[idx][type] = next;
 	            nextValue = next;
 	            syncDisplayedResidentCount(residentId, type, next);
-	            clearSearchInputAfterWorkflowAction({ render: true });
 	          } else {
 	            // 変化なしならサーバー更新も不要
 	            return;
@@ -10727,6 +10729,27 @@ function isWorkflowRegisterMode() {
 		  return false;
 		}
 
+	function isWorkflowDetailOpen() {
+	  try {
+	    if (elements.receiveModal && elements.receiveModal.classList && elements.receiveModal.classList.contains('active')) return true;
+	  } catch(_) {}
+	  try {
+	    if (elements.mobileCountEditModal && elements.mobileCountEditModal.classList && elements.mobileCountEditModal.classList.contains('active')) return true;
+	  } catch(_) {}
+	  return false;
+	}
+
+	function syncWorkflowDetailState() {
+	  const detailOpen = isWorkflowDetailOpen();
+	  setBodyClassCompat('workflow-detail-open', detailOpen);
+	  if (detailOpen) {
+	    clearWorkflowHomeTimer();
+	  } else if (isWorkflowFeatureEnabled() && workflowState.mode !== 'home') {
+	    resetWorkflowHomeTimer();
+	  }
+	  forceWorkflowHomeVisibility();
+	}
+
 	function clearWorkflowHomeTimer() {
 	  if (workflowState.timerId) window.clearTimeout(workflowState.timerId);
 	  if (workflowState.countdownIntervalId) window.clearInterval(workflowState.countdownIntervalId);
@@ -10751,6 +10774,10 @@ function isWorkflowRegisterMode() {
 	  clearWorkflowHomeTimer();
 	  if (!isWorkflowFeatureEnabled()) return;
 	  if (workflowState.mode === 'home') return;
+	  if (isWorkflowDetailOpen()) {
+	    forceWorkflowHomeVisibility();
+	    return;
+	  }
 	  workflowState.lastTimerResetAt = Date.now();
 	  workflowState.timerEndsAt = Date.now() + WORKFLOW_HOME_TIMEOUT_MS;
 	  updateWorkflowHomeCountdown(WORKFLOW_HOME_TIMEOUT_MS);
@@ -10758,6 +10785,11 @@ function isWorkflowRegisterMode() {
 	    updateWorkflowHomeCountdown();
 	  }, 1000);
 	  workflowState.timerId = window.setTimeout(function(){
+	    if (isWorkflowDetailOpen()) {
+	      clearWorkflowHomeTimer();
+	      forceWorkflowHomeVisibility();
+	      return;
+	    }
 	    applyWorkflowMode('home', { reason: 'timeout' });
 	  }, WORKFLOW_HOME_TIMEOUT_MS);
 }
@@ -10791,6 +10823,7 @@ function closeWorkflowTransientViews() {
 	  setBodyClassCompat('workflow-home', enabled && workflowState.mode === 'home');
 	  setBodyClassCompat('workflow-receive-mode', enabled && workflowState.mode === 'receive');
 	  setBodyClassCompat('workflow-register-mode', enabled && workflowState.mode === 'register');
+	  setBodyClassCompat('workflow-detail-open', isWorkflowDetailOpen());
 	  syncWorkflowSohmuToggle();
 	  forceWorkflowHomeVisibility();
 	}
@@ -10804,11 +10837,12 @@ function closeWorkflowTransientViews() {
 	function forceWorkflowHomeVisibility() {
 	  const enabled = isWorkflowFeatureEnabled();
 	  const homeActive = !!(enabled && workflowState.mode === 'home');
+	  const detailOpen = isWorkflowDetailOpen();
 	  if (elements.workflowHomeScreen) {
 	    elements.workflowHomeScreen.style.display = homeActive ? 'flex' : '';
 	  }
 	  if (elements.workflowHomeBtn) {
-	    elements.workflowHomeBtn.style.display = (!enabled || homeActive) ? 'none' : '';
+	    elements.workflowHomeBtn.style.display = (!enabled || homeActive || detailOpen) ? 'none' : '';
 	  }
 	}
 
@@ -10843,6 +10877,11 @@ function applyWorkflowMode(mode, options) {
 	function handleWorkflowActivity() {
 	  if (!isWorkflowFeatureEnabled()) return;
 	  if (workflowState.mode === 'home') return;
+	  if (isWorkflowDetailOpen()) {
+	    clearWorkflowHomeTimer();
+	    forceWorkflowHomeVisibility();
+	    return;
+	  }
 	  const now = Date.now();
 	  if ((now - workflowState.lastTimerResetAt) >= WORKFLOW_ACTIVITY_THROTTLE_MS) {
 	    resetWorkflowHomeTimer();
@@ -10853,6 +10892,11 @@ function applyWorkflowMode(mode, options) {
 	    workflowState.activityTimerId = 0;
 	    if (!isWorkflowFeatureEnabled()) return;
 	    if (workflowState.mode === 'home') return;
+	    if (isWorkflowDetailOpen()) {
+	      clearWorkflowHomeTimer();
+	      forceWorkflowHomeVisibility();
+	      return;
+	    }
 	    resetWorkflowHomeTimer();
 	  }, WORKFLOW_ACTIVITY_THROTTLE_MS);
 	}
@@ -12301,11 +12345,12 @@ function syncMobileCountEditModalUI() {
 	  if (!elements.mobileCountEditModal) return;
 	  flushMobileCountEditNoteAutosave();
 	  elements.mobileCountEditModal.classList.remove('active');
-  elements.mobileCountEditModal.style.display = 'none';
+	  elements.mobileCountEditModal.style.display = 'none';
   mobileCountEditState.residentId = null;
   mobileCountEditState.noteDirty = false;
   mobileCountEditState.noteSaving = false;
   setMobileCountNoteStatus('', '');
+  syncWorkflowDetailState();
 }
 
 function openMobileCountEditModal(residentId) {
@@ -12322,6 +12367,7 @@ function openMobileCountEditModal(residentId) {
   syncMobileCountEditModalUI();
   elements.mobileCountEditModal.style.display = 'flex';
   elements.mobileCountEditModal.classList.add('active');
+  syncWorkflowDetailState();
 }
 
 function handleResidentRowCountEditTap(ev, residentId) {
@@ -12475,6 +12521,7 @@ function syncReceiveModalUI() {
 function closeReceiveModal() {
   if (!elements.receiveModal) return;
   elements.receiveModal.classList.remove('active');
+  syncWorkflowDetailState();
 }
 
 function openReceiveModal(residentId) {
@@ -12496,6 +12543,7 @@ function openReceiveModal(residentId) {
   receiveModalState.showCustom = false;
   syncReceiveModalUI();
   elements.receiveModal.classList.add('active');
+  syncWorkflowDetailState();
 }
 
 function adjustReceiveCustomCount(type, delta) {
@@ -12626,7 +12674,6 @@ async function confirmReceiveAction(luggageCount, mailCount) {
 	  closeReceiveModal();
 	  try {
 	    await receiveResidentItems(residentId, luggageCount, mailCount);
-	    clearSearchInputAfterWorkflowAction({ render: true });
 	  } catch (error) {
 	    console.error('receive action failed', error);
 	    alert('受け取り処理に失敗しました。通信状態や権限をご確認ください。');
