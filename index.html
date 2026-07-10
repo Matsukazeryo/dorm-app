@@ -2911,12 +2911,70 @@
     .table-container{
       border-radius:18px;
     }
-    body.count-edit-mode:not(.morning-mode) .name-cell{
-      background:rgba(47,142,229,0.12);
-      border-radius:12px;
-    }
-  }
-</style>
+	    body.count-edit-mode:not(.morning-mode) .name-cell{
+	      background:rgba(47,142,229,0.12);
+	      border-radius:12px;
+	    }
+	  }
+
+	  /* Keep the existing layout stable while reducing repaint work on older WebKit. */
+	  html{
+	    width:100%;
+	    max-width:100%;
+	    overflow-x:hidden;
+	  }
+	  body{
+	    width:100%;
+	    max-width:100%;
+	    box-sizing:border-box;
+	    overflow-x:hidden;
+	  }
+	  .container,
+	  .header-area,
+	  .header-buttons,
+	  .controls-container,
+	  .top-controls,
+	  .middle-controls,
+	  .table-container{
+	    box-sizing:border-box;
+	    min-width:0;
+	  }
+	  .container{
+	    width:100%;
+	  }
+	  .table-container{
+	    max-width:100%;
+	    contain:paint;
+	    isolation:isolate;
+	  }
+	  #resident-table{
+	    min-width:100%;
+	  }
+	  html.app-is-scrolling .container,
+	  html.app-is-scrolling .controls-container,
+	  html.app-is-scrolling .middle-controls,
+	  html.app-is-scrolling .modal-content,
+	  html.app-is-scrolling .notification-settings-card,
+	  html.app-is-scrolling .off-count-card,
+	  html.app-is-scrolling .off-note,
+	  html.app-is-scrolling .receive-custom-panel,
+	  html.app-is-scrolling .item-history-list li,
+	  html.app-is-scrolling .ocr-candidate-card,
+	  html.app-is-scrolling .announcement-preview,
+	  html.app-is-scrolling .announce-item,
+	  html.app-is-scrolling #post-preview,
+	  html.app-is-scrolling .count-history-btn,
+	  html.app-is-scrolling .modal-overlay,
+	  html.app-is-scrolling .morning-banner,
+	  html.app-is-scrolling .ocr-help-panel,
+	  html.app-is-scrolling .footer{
+	    backdrop-filter:none !important;
+	    -webkit-backdrop-filter:none !important;
+	  }
+	  html.app-is-scrolling #resident-table tbody tr{
+	    transition:none !important;
+	  }
+	</style>
 </head>
 <body>
 
@@ -3019,7 +3077,7 @@
             <label><input type="checkbox" id="toggle-dorm"> 寮</label>
             <label class="display-inline-select" for="resident-sort-selector">
               <span>並び順</span>
-              <select id="resident-sort-selector" onchange="window.applyResidentSortPreference && window.applyResidentSortPreference(this.value)" oninput="window.applyResidentSortPreference && window.applyResidentSortPreference(this.value)">
+	              <select id="resident-sort-selector">
                   <option value="name">名前順</option>
                   <option value="room">部屋番号順</option>
               </select>
@@ -4224,10 +4282,15 @@
         : false;
     }
 
-    function getResidentSearchFields(resident){
-      var r = resident || {};
-      var dormLabel = r.dorm === 'shofu' ? '松風寮' : (r.dorm === 'meizen' ? '明善寮' : '');
-      var fields = [
+	    var residentSearchFieldsCache = typeof WeakMap === 'function' ? new WeakMap() : null;
+
+	    function getResidentSearchFields(resident){
+	      var r = resident || {};
+	      if (residentSearchFieldsCache && r && typeof r === 'object' && residentSearchFieldsCache.has(r)) {
+	        return residentSearchFieldsCache.get(r);
+	      }
+	      var dormLabel = r.dorm === 'shofu' ? '松風寮' : (r.dorm === 'meizen' ? '明善寮' : '');
+	      var fields = [
         r.name,
         r.furigana,
         r.roomNumber,
@@ -4237,11 +4300,15 @@
         [r.roomNumber, r.furigana].join(' '),
         [r.name, r.furigana].join(' ')
       ];
-      return fields.map(normalizeSearchText).filter(Boolean);
-    }
+	      var normalizedFields = fields.map(normalizeSearchText).filter(Boolean);
+	      if (residentSearchFieldsCache && r && typeof r === 'object') {
+	        residentSearchFieldsCache.set(r, normalizedFields);
+	      }
+	      return normalizedFields;
+	    }
 
-    function residentMatchesSearch(resident, searchValue){
-      var terms = normalizeSearchTerms(searchValue);
+	    function residentMatchesSearch(resident, searchValue, preparedTerms){
+	      var terms = Array.isArray(preparedTerms) ? preparedTerms : normalizeSearchTerms(searchValue);
       if (terms.length === 0) return true;
       var fields = getResidentSearchFields(resident);
       var roomNumber = normalizeSearchText((resident && resident.roomNumber) || '');
@@ -7700,6 +7767,23 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
     let allResidents = []; 
     let unsubscribe; 
     let logUnsubscribe = null;  // 操作履歴 listener
+	let residentTableRenderFrameId = 0;
+
+	function requestResidentTableRender(){
+	  if (residentTableRenderFrameId) return;
+	  const run = function(){
+	    residentTableRenderFrameId = 0;
+	    const root = document.documentElement;
+	    if (root && root.classList && root.classList.contains('app-is-scrolling')) {
+	      residentTableRenderFrameId = window.setTimeout(run, 80);
+	      return;
+	    }
+	    if (typeof window.renderTable === 'function') window.renderTable();
+	  };
+	  residentTableRenderFrameId = window.requestAnimationFrame
+	    ? window.requestAnimationFrame(run)
+	    : window.setTimeout(run, 16);
+	}
 
 // ==== 両寮表示("両方")の購読を明示的に修正するパッチ ====
 (function patchSubscribeResidentsForAllDorms(){
@@ -7761,7 +7845,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       });
       try {
         allResidents = shofuCache.concat(meizenCache);
-        if (typeof renderTable === 'function') renderTable();
+	        requestResidentTableRender();
       } catch(_) {}
     }, (err) => {
       console.error('shofu onSnapshot error (all mode)', err);
@@ -7784,7 +7868,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       });
       try {
         allResidents = shofuCache.concat(meizenCache);
-        if (typeof renderTable === 'function') renderTable();
+	        requestResidentTableRender();
       } catch(_) {}
     }, (err) => {
       console.error('meizen onSnapshot error (all mode)', err);
@@ -8032,11 +8116,24 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       return idA.localeCompare(idB, 'ja');
     }
 
-    function sortResidentsByPreference(residents, options){
-      const list = Array.isArray(residents) ? residents.slice() : [];
-      list.sort((a, b) => compareResidentsByPreference(a, b, options));
-      return list;
-    }
+	    const residentSortResultCache = typeof WeakMap === 'function' ? new WeakMap() : null;
+
+	    function sortResidentsByPreference(residents, options){
+	      const source = Array.isArray(residents) ? residents : [];
+	      const pinResidentId = options && options.pinResidentId ? String(options.pinResidentId) : '';
+	      const sortOrder = normalizeResidentSortOrder(options && options.sortOrder ? options.sortOrder : getResidentSortOrder());
+	      const cacheKey = pinResidentId + '|' + sortOrder;
+	      if (residentSortResultCache && source.length) {
+	        const cached = residentSortResultCache.get(source);
+	        if (cached && cached.key === cacheKey && cached.length === source.length) return cached.result;
+	      }
+	      const list = source.slice();
+	      list.sort((a, b) => compareResidentsByPreference(a, b, { pinResidentId, sortOrder }));
+	      if (residentSortResultCache && source.length) {
+	        residentSortResultCache.set(source, { key: cacheKey, length: source.length, result: list });
+	      }
+	      return list;
+	    }
 
     function compareResidentsForSelfSelect(a, b){
       let cmp = compareResidentDormOrder(a, b);
@@ -10473,7 +10570,8 @@ function applySohmuUI(){
 		          workflowHomeCountdown: document.getElementById('workflow-home-countdown'),
 		          workflowSohmuToggle: document.getElementById('workflow-sohmu-toggle'),
 
-			          tableBody: document.querySelector("#resident-table tbody"),
+				          tableHead: document.querySelector("#resident-table thead"),
+				          tableBody: document.querySelector("#resident-table tbody"),
 	          searchInput: document.getElementById('search-input'),
 	          searchBox: document.getElementById('search-box'),
 	          searchClearBtn: document.getElementById('search-clear-btn'),
@@ -10693,6 +10791,38 @@ const mobileCountEditState = {
 	  lastTimerResetAt: 0,
 	  initialized: false
 	};
+	let workflowScrollFrameId = 0;
+	let appScrollIdleTimerId = 0;
+
+	function handleAppScrollActivity() {
+	  const root = document.documentElement;
+	  if (root && root.classList && !root.classList.contains('app-is-scrolling')) {
+	    root.classList.add('app-is-scrolling');
+	  }
+	  if (appScrollIdleTimerId) window.clearTimeout(appScrollIdleTimerId);
+	  appScrollIdleTimerId = window.setTimeout(function(){
+	    appScrollIdleTimerId = 0;
+	    if (root && root.classList) root.classList.remove('app-is-scrolling');
+	  }, 140);
+
+	  if (workflowScrollFrameId) return;
+	  const run = function(){
+	    workflowScrollFrameId = 0;
+	    handleWorkflowActivity();
+	  };
+	  workflowScrollFrameId = window.requestAnimationFrame
+	    ? window.requestAnimationFrame(run)
+	    : window.setTimeout(run, 16);
+	}
+
+	function addPassiveCaptureListener(target, eventName, listener) {
+	  if (!target || typeof target.addEventListener !== 'function') return;
+	  try {
+	    target.addEventListener(eventName, listener, { capture: true, passive: true });
+	  } catch (_) {
+	    target.addEventListener(eventName, listener, true);
+	  }
+	}
 
 function isWorkflowReceiveMode() {
   return workflowState.mode === 'receive';
@@ -10952,9 +11082,16 @@ function initializeWorkflowMode() {
 	      syncWorkflowAvailability();
 	    });
 	  }
-	  ['pointerdown', 'mousedown', 'keydown', 'input', 'scroll', 'touchstart'].forEach(function(eventName){
+	  ['keydown', 'input'].forEach(function(eventName){
 	    document.addEventListener(eventName, handleWorkflowActivity, true);
 	  });
+	  if (typeof window.PointerEvent === 'function') {
+	    document.addEventListener('pointerdown', handleWorkflowActivity, true);
+	  } else {
+	    document.addEventListener('mousedown', handleWorkflowActivity, true);
+	    addPassiveCaptureListener(document, 'touchstart', handleWorkflowActivity);
+	  }
+	  addPassiveCaptureListener(document, 'scroll', handleAppScrollActivity);
 	  applyWorkflowMode('home');
 	  window.setTimeout(forceWorkflowHomeVisibility, 0);
 	  window.setTimeout(forceWorkflowHomeVisibility, 300);
@@ -10975,8 +11112,19 @@ function normalizeCountDisplayValue(value) {
   return Math.max(0, parseInt(value, 10) || 0);
 }
 
+let displayedResidentRowsById = Object.create(null);
+
 function findResidentMainRows(residentId) {
   const id = String(residentId || '');
+	  const cachedRows = displayedResidentRowsById[id];
+	  if (cachedRows && cachedRows.length) {
+	    const connectedRows = [];
+	    for (let i = 0; i < cachedRows.length; i++) {
+	      const row = cachedRows[i];
+	      if (row && row.parentNode === elements.tableBody) connectedRows.push(row);
+	    }
+	    if (connectedRows.length) return connectedRows;
+	  }
   const rows = document.querySelectorAll('#resident-table tbody tr.resident-main-row');
   const out = [];
   for (let i = 0; i < rows.length; i++) {
@@ -13500,7 +13648,7 @@ if(elements.changePasswordForm){
                   })();
                   return;
                 }
-                renderTable(); 
+                requestResidentTableRender();
             }, error => {
                 console.error("データの読み込みに失敗しました:", error);
                 showResidentLoadingRow('寮生の読み込みに失敗しました。通信状態を確認して再読み込みしてください。');
@@ -13535,7 +13683,7 @@ if(elements.changePasswordForm){
 	                setCrossDormSearchCache('shofu', shofuResidents);
 	                setCrossDormSearchCache('meizen', meizenResidents);
 	                allResidents = shofuResidents.concat(meizenResidents);
-	                renderTable();
+	                requestResidentTableRender();
 	            };
 
             const unsubShofu = shofuRef.onSnapshot(snap => {
@@ -13645,7 +13793,8 @@ if(elements.changePasswordForm){
 	            try {
 	                const residents = await loadCrossDormSearchResidents(otherDormKey);
 	                if (requestId !== crossDormSearchRequestId) return;
-	                const matches = residents.filter(r => residentMatchesSearch(r, term));
+	                const preparedTerms = normalizeSearchTerms(term);
+	                const matches = residents.filter(r => residentMatchesSearch(r, term, preparedTerms));
 	                if (matches.length > 0) {
 	                    showCrossDormSearchHint(otherDormKey, matches.length);
 	                } else {
@@ -13682,8 +13831,20 @@ if(elements.changePasswordForm){
                 const dormLabel = dorm === 'shofu' ? '松風寮' : '明善寮';
                 resetBtn.textContent = `${dormLabel}の全ての荷物/郵便を0にする`;
               }
-            }
-        }
+	            }
+	        }
+
+	        let residentTableNotificationUiSignature = '';
+	        function syncNotificationSettingsUiAfterTableRender(){
+	          const signature = [
+	            sessionStorage.getItem('isAdminLoggedIn') === 'true' ? '1' : '0',
+	            String(getStoredResidentId() || ''),
+	            elements.sohmuToggle && elements.sohmuToggle.checked ? '1' : '0'
+	          ].join('|');
+	          if (signature === residentTableNotificationUiSignature) return;
+	          residentTableNotificationUiSignature = signature;
+	          try { updateNotificationSettingsUI(); } catch(_) {}
+	        }
 
 	        window.renderTable = async () => {
 	            const searchTerm = elements.searchInput.value;
@@ -13694,19 +13855,23 @@ if(elements.changePasswordForm){
 		            const hasSearchTerm = String(searchTerm || '').trim().length > 0;
 		            const itemFilterActive = !!(sohmuOn && !isMorningDisplayLocked() && getItemFilterEnabled() && !hasSearchTerm);
 	            // Hide table header when 庶務モード is OFF
-	            const tableHead = document.querySelector('#resident-table thead');
+	            const tableHead = elements.tableHead;
 	            tableHead.style.display = sohmuOn ? '' : 'none';
 	            const sourceResidents = sohmuOn
 	              ? allResidents
 	              : allResidents.filter(r => r.id === myId);
 	            const currentSortOrder = normalizeResidentSortOrder(window.__residentSortOrderState || getResidentSortOrder());
 		            const baseList = sortResidentsByPreference(sourceResidents, { pinResidentId: sohmuOn ? '' : myId, sortOrder: currentSortOrder });
-		            const searchedResidents = baseList.filter(r => residentMatchesSearch(r, searchTerm));
+		            const preparedSearchTerms = normalizeSearchTerms(searchTerm);
+		            const searchedResidents = preparedSearchTerms.length
+		              ? baseList.filter(r => residentMatchesSearch(r, searchTerm, preparedSearchTerms))
+		              : baseList;
 		            const filteredResidents = itemFilterActive
 		              ? searchedResidents.filter(r => hasResidentReceivableItems(r))
 		              : searchedResidents;
 		            updateCrossDormSearchHint(searchTerm);
-		            elements.tableBody.innerHTML = ''; 
+		            const nextDisplayedResidentRowsById = Object.create(null);
+		            const tableRowsFragment = document.createDocumentFragment();
 	            if (filteredResidents.length === 0) {
 		                const emptyMessage = itemFilterActive
 		                  ? '受け取る荷物・郵便がある寮生はいません。'
@@ -13799,20 +13964,21 @@ if(elements.changePasswordForm){
                           </td>
                         `;
                     }
-                    if (elements.sohmuToggle.checked && !morningInlineEdit) {
-                        row.addEventListener('click', function(ev){
-                            handleResidentRowCountEditTap(ev, resident.id || '');
-                        }, false);
-                    }
-                    elements.tableBody.appendChild(row);
-                });
-            }
+	                    const rowId = String(resident.id || '');
+	                    if (!nextDisplayedResidentRowsById[rowId]) nextDisplayedResidentRowsById[rowId] = [];
+	                    nextDisplayedResidentRowsById[rowId].push(row);
+	                    tableRowsFragment.appendChild(row);
+	                });
+	                elements.tableBody.innerHTML = '';
+	                elements.tableBody.appendChild(tableRowsFragment);
+	            }
+	            displayedResidentRowsById = nextDisplayedResidentRowsById;
             updateDeleteButtonState();
             if (elements.mobileCountEditModal && elements.mobileCountEditModal.classList.contains('active')) {
               syncMobileCountEditModalUI();
             }
-            try { updateNotificationSettingsUI(); } catch(_){}
-        }
+	            syncNotificationSettingsUiAfterTableRender();
+	        }
         
 
         function renderLogs(snapshot){
@@ -14248,7 +14414,6 @@ if(elements.changePasswordForm){
             window.applyResidentSortPreference(savedSort);
         }
 
-	        let renderTableFrameId = 0;
 			        function hasResidentReceivableItems(resident) {
 			            const luggage = Math.max(0, parseInt(resident && resident.luggage, 10) || 0);
 			            const mail = Math.max(0, parseInt(resident && resident.mail, 10) || 0);
@@ -14311,13 +14476,7 @@ if(elements.changePasswordForm){
 		            updateItemFilterControls();
 		        }
 	        function scheduleRenderTable() {
-	            if (renderTableFrameId) return;
-	            const run = () => {
-	                renderTableFrameId = 0;
-	                renderTable();
-            };
-	            if (window.requestAnimationFrame) renderTableFrameId = window.requestAnimationFrame(run);
-	            else renderTableFrameId = setTimeout(run, 16);
+	            requestResidentTableRender();
 	        }
 
 	        function clearSearchInputAfterWorkflowAction(options) {
@@ -14556,14 +14715,11 @@ if(elements.changePasswordForm){
             localStorage.setItem('theme', e.target.value);
             handleThemeChange(e.target.value);
         });
-        if (elements.residentSortSelector) {
-            elements.residentSortSelector.addEventListener('change', function(e){
-                window.applyResidentSortPreference(e && e.target ? e.target.value : RESIDENT_SORT_NAME);
-            });
-            elements.residentSortSelector.addEventListener('input', function(e){
-                window.applyResidentSortPreference(e && e.target ? e.target.value : RESIDENT_SORT_NAME);
-            });
-        }
+	        if (elements.residentSortSelector) {
+	            elements.residentSortSelector.addEventListener('change', function(e){
+	                window.applyResidentSortPreference(e && e.target ? e.target.value : RESIDENT_SORT_NAME);
+	            });
+	        }
 	        const handleSystemThemeChange = function(){
 	            const savedTheme = localStorage.getItem('theme') || 'light';
 	            if (savedTheme === 'system') handleThemeChange('system');
