@@ -4365,6 +4365,11 @@
       var raw = (doc && typeof doc.data === 'function' ? doc.data() : {}) || {};
       var merged = Object.assign({ id: doc.id }, raw, { dorm: dorm });
       merged.roomNumber = getResidentDocRoomNumber(raw);
+      if (typeof getPendingCountOverlayValue === 'function') {
+        var residentPath = 'residents_' + dorm + '/' + doc.id;
+        merged.luggage = getPendingCountOverlayValue(residentPath, 'luggage', raw.luggage);
+        merged.mail = getPendingCountOverlayValue(residentPath, 'mail', raw.mail);
+      }
       return merged;
     }
 
@@ -4850,8 +4855,9 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
     window.__morningStagedWrites = new Map(); // key: `${collection}/${docId}` -> {luggage, mail, ...}
     window.__morningCommitInProgress = false; // commit/restore中はステージングをバイパス
     window.__morningFinishing = false;
-    window.__morningLastCommitError = null;
-    window.__morningLastNotificationError = null;
+	    window.__morningLastCommitError = null;
+	    window.__morningLastNotificationError = null;
+	    window.__morningCommitRunId = '';
 
     function __mergeObject(a,b){
       const out = Object.assign({}, a || {});
@@ -5006,7 +5012,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       return 'morning_' + now + '_' + rand;
     }
 
-    function __parseMorningCommitPath(path){
+	    function __parseMorningCommitPath(path){
       try{
         const parts = String(path || '').split('/').filter(Boolean);
         const collectionName = parts.length >= 2 ? parts[parts.length - 2] : '';
@@ -5018,9 +5024,48 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
             : null;
         return { collectionName, residentId, dorm };
       }catch(_){
-        return { collectionName: '', residentId: '', dorm: null };
-      }
-    }
+	        return { collectionName: '', residentId: '', dorm: null };
+	      }
+	    }
+
+	    function __safeMorningLogIdPart(value){
+	      try { return encodeURIComponent(String(value || '')); }
+	      catch(_) { return String(value || '').replace(/[^a-zA-Z0-9_-]/g, '_'); }
+	    }
+
+	    function __getMorningOriginalForPath(path){
+	      try {
+	        if (morningRef && morningRef.byPath && typeof morningRef.byPath.get === 'function') {
+	          return morningRef.byPath.get(path) || null;
+	        }
+	      } catch(_) {}
+	      return null;
+	    }
+
+	    function __buildMorningHistoryWrites(entry, runId){
+	      const parsed = __parseMorningCommitPath(entry && entry.path);
+	      const original = __getMorningOriginalForPath(entry && entry.path) || {};
+	      const current = entry && entry.patch ? entry.patch : {};
+	      const resident = original && original.id ? original : (__getResidentSnapshotForMorning(parsed.residentId) || {});
+	      const writes = [];
+	      ['luggage', 'mail'].forEach(function(type){
+	        const previousValue = __normalizeMorningCountValue(original[type]);
+	        const nextValue = __normalizeMorningCountValue(current[type]);
+	        if (previousValue == null || nextValue == null || previousValue === nextValue) return;
+	        const delta = nextValue - previousValue;
+	        const typeJa = getItemHistoryTypeLabel(type);
+	        const details = `[${parsed.dorm || ''}] ${resident.name || ''} の${typeJa}を ${delta > 0 ? '+' : ''}${delta}（朝の庶務）`;
+	        const historyMeta = buildItemHistoryLogMeta(parsed.residentId, resident.name || '', parsed.collectionName,
+	          type, delta, previousValue, nextValue, 'morning');
+	        historyMeta.historyCommitId = runId;
+	        historyMeta.historyConsistencyVersion = 2;
+	        const payload = buildTrackedLogPayload('個数変更', details, historyMeta);
+	        const logId = ['morning', runId, parsed.collectionName, parsed.residentId, type]
+	          .map(__safeMorningLogIdPart).join('__');
+	        writes.push({ ref: db.collection('logs').doc(logId), payload: payload });
+	      });
+	      return writes;
+	    }
 
     function __buildMorningNotificationResidents(entries){
       const residentMap = new Map();
@@ -5137,12 +5182,13 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       }catch(_){ }
     }
 
-    async function commitMorningStagedWrites(options){
+	    async function commitMorningStagedWrites(options){
       const opts = Object.assign({ enqueueSummary: false }, options || {});
       let committed = false;
       let normalizedEntries = [];
       let commitEntries = [];
-      let notificationRunId = '';
+	      let notificationRunId = '';
+	      let commitRunId = '';
       try{
         if (!db || typeof db.batch !== 'function') return false;
 
@@ -5155,28 +5201,36 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
           return true;
         }
 
-        if (opts.enqueueSummary) {
-          notificationRunId = __buildMorningNotificationRunId();
-        }
-        commitEntries = normalizedEntries.map((entry) => {
-          const patch = Object.assign({}, entry && entry.patch ? entry.patch : {});
-          if (notificationRunId) {
-            patch.__skipCountNotificationOnce = notificationRunId;
-          }
-          return { path: entry.path, patch };
-        });
+	        commitRunId = window.__morningCommitRunId || morningRef.restoreRunId || __buildMorningNotificationRunId();
+	        window.__morningCommitRunId = commitRunId;
+	        if (opts.enqueueSummary) notificationRunId = commitRunId;
+	        commitEntries = normalizedEntries.map((entry) => {
+	          const patch = Object.assign({}, entry && entry.patch ? entry.patch : {});
+	          if (notificationRunId) {
+	            patch.__skipCountNotificationOnce = notificationRunId;
+	          }
+	          return {
+	            path: entry.path,
+	            patch,
+	            historyWrites: __buildMorningHistoryWrites(entry, commitRunId)
+	          };
+	        });
 
-        let batch = db.batch();
-        let opCount = 0;
-        for (const entry of commitEntries){
-	          const ref = getFirestoreDocByPath(entry.path);
-          batch.update(ref, entry.patch);
-          opCount++;
-          if (opCount >= 450){
-            await batch.commit();
-            batch = db.batch();
-            opCount = 0;
-          }
+	        let batch = db.batch();
+	        let opCount = 0;
+	        for (const entry of commitEntries){
+	          const groupSize = 1 + entry.historyWrites.length;
+	          if (opCount > 0 && opCount + groupSize > 450) {
+	            await batch.commit();
+	            batch = db.batch();
+	            opCount = 0;
+	          }
+		          const ref = getFirestoreDocByPath(entry.path);
+	          batch.update(ref, entry.patch);
+	          entry.historyWrites.forEach(function(historyWrite){
+	            batch.set(historyWrite.ref, historyWrite.payload);
+	          });
+	          opCount += groupSize;
         }
         if (opCount > 0) {
           await batch.commit();
@@ -5193,22 +5247,32 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       }catch(e){
         console.warn('[morning] batch commit failed; retrying one by one', e);
         try{
-          normalizedEntries = __buildMorningCommitEntries();
-          if (!normalizedEntries.length) {
-            committed = true;
-            return true;
-          }
-          if (!commitEntries.length) {
-            commitEntries = normalizedEntries.map((entry) => {
-              const patch = Object.assign({}, entry && entry.patch ? entry.patch : {});
-              if (notificationRunId) {
-                patch.__skipCountNotificationOnce = notificationRunId;
-              }
-              return { path: entry.path, patch };
-            });
-          }
-          for (const entry of commitEntries){
-	            await getFirestoreDocByPath(entry.path).update(entry.patch);
+	          if (!normalizedEntries.length) {
+	            committed = true;
+	            return true;
+	          }
+	          if (!commitEntries.length) {
+	            commitRunId = window.__morningCommitRunId || morningRef.restoreRunId || __buildMorningNotificationRunId();
+	            window.__morningCommitRunId = commitRunId;
+	            commitEntries = normalizedEntries.map((entry) => {
+	              const patch = Object.assign({}, entry && entry.patch ? entry.patch : {});
+	              if (notificationRunId) {
+	                patch.__skipCountNotificationOnce = notificationRunId;
+	              }
+	              return {
+	                path: entry.path,
+	                patch,
+	                historyWrites: __buildMorningHistoryWrites(entry, commitRunId)
+	              };
+	            });
+	          }
+	          for (const entry of commitEntries){
+	            const retryBatch = db.batch();
+	            retryBatch.update(getFirestoreDocByPath(entry.path), entry.patch);
+	            entry.historyWrites.forEach(function(historyWrite){
+	              retryBatch.set(historyWrite.ref, historyWrite.payload);
+	            });
+	            await retryBatch.commit();
           }
           if (opts.enqueueSummary) {
             try{
@@ -7923,12 +7987,9 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
     // 開始の二重押し/多重実行を防止（確認は1クリックにつき1回だけ）
     let __morningStarting = false;
     // DOM変化を検知して再注入するためのオブザーバ
-    let __morningObserver = null;
-    let __annotating = false;
-    let __annotateTimer = null;
-	    let __morningConfirmShown = false; // 初回だけ確認ダイアログを出すためのフラグ
-	    const MORNING_DORMS = ['shofu', 'meizen'];
-	    const MORNING_BATCH_LIMIT = 480;
+	    let __morningObserver = null;
+	    let __annotating = false;
+	    let __annotateTimer = null;
 	    const MORNING_RESTORE_SETTINGS_DOC_ID = 'morning_restore';
 
     function setMorningOverlayVisible(visible){
@@ -8247,34 +8308,12 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       };
     }
 
-    function getLoadedMorningResidentsForDorm(dormKey){
-      const collectionName = `residents_${dormKey}`;
-      if (!Array.isArray(allResidents) || !allResidents.length) return [];
-      return allResidents
-        .filter(function(r){
-          return r && r.id && (r.dorm === dormKey || currentCollectionName === collectionName);
-        })
-        .map(function(r){
-          return Object.assign({}, r, { dorm: dormKey, roomNumber: getResidentRoomRawValue(r) });
-        });
-    }
-
 	    async function loadMorningResidentsForDorm(dormKey){
 	      const collectionName = `residents_${dormKey}`;
-	      try {
-        const snap = await db.collection(collectionName).get({ source: 'server' }).catch(function(){
-          return db.collection(collectionName).get();
-        });
-        return snap.docs.map(function(doc){
-          return mergeResidentDocData(doc, dormKey);
-        });
-      } catch(e) {
-        const fallback = getLoadedMorningResidentsForDorm(dormKey);
-        if (fallback.length) {
-          return fallback;
-        }
-	        throw e;
-	      }
+	      const snap = await db.collection(collectionName).get({ source: 'server' });
+	      return snap.docs.map(function(doc){
+	        return mergeResidentDocData(doc, dormKey);
+	      });
 	    }
 
 	    function createMorningRestoreRunId(){
@@ -8409,41 +8448,106 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 	      });
 	    }
 
-	    async function commitMorningRestoreEntries(entries, restoreMarker){
+	    async function loadCurrentMorningCountsByPath(entries){
+	      const requiredDorms = {};
+	      (entries || []).forEach(function(entry){
+	        if (entry && (entry.dorm === 'shofu' || entry.dorm === 'meizen')) requiredDorms[entry.dorm] = true;
+	      });
+	      const dorms = Object.keys(requiredDorms);
+	      const snapshots = await Promise.all(dorms.map(function(dorm){
+	        return db.collection('residents_' + dorm).get({ source: 'server' });
+	      }));
+	      const byPath = new Map();
+	      snapshots.forEach(function(snapshot, index){
+	        const dorm = dorms[index];
+	        snapshot.forEach(function(doc){
+	          const data = doc.data() || {};
+	          byPath.set('residents_' + dorm + '/' + doc.id, {
+	            luggage: getMorningCountNumber(data.luggage),
+	            mail: getMorningCountNumber(data.mail),
+	            name: data.name || ''
+	          });
+	        });
+	      });
+	      return byPath;
+	    }
+
+	    function buildMorningRestoreHistoryWrites(entry, currentValues, restoreMarker){
+	      const writes = [];
+	      const current = currentValues || {};
+	      ['luggage', 'mail'].forEach(function(type){
+	        const previousValue = getMorningCountNumber(current[type]);
+	        const nextValue = getMorningCountNumber(entry[type]);
+	        if (previousValue === nextValue) return;
+	        const delta = nextValue - previousValue;
+	        const collectionName = 'residents_' + entry.dorm;
+	        const residentName = entry.name || current.name || '';
+	        const typeJa = getItemHistoryTypeLabel(type);
+	        const details = `[${entry.dorm}] ${residentName} の${typeJa}を ${delta > 0 ? '+' : ''}${delta}（朝の庶務前へ復元）`;
+	        const historyMeta = buildItemHistoryLogMeta(entry.residentId, residentName, collectionName,
+	          type, delta, previousValue, nextValue, 'morning_restore');
+	        historyMeta.historyCommitId = restoreMarker;
+	        historyMeta.historyConsistencyVersion = 2;
+	        const payload = buildTrackedLogPayload('個数変更', details, historyMeta);
+	        const logId = ['restore', restoreMarker, collectionName, entry.residentId, type]
+	          .map(__safeMorningLogIdPart).join('__');
+	        writes.push({ ref: db.collection('logs').doc(logId), payload: payload });
+	      });
+	      return writes;
+	    }
+
+	    async function commitMorningRestoreEntries(entries, restoreMarker, currentCountsByPath){
 	      const normalized = (entries || []).filter(function(entry){
 	        return entry && entry.path && (entry.dorm === 'shofu' || entry.dorm === 'meizen') && entry.residentId;
 	      });
+	      const groups = normalized.map(function(entry){
+	        return {
+	          entry: entry,
+	          historyWrites: buildMorningRestoreHistoryWrites(entry,
+	            currentCountsByPath && currentCountsByPath.get ? currentCountsByPath.get(entry.path) : null,
+	            restoreMarker)
+	        };
+	      });
 	      let batch = db.batch();
 	      let opCount = 0;
-	      const commits = [];
-	      normalized.forEach(function(entry){
+	      try {
+	        for (const group of groups) {
+	          const entry = group.entry;
+	          const groupSize = 1 + group.historyWrites.length;
+	          if (opCount > 0 && opCount + groupSize > 450) {
+	            await batch.commit();
+	            batch = db.batch();
+	            opCount = 0;
+	          }
 	        batch.update(getFirestoreDocByPath(entry.path), {
 	          luggage: getMorningCountNumber(entry.luggage),
 	          mail: getMorningCountNumber(entry.mail),
 	          __skipCountNotificationOnce: restoreMarker
 	        });
-	        opCount++;
-	        if (opCount >= 450) {
-	          commits.push(batch.commit());
-	          batch = db.batch();
-	          opCount = 0;
+	          group.historyWrites.forEach(function(historyWrite){
+	            batch.set(historyWrite.ref, historyWrite.payload);
+	          });
+	          opCount += groupSize;
 	        }
-	      });
-	      if (opCount > 0) commits.push(batch.commit());
-	      try {
-	        await Promise.all(commits);
+	        if (opCount > 0) await batch.commit();
 	        return { restored: normalized.length, failed: 0 };
 	      } catch(e) {
 	        console.warn('morning restore batch failed; retrying one by one', e);
 	        let restored = 0;
 	        let failed = 0;
-	        for (const entry of normalized) {
+	        for (const group of groups) {
+	          const entry = group.entry;
 	          try {
-	            await getFirestoreDocByPath(entry.path).update({
+	            const retryBatch = db.batch();
+	            retryBatch.update(getFirestoreDocByPath(entry.path), {
 	              luggage: getMorningCountNumber(entry.luggage),
 	              mail: getMorningCountNumber(entry.mail),
 	              __skipCountNotificationOnce: restoreMarker
 	            });
+	            group.historyWrites.forEach(function(historyWrite){
+	              retryBatch.set(historyWrite.ref, historyWrite.payload);
+	            });
+	            await retryBatch.commit();
 	            restored++;
 	          } catch(err) {
 	            failed++;
@@ -8500,7 +8604,8 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 	        if (btn) btn.textContent = '復元中...';
 	        setMorningOverlayVisible(true);
 	        const restoreMarker = 'morning_restore_' + Date.now();
-	        const result = await commitMorningRestoreEntries(entries, restoreMarker);
+	        const currentCountsByPath = await loadCurrentMorningCountsByPath(entries);
+	        const result = await commitMorningRestoreEntries(entries, restoreMarker, currentCountsByPath);
 	        if (!result.restored && result.failed) {
 	          throw new Error('復元対象の更新にすべて失敗しました。');
 	        }
@@ -8620,87 +8725,6 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 	      } catch(_) {}
 	    }
 
-    async function snapshotDormToFirestore(dormKey){
-      // runId 例: 20251004T083012_shofu
-      const runId = new Date().toISOString().replace(/[:.]/g,'') + '_' + dormKey;
-      const topRef = db.collection('morning_refs').doc(runId);
-
-      const snap = await db.collection(`residents_${dormKey}`).get({ source: 'server' }).catch(() => db.collection(`residents_${dormKey}`).get());
-      const byId = new Map();
-      const byName = new Map();
-      const byRoom = new Map();
-      const byComposite = new Map();
-
-      // 親ドキュメント作成
-      const head = {
-        dorm: dormKey,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        count: snap.size
-      };
-      let batch = db.batch();
-      let opCount = 0;
-      batch.set(topRef, head); opCount++;
-
-      snap.forEach(doc => {
-        const d = doc.data() || {};
-        const lug = (typeof d.luggage === 'number') ? d.luggage : (parseInt(d.luggage) || 0);
-        const mail = (typeof d.mail === 'number') ? d.mail : (parseInt(d.mail) || 0);
-        const rdoc = topRef.collection('residents').doc(doc.id);
-        batch.set(rdoc, {
-          name: d.name || '',
-          roomNumber: d.roomNumber || '',
-          luggage: lug,
-          mail: mail
-        });
-        opCount++;
-
-        const room = (d.roomNumber || '').toString().trim();
-        const obj = { id: doc.id, luggage: lug, mail: mail, name: d.name || '', roomNumber: room };
-
-        byId.set(doc.id, obj);
-
-        const nameKey = normalizeKey(d.name || '');
-        if (nameKey) {
-          byName.set(nameKey, obj);
-        }
-
-        if (room) {
-          const arr = byRoom.get(room) || [];
-          arr.push(obj);
-          byRoom.set(room, arr);
-          if (nameKey) {
-            byComposite.set(room + '::' + nameKey, obj);
-          }
-        }
-
-        if (opCount >= MORNING_BATCH_LIMIT){
-          batch.commit().catch(()=>{});
-          batch = db.batch();
-          opCount = 0;
-        }
-      });
-      await batch.commit().catch(()=>{});
-      return { runId, byId, byName, byRoom, byComposite };
-    }
-
-    async function zeroDorm(dormKey){
-      const snap = await db.collection(`residents_${dormKey}`).get();
-      let batch = db.batch();
-      let opCount = 0;
-      const commits = [];
-      snap.forEach(doc => {
-        batch.update(db.collection(`residents_${dormKey}`).doc(doc.id), { luggage: 0, mail: 0 });
-        opCount++;
-        if (opCount >= MORNING_BATCH_LIMIT){
-          commits.push(batch.commit());
-          batch = db.batch();
-          opCount = 0;
-        }
-      });
-      commits.push(batch.commit());
-      await Promise.all(commits);
-    }
-
 	    function showMorningBanner(){
 	      const b = document.getElementById('morning-banner');
 	      const l = document.getElementById('morning-banner-dorm');
@@ -8806,6 +8830,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 	        morningRef.startedAt   = Date.now();
 	        morningRef.restoreRunId = restorePoint && restorePoint.runId ? restorePoint.runId : '';
 	        morningRef.restoreCount = restorePoint && restorePoint.count ? restorePoint.count : 0;
+	        window.__morningCommitRunId = morningRef.restoreRunId || __buildMorningNotificationRunId();
 
         try {
           if (typeof unsubscribe === 'function') unsubscribe();
@@ -8847,9 +8872,10 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       } catch(e){
         console.error('startMorning failed', e);
         try {
-          if (window.__morningStagedWrites && typeof window.__morningStagedWrites.clear === 'function') {
-            window.__morningStagedWrites.clear();
-          }
+	          if (window.__morningStagedWrites && typeof window.__morningStagedWrites.clear === 'function') {
+	            window.__morningStagedWrites.clear();
+	          }
+	          window.__morningCommitRunId = '';
         } catch(_) {}
         closeMorningModeUI();
         const detail = (e && (e.code || e.message)) ? `\n[${e.code || 'error'}] ${e.message}` : '';
@@ -8993,7 +9019,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
     })();
 
     // 全ての関数をグローバルスコープに配置
-    function cleanLogPayload(payload){
+	    function cleanLogPayload(payload){
         const out = {};
         Object.keys(payload || {}).forEach(function(key){
             const value = payload[key];
@@ -9005,23 +9031,30 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
             }
             out[key] = value;
         });
-        return out;
-    }
+	        return out;
+	    }
 
-    async function addLog(action, details, extra){
-        if (!isTrackedHistoryAction(action)) return;
-        try{
-            const payload = cleanLogPayload(Object.assign({
-                action, details,
-                isAdmin: sessionStorage.getItem('isAdminLoggedIn')==='true',
-                timestamp: firebase.firestore.FieldValue.serverTimestamp()
-            }, (extra && typeof extra === 'object') ? extra : {}));
-            payload.timestamp = firebase.firestore.FieldValue.serverTimestamp();
-            await db.collection("logs").add(payload);
-        }catch(e){
-            console.error('addLog error',e);
-        }
-    }
+	    function buildTrackedLogPayload(action, details, extra){
+	        if (!isTrackedHistoryAction(action)) return null;
+	        const payload = cleanLogPayload(Object.assign({
+	            action: action,
+	            details: details,
+	            isAdmin: sessionStorage.getItem('isAdminLoggedIn') === 'true',
+	            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+	        }, (extra && typeof extra === 'object') ? extra : {}));
+	        payload.timestamp = firebase.firestore.FieldValue.serverTimestamp();
+	        return payload;
+	    }
+
+	    async function addLog(action, details, extra){
+	        try{
+	            const payload = buildTrackedLogPayload(action, details, extra);
+	            if (!payload) return;
+	            await db.collection("logs").add(payload);
+	        }catch(e){
+	            console.error('addLog error',e);
+	        }
+	    }
 
     const TRACKED_HISTORY_ACTIONS = new Set(['受け取り', '個数変更']);
 
@@ -9039,7 +9072,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       return '';
     }
 
-    function buildItemHistoryLogMeta(residentId, residentName, collectionName, type, delta, previousValue, nextValue, source){
+	    function buildItemHistoryLogMeta(residentId, residentName, collectionName, type, delta, previousValue, nextValue, source){
       const dorm = collectionName === 'all' ? '' : (String(collectionName || '').split('_')[1] || '');
       return {
         residentId,
@@ -9051,8 +9084,204 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
         nextValue,
         changeType: delta > 0 ? 'increase' : 'decrease',
         historySource: source || 'manual'
-      };
-    }
+	      };
+	    }
+
+	    const residentMutationQueues = new Map();
+	    const pendingCountUiStates = new Map();
+	    let countMutationTokenSequence = 0;
+	    let lastCountSaveErrorAlertAt = 0;
+
+	    function enqueueResidentMutation(residentPath, task){
+	      const key = String(residentPath || '');
+	      const previous = residentMutationQueues.get(key) || Promise.resolve();
+	      const current = previous.catch(function(){ return null; }).then(task);
+	      residentMutationQueues.set(key, current);
+	      const cleanup = function(){
+	        if (residentMutationQueues.get(key) === current) residentMutationQueues.delete(key);
+	      };
+	      current.then(cleanup, cleanup);
+	      return current;
+	    }
+
+	    function applyQueuedCountDeltas(baseValue, operations){
+	      let value = normalizeCountDisplayValue(baseValue);
+	      (operations || []).forEach(function(operation){
+	        value = Math.max(0, value + Number(operation.delta || 0));
+	      });
+	      return value;
+	    }
+
+	    function getPendingCountStateKey(residentPath, type){
+	      return String(residentPath || '') + '|' + (type === 'mail' ? 'mail' : 'luggage');
+	    }
+
+	    function getPendingCountOverlayValue(residentPath, type, serverValue){
+	      const key = getPendingCountStateKey(residentPath, type);
+	      const state = pendingCountUiStates.get(key);
+	      const normalizedServerValue = normalizeCountDisplayValue(serverValue);
+	      if (!state) return normalizedServerValue;
+	      if (state.operations.length) return normalizeCountDisplayValue(state.optimisticValue);
+	      if (state.settledValue != null) {
+	        if (normalizedServerValue === normalizeCountDisplayValue(state.settledValue)) {
+	          pendingCountUiStates.delete(key);
+	          return normalizedServerValue;
+	        }
+	        if (Date.now() < state.expiresAt) return normalizeCountDisplayValue(state.settledValue);
+	      }
+	      pendingCountUiStates.delete(key);
+	      return normalizedServerValue;
+	    }
+
+	    function clearSettledCountOverlayForResident(residentPath){
+	      ['luggage', 'mail'].forEach(function(type){
+	        const key = getPendingCountStateKey(residentPath, type);
+	        const state = pendingCountUiStates.get(key);
+	        if (state && !state.operations.length) pendingCountUiStates.delete(key);
+	      });
+	    }
+
+	    function rebasePendingCountOverlayForResident(residentId, residentPath, values){
+	      ['luggage', 'mail'].forEach(function(type){
+	        const baseValue = normalizeCountDisplayValue(values && values[type]);
+	        const key = getPendingCountStateKey(residentPath, type);
+	        const state = pendingCountUiStates.get(key);
+	        if (state && state.operations.length) {
+	          state.baseValue = baseValue;
+	          state.optimisticValue = applyQueuedCountDeltas(baseValue, state.operations);
+	          state.settledValue = null;
+	          setLocalResidentCount(residentId, residentPath, type, state.optimisticValue);
+	          return;
+	        }
+	        pendingCountUiStates.delete(key);
+	        setLocalResidentCount(residentId, residentPath, type, baseValue);
+	      });
+	    }
+
+	    function getResidentForMutation(residentId, residentPath){
+	      const parts = String(residentPath || '').split('/');
+	      const collectionName = parts.length >= 2 ? parts[parts.length - 2] : '';
+	      const dorm = collectionName === 'residents_meizen' ? 'meizen'
+	        : collectionName === 'residents_shofu' ? 'shofu' : '';
+	      const list = Array.isArray(allResidents) ? allResidents : [];
+	      for (let i = 0; i < list.length; i++) {
+	        const resident = list[i];
+	        if (!resident || String(resident.id || '') !== String(residentId || '')) continue;
+	        if (dorm && resident.dorm && resident.dorm !== dorm) continue;
+	        return resident;
+	      }
+	      return null;
+	    }
+
+	    function setLocalResidentCount(residentId, residentPath, type, value){
+	      const resident = getResidentForMutation(residentId, residentPath);
+	      const normalized = normalizeCountDisplayValue(value);
+	      if (resident) resident[type === 'mail' ? 'mail' : 'luggage'] = normalized;
+	      syncDisplayedResidentCount(residentId, type, normalized);
+	    }
+
+	    function beginOptimisticCountChange(residentId, residentPath, type, delta){
+	      const safeType = type === 'mail' ? 'mail' : 'luggage';
+	      const resident = getResidentForMutation(residentId, residentPath);
+	      if (!resident) return null;
+	      const key = getPendingCountStateKey(residentPath, safeType);
+	      let state = pendingCountUiStates.get(key);
+	      const currentValue = state
+	        ? normalizeCountDisplayValue(state.optimisticValue)
+	        : normalizeCountDisplayValue(resident[safeType]);
+	      const nextValue = Math.max(0, currentValue + Number(delta || 0));
+	      if (nextValue === currentValue) return null;
+	      if (!state) {
+	        state = {
+	          residentId: String(residentId || ''),
+	          residentPath: String(residentPath || ''),
+	          type: safeType,
+	          baseValue: currentValue,
+	          optimisticValue: currentValue,
+	          settledValue: null,
+	          expiresAt: 0,
+	          operations: []
+	        };
+	        pendingCountUiStates.set(key, state);
+	      }
+	      const token = {
+	        id: ++countMutationTokenSequence,
+	        key: key,
+	        delta: Number(delta || 0)
+	      };
+	      state.operations.push(token);
+	      state.optimisticValue = nextValue;
+	      state.settledValue = null;
+	      setLocalResidentCount(residentId, residentPath, safeType, nextValue);
+	      return token;
+	    }
+
+	    function settleOptimisticCountChange(token, result, succeeded){
+	      if (!token) return;
+	      const state = pendingCountUiStates.get(token.key);
+	      if (!state) return;
+	      state.operations = state.operations.filter(function(operation){ return operation.id !== token.id; });
+	      if (succeeded && result && result.nextValue != null) {
+	        state.baseValue = normalizeCountDisplayValue(result.nextValue);
+	      }
+	      state.optimisticValue = applyQueuedCountDeltas(state.baseValue, state.operations);
+	      if (!state.operations.length) {
+	        state.settledValue = state.optimisticValue;
+	        state.expiresAt = Date.now() + 5000;
+	      }
+	      setLocalResidentCount(state.residentId, state.residentPath, state.type, state.optimisticValue);
+	    }
+
+	    function showCountSaveErrorOnce(){
+	      const now = Date.now();
+	      if (now - lastCountSaveErrorAlertAt < 4000) return;
+	      lastCountSaveErrorAlertAt = now;
+	      alert('個数の保存に失敗しました。表示を保存前の数へ戻しました。通信状態を確認してください。');
+	    }
+
+	    function commitResidentCountDelta(options){
+	      const opts = options || {};
+	      const residentId = String(opts.residentId || '');
+	      const residentName = String(opts.residentName || '');
+	      const collectionName = String(opts.collectionName || '');
+	      const residentPath = collectionName + '/' + residentId;
+	      const type = opts.type === 'mail' ? 'mail' : 'luggage';
+	      const requestedDelta = Number(opts.delta || 0);
+	      const source = String(opts.source || 'manual');
+	      if (!residentId || !collectionName || !requestedDelta) return Promise.resolve({ changed: false });
+
+	      return enqueueResidentMutation(residentPath, function(){
+	        const docRef = db.collection(collectionName).doc(residentId);
+	        const logRef = db.collection('logs').doc();
+	        return db.runTransaction(async function(transaction){
+	          const snap = await transaction.get(docRef);
+	          if (!snap.exists) throw new Error('resident document missing');
+	          const data = snap.data() || {};
+	          const rawValue = data[type];
+	          const previousValue = normalizeCountDisplayValue(data[type]);
+	          const nextValue = Math.max(0, previousValue + requestedDelta);
+	          const appliedDelta = nextValue - previousValue;
+	          if (!appliedDelta) {
+	            if (typeof rawValue !== 'number' || !Number.isFinite(rawValue) || rawValue < 0 || rawValue !== previousValue) {
+	              transaction.update(docRef, { [type]: previousValue });
+	            }
+	            return { changed: false, previousValue: previousValue, nextValue: nextValue, delta: 0 };
+	          }
+
+	          transaction.update(docRef, { [type]: nextValue });
+	          const dormKey = collectionName.split('_')[1] || '';
+	          const typeJa = getItemHistoryTypeLabel(type);
+	          const sourceSuffix = source === 'ocr' ? '（OCR登録）' : '';
+	          const details = `[${dormKey}] ${residentName} の${typeJa}を ${appliedDelta > 0 ? '+' : ''}${appliedDelta}${sourceSuffix}`;
+	          const historyMeta = buildItemHistoryLogMeta(residentId, residentName, collectionName,
+	            type, appliedDelta, previousValue, nextValue, source);
+	          historyMeta.historyConsistencyVersion = 2;
+	          const payload = buildTrackedLogPayload('個数変更', details, historyMeta);
+	          transaction.set(logRef, payload);
+	          return { changed: true, previousValue: previousValue, nextValue: nextValue, delta: appliedDelta };
+	        });
+	      });
+	    }
 
     function renderCountHistoryButton(resident, type){
       if (!resident || !resident.id) return '';
@@ -9089,18 +9318,27 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       return date ? date.getTime() : 0;
     }
 
-    function normalizeStructuredHistoryEntry(log, itemType){
-      const d = log || {};
-      const entries = [];
-      if (d.action === '個数変更' && d.itemType === itemType) {
-        const delta = Number(d.delta || 0);
-        if (delta) {
-          entries.push({
-            delta,
-            reason: delta > 0 ? '増えました' : '減りました',
-            note: d.historySource === 'morning' ? '朝の庶務で変更' : '個数変更ボタンで変更',
-            timestamp: d.timestamp
-          });
+	    function normalizeStructuredHistoryEntry(log, itemType){
+	      const d = log || {};
+	      const entries = [];
+	      if (d.historySource === 'morning' && !d.historyCommitId && Number(d.historyConsistencyVersion || 0) < 2) {
+	        return entries;
+	      }
+	      if (d.action === '個数変更' && d.itemType === itemType) {
+	        const delta = Number(d.delta || 0);
+	        if (delta) {
+	          const sourceNotes = {
+	            morning: '朝の庶務で変更',
+	            morning_restore: '朝の庶務前へ復元',
+	            ocr: 'OCR登録で変更',
+	            manual: '個数変更ボタンで変更'
+	          };
+	          entries.push({
+	            delta,
+	            reason: delta > 0 ? '増えました' : '減りました',
+	            note: sourceNotes[d.historySource] || '個数変更で変更',
+	            timestamp: d.timestamp
+	          });
         }
       }
       if (d.action === '受け取り') {
@@ -9118,8 +9356,9 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       return entries;
     }
 
-    function normalizeLegacyHistoryEntry(log, resident, itemType){
-      const d = log || {};
+	    function normalizeLegacyHistoryEntry(log, resident, itemType){
+	      const d = log || {};
+	      if (d.residentId || d.itemType || d.items) return [];
       const residentName = resident && resident.name ? String(resident.name) : '';
       const details = String(d.details || '');
       const label = getItemHistoryTypeLabel(itemType);
@@ -9177,12 +9416,16 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       }).join('');
     }
 
-    async function fetchStructuredItemHistory(residentId, itemType){
-      const snap = await db.collection('logs').where('residentId', '==', residentId).limit(200).get();
-      const entries = [];
-      snap.forEach(function(doc){
-        entries.push.apply(entries, normalizeStructuredHistoryEntry(doc.data() || {}, itemType));
-      });
+	    async function fetchStructuredItemHistory(resident, itemType){
+	      const residentId = resident && resident.id ? resident.id : '';
+	      if (!residentId) return [];
+	      const snap = await db.collection('logs').where('residentId', '==', residentId).get();
+	      const entries = [];
+	      snap.forEach(function(doc){
+	        const data = doc.data() || {};
+	        if (resident.dorm && data.dorm && resident.dorm !== data.dorm) return;
+	        entries.push.apply(entries, normalizeStructuredHistoryEntry(data, itemType));
+	      });
       return entries;
     }
 
@@ -9212,11 +9455,12 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       modal.classList.add('active');
 
       try {
-        let entries = await fetchStructuredItemHistory(residentId, type);
+	        let entries = await fetchStructuredItemHistory(resident, type);
         if (!entries.length) {
           entries = await fetchLegacyItemHistory(resident, type);
         }
-        entries.sort(function(a, b){ return historyTimestampMillis(b) - historyTimestampMillis(a); });
+	        entries.sort(function(a, b){ return historyTimestampMillis(b) - historyTimestampMillis(a); });
+	        if (entries.length > 200) entries = entries.slice(0, 200);
         renderItemHistoryEntries(entries, type);
       } catch (e) {
         console.error('openItemHistoryModal failed', e);
@@ -9876,11 +10120,12 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
         if (btn) btn.disabled = true;
 
         try {
-          if (window.__morningStagedWrites && typeof window.__morningStagedWrites.clear === 'function') {
-            window.__morningStagedWrites.clear();
-          }
-        } catch(_) {}
-        restoreMorningLocalReferenceValues();
+	          if (window.__morningStagedWrites && typeof window.__morningStagedWrites.clear === 'function') {
+	            window.__morningStagedWrites.clear();
+	          }
+	          window.__morningCommitRunId = '';
+	        } catch(_) {}
+	        restoreMorningLocalReferenceValues();
 
         try { addLog('朝の庶務取り消し', '未反映のまま開始直前の数へ戻しました'); } catch(_){}
         alert('朝の庶務を取り消しました。サーバーには反映していません。');
@@ -9944,97 +10189,51 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       window.__morningDelegationBound = true;
     }
 
-    // 荷物/郵便の個数を ±1（即時にUI反映し、バックグラウンドで保存）
-	    function updateCount(residentId, residentName, type, value, dormHint) {
-	      let nextValue = null;
-	      let previousValue = null;
-      // 1) 楽観的にメモリ上のデータとUIを即反映
-      try {
-        const idx = Array.isArray(allResidents) ? allResidents.findIndex(r => r.id === residentId) : -1;
-        if (idx >= 0) {
-          const cur = (typeof allResidents[idx][type] === 'number')
-            ? allResidents[idx][type]
-            : (parseInt(allResidents[idx][type]) || 0);
-          const next = Math.max(0, cur + value);
-	          if (next !== cur) {
-	            previousValue = cur;
-	            allResidents[idx][type] = next;
-	            nextValue = next;
-	            syncDisplayedResidentCount(residentId, type, next);
-	          } else {
-	            // 変化なしならサーバー更新も不要
-	            return;
-	          }
-        }
-      } catch (_) {}
+	    // 荷物/郵便の個数を ±1（表示は即時、保存と履歴は同じトランザクションで確定）
+		    function updateCount(residentId, residentName, type, value, dormHint, sourceHint) {
+	      const safeType = type === 'mail' ? 'mail' : 'luggage';
+	      const delta = Number(value || 0);
+	      let targetCollection = currentCollectionName;
+	      if (dormHint === 'shofu' || dormHint === 'meizen') {
+	        targetCollection = `residents_${dormHint}`;
+	      } else if (currentCollectionName === 'all') {
+	        const resident = getResidentForMutation(residentId, '');
+	        const dormKey = (resident && resident.dorm) || 'shofu';
+	        targetCollection = `residents_${dormKey}`;
+	      }
+	      const residentPath = targetCollection + '/' + residentId;
+	      const resident = getResidentForMutation(residentId, residentPath);
+	      if (!resident || !delta) return Promise.resolve({ changed: false });
 
-      // 2) 保存先コレクションを決定（両寮表示時にも正しく解決）
-      let targetCollection = currentCollectionName;
-      if (dormHint === 'shofu' || dormHint === 'meizen') {
-        targetCollection = `residents_${dormHint}`;
-      } else if (currentCollectionName === 'all') {
-        const res = Array.isArray(allResidents) ? allResidents.find(r => r.id === residentId) : null;
-        const dormKey = (res && res.dorm) || (currentCollectionName.split('_')[1] || 'shofu');
-        targetCollection = `residents_${dormKey}`;
-      }
-      const docRef = db.collection(targetCollection).doc(residentId);
+	      if ((window.__morningModeSuppressPush || __isMorningMode()) && !window.__morningCommitInProgress) {
+	        const previousValue = normalizeCountDisplayValue(resident[safeType]);
+	        const nextValue = Math.max(0, previousValue + delta);
+	        if (nextValue === previousValue) return Promise.resolve({ changed: false, previousValue, nextValue });
+	        resident[safeType] = nextValue;
+	        syncDisplayedResidentCount(residentId, safeType, nextValue);
+	        __stageResidentWrite(targetCollection, residentId, { [safeType]: nextValue });
+	        return Promise.resolve({ changed: true, previousValue, nextValue, delta: nextValue - previousValue, staged: true });
+	      }
 
-      if ((window.__morningModeSuppressPush || __isMorningMode()) && !window.__morningCommitInProgress) {
-        try {
-          if (nextValue == null) {
-            const resident = Array.isArray(allResidents) ? allResidents.find(r => r.id === residentId) : null;
-            const raw = resident ? resident[type] : 0;
-            nextValue = (typeof raw === 'number') ? raw : (parseInt(raw, 10) || 0);
-          }
-          __stageResidentWrite(targetCollection, residentId, { [type]: nextValue });
-          const typeJa = (type === 'luggage') ? '荷物' : '郵便';
-          const dormKey = (targetCollection.split('_')[1] || '');
-          addLog('個数変更', `[${dormKey}] ${residentName} の${typeJa}を ${value > 0 ? '+1' : '-1'}`,
-            buildItemHistoryLogMeta(residentId, residentName, targetCollection, type, value, previousValue, nextValue, 'morning'));
-        } catch (e) {
-          console.warn('morning staged updateCount failed', e);
-        }
-        return;
-      }
-
-      // 3) まずは FieldValue.increment で高速に更新（競合にも強い）
-      docRef.update({ [type]: firebase.firestore.FieldValue.increment(value) })
-        .then(() => {
-          try {
-            const typeJa = (type === 'luggage') ? '荷物' : '郵便';
-            const dormKey = (targetCollection.split('_')[1] || '');
-            addLog('個数変更', `[${dormKey}] ${residentName} の${typeJa}を ${value > 0 ? '+1' : '-1'}`,
-              buildItemHistoryLogMeta(residentId, residentName, targetCollection, type, value, previousValue, nextValue, 'manual'));
-          } catch (_) {}
-        })
-        .catch((e) => {
-          console.warn('increment 更新に失敗: 競合や権限により再試行します', (e && (e.code || e.message)) || e);
-          // 4) フォールバック: トランザクションで 0 未満禁止を担保
-          db.runTransaction(async (t) => {
-            const snap = await t.get(docRef);
-            if (!snap.exists) return;
-            const current = (snap.data()[type] != null) ? snap.data()[type] : 0;
-            let next = current + value;
-            if (next < 0) next = 0;
-            if (next === current) return { changed: false, previousValue: current, nextValue: next };
-            t.update(docRef, { [type]: next });
-            return { changed: true, previousValue: current, nextValue: next };
-          }).then((result) => {
-            if (!result || !result.changed) return;
-            try {
-              const idx = Array.isArray(allResidents) ? allResidents.findIndex(r => r.id === residentId) : -1;
-              if (idx >= 0) allResidents[idx][type] = normalizeCountDisplayValue(result.nextValue);
-              syncDisplayedResidentCount(residentId, type, result.nextValue);
-            } catch (_) {}
-            try {
-              const typeJa = (type === 'luggage') ? '荷物' : '郵便';
-              const dormKey = (targetCollection.split('_')[1] || '');
-              addLog('個数変更', `[${dormKey}] ${residentName} の${typeJa}を ${value > 0 ? '+1' : '-1'}`,
-                buildItemHistoryLogMeta(residentId, residentName, targetCollection, type, value, result.previousValue, result.nextValue, 'manual'));
-            } catch (_) {}
-          }).catch(err => console.error('updateCount フォールバック失敗', err));
-        });
-    }
+	      const token = beginOptimisticCountChange(residentId, residentPath, safeType, delta);
+	      if (!token) return Promise.resolve({ changed: false });
+	      return commitResidentCountDelta({
+	        residentId: residentId,
+	        residentName: residentName,
+	        collectionName: targetCollection,
+	        type: safeType,
+	        delta: delta,
+	        source: sourceHint === 'ocr' ? 'ocr' : 'manual'
+	      }).then(function(result){
+	        settleOptimisticCountChange(token, result, true);
+	        return result;
+	      }).catch(function(error){
+	        console.error('updateCount transaction failed', error);
+	        settleOptimisticCountChange(token, null, false);
+	        showCountSaveErrorOnce();
+	        return { changed: false, error: error };
+	      });
+	    }
 
     try { window.updateCount = updateCount; } catch (_) {}
 
@@ -11139,7 +11338,7 @@ function applyWorkflowMode(mode, options) {
 	  try { setMode('view-mode', { skipRender: true }); } catch(_) {}
 	  try { setItemFilterEnabled(nextMode === 'receive', { skipRender: true }); } catch(_) {}
 	  try { updateItemFilterControls(); } catch(_) {}
-	  try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_) {}
+			    try { requestResidentTableRender(); } catch(_) {}
 	  resetWorkflowHomeTimer();
 }
 
@@ -12361,26 +12560,18 @@ async function applyOcrRegistration(residentId, itemType) {
     setOcrStatus('登録する寮生を特定できませんでした。候補を更新してください。', 'error');
     return;
   }
-  const resident = selected.resident;
-  const type = itemType === 'mail' ? 'mail' : 'luggage';
-  const dormKey = resident.dorm === 'meizen' ? 'meizen' : 'shofu';
-  const collectionName = `residents_${dormKey}`;
-  const previousValue = Math.max(0, parseInt(resident[type], 10) || 0);
-  const nextValue = previousValue + 1;
-
-  setOcrBusy(true);
-  setOcrStatus('登録しています...', '');
-  try {
-    await db.collection(collectionName).doc(resident.id).update({
-      [type]: firebase.firestore.FieldValue.increment(1)
-    });
-    const localResident = getResidentById(resident.id);
-    if (localResident) localResident[type] = Math.max(0, parseInt(localResident[type], 10) || 0) + 1;
-    resident[type] = nextValue;
-    const typeJa = getItemHistoryTypeLabel(type);
-    await addLog('個数変更', `[${dormKey}] ${resident.name || ''} の${typeJa}を +1（OCR登録）`,
-      buildItemHistoryLogMeta(resident.id, resident.name || '', collectionName, type, 1, previousValue, nextValue, 'ocr'));
-    try { syncDisplayedResidentCount(resident.id, type, nextValue); } catch (_) {}
+	  const resident = selected.resident;
+	  const type = itemType === 'mail' ? 'mail' : 'luggage';
+	  const dormKey = resident.dorm === 'meizen' ? 'meizen' : 'shofu';
+	  setOcrBusy(true);
+	  setOcrStatus('登録しています...', '');
+	  try {
+	    const result = await updateCount(resident.id, resident.name || '', type, 1, dormKey, 'ocr');
+	    if (!result || result.error) throw (result && result.error) || new Error('OCR count update failed');
+	    const nextValue = normalizeCountDisplayValue(result.nextValue);
+	    resident[type] = nextValue;
+	    const typeJa = getItemHistoryTypeLabel(type);
+	    try { syncDisplayedResidentCount(resident.id, type, nextValue); } catch (_) {}
     ocrState.registeredResidentId = resident.id;
     ocrState.registeredType = type;
     setOcrRegistrationLocked(true);
@@ -12534,7 +12725,7 @@ function setSelfResidentNoteStatus(residentId, message, tone) {
 		    } else {
 		      scheduleSelfResidentNoteAutosave(id);
 		    }
-		    try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_) {}
+		    try { requestResidentTableRender(); } catch(_) {}
 		    if (!autoMode) {
 		      setTimeout(function(){
 		        closeSelfResidentNoteModal();
@@ -12744,7 +12935,7 @@ function setMobileCountNoteStatus(message, tone) {
 	      mobileCountEditState.noteDirty = true;
 	      scheduleMobileCountEditNoteAutosave();
 	    }
-	    try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_) {}
+	    try { requestResidentTableRender(); } catch(_) {}
 	    if (isSameModalResident()) syncMobileCountEditModalUI();
 	  } catch (e) {
 	    console.error('saveMobileCountEditNote failed', e);
@@ -12864,10 +13055,10 @@ async function maybeClearResidentNoteAfterReceive(residentId, targetCollection, 
   if (!shouldClear) return;
   try {
     await db.collection(targetCollection).doc(residentId).update({ note: '' });
-    resident.note = '';
-    resident.memo = '';
-    resident.notes = '';
-    try { if (typeof window.renderTable === 'function') window.renderTable(); } catch (_) {}
+	    resident.note = '';
+	    resident.memo = '';
+	    resident.notes = '';
+	    try { requestResidentTableRender(); } catch (_) {}
     try { addLog('備考削除', `[${dormKey}] ${resident.name || ''} の備考を受け取り後に削除`); } catch (_) {}
   } catch (error) {
     console.error('clear resident note after receive failed', error);
@@ -12897,59 +13088,73 @@ async function receiveResidentItems(residentId, requestedLuggage, requestedMail)
   resident.mail = Math.max(0, originalMail - mailToReceive);
   try { if (typeof window.renderTable === 'function') window.renderTable(); } catch (_) {}
 
-  try {
-    const docRef = db.collection(targetCollection).doc(residentId);
-    const result = await db.runTransaction(async (transaction) => {
-      const snap = await transaction.get(docRef);
-      if (!snap.exists) throw new Error('resident document missing');
+	  try {
+	    const docRef = db.collection(targetCollection).doc(residentId);
+	    const residentPath = targetCollection + '/' + residentId;
+	    const result = await enqueueResidentMutation(residentPath, function(){
+	      clearSettledCountOverlayForResident(residentPath);
+	      const logRef = db.collection('logs').doc();
+	      return db.runTransaction(async function(transaction){
+	        const snap = await transaction.get(docRef);
+	        if (!snap.exists) throw new Error('resident document missing');
 
-      const data = snap.data() || {};
-      const currentLuggage = Math.max(0, parseInt(data.luggage, 10) || 0);
-      const currentMail = Math.max(0, parseInt(data.mail, 10) || 0);
-      const appliedLuggage = Math.min(currentLuggage, luggageToReceive);
-      const appliedMail = Math.min(currentMail, mailToReceive);
-      const nextLuggage = currentLuggage - appliedLuggage;
-      const nextMail = currentMail - appliedMail;
-      const payload = {};
+	        const data = snap.data() || {};
+	        const currentLuggage = normalizeCountDisplayValue(data.luggage);
+	        const currentMail = normalizeCountDisplayValue(data.mail);
+	        const appliedLuggage = Math.min(currentLuggage, luggageToReceive);
+	        const appliedMail = Math.min(currentMail, mailToReceive);
+	        const nextLuggage = currentLuggage - appliedLuggage;
+	        const nextMail = currentMail - appliedMail;
+	        const countPayload = {};
 
-      if (nextLuggage !== currentLuggage) payload.luggage = nextLuggage;
-      if (nextMail !== currentMail) payload.mail = nextMail;
-      if (Object.keys(payload).length) transaction.update(docRef, payload);
-
-      return { appliedLuggage, appliedMail, nextLuggage, nextMail };
-    });
-
-    resident.luggage = result.nextLuggage;
-    resident.mail = result.nextMail;
-    try { if (typeof window.renderTable === 'function') window.renderTable(); } catch (_) {}
-
-	    if (result.appliedLuggage || result.appliedMail) {
-	      addLog('受け取り', `[${dormKey}] ${resident.name} ${formatReceiveLogDetails(result.appliedLuggage, result.appliedMail)}`, {
-        residentId,
-        residentName: resident.name || '',
-        dorm: dormKey,
-        historySource: 'receive',
-        items: {
-          luggage: result.appliedLuggage || 0,
-          mail: result.appliedMail || 0
-        },
-        previousValues: {
-          luggage: originalLuggage,
-          mail: originalMail
-        },
-        nextValues: {
-          luggage: result.nextLuggage,
-          mail: result.nextMail
+	        if (nextLuggage !== currentLuggage) countPayload.luggage = nextLuggage;
+	        if (nextMail !== currentMail) countPayload.mail = nextMail;
+	        if (Object.keys(countPayload).length) {
+	          transaction.update(docRef, countPayload);
+	          const logPayload = buildTrackedLogPayload('受け取り',
+	            `[${dormKey}] ${resident.name} ${formatReceiveLogDetails(appliedLuggage, appliedMail)}`, {
+	              residentId: residentId,
+	              residentName: resident.name || '',
+	              dorm: dormKey,
+	              historySource: 'receive',
+	              historyConsistencyVersion: 2,
+	              items: {
+	                luggage: appliedLuggage,
+	                mail: appliedMail
+	              },
+	              previousValues: {
+	                luggage: currentLuggage,
+	                mail: currentMail
+	              },
+	              nextValues: {
+	                luggage: nextLuggage,
+	                mail: nextMail
+	              }
+	            });
+	          transaction.set(logRef, logPayload);
 	        }
+
+	        return { appliedLuggage, appliedMail, nextLuggage, nextMail };
 	      });
-	      await maybeClearResidentNoteAfterReceive(residentId, targetCollection, dormKey);
-	    } else {
-      alert('受け取れる荷物・郵便がありませんでした。');
-    }
-  } catch (error) {
-    resident.luggage = originalLuggage;
-    resident.mail = originalMail;
-    try { if (typeof window.renderTable === 'function') window.renderTable(); } catch (_) {}
+	    });
+
+	    rebasePendingCountOverlayForResident(residentId, residentPath, {
+	      luggage: result.nextLuggage,
+	      mail: result.nextMail
+	    });
+	    try { requestResidentTableRender(); } catch (_) {}
+
+		    if (result.appliedLuggage || result.appliedMail) {
+		      await maybeClearResidentNoteAfterReceive(residentId, targetCollection, dormKey);
+		    } else {
+	      alert('受け取れる荷物・郵便がありませんでした。');
+	    }
+	  } catch (error) {
+	    rebasePendingCountOverlayForResident(residentId, targetCollection + '/' + residentId, {
+	      luggage: originalLuggage,
+	      mail: originalMail
+	    });
+	    try { requestResidentTableRender(); } catch (_) {}
     throw error;
   }
 }
@@ -13853,11 +14058,12 @@ if(elements.changePasswordForm){
 	            return 'all';
 	        }
 
-	        const crossDormSearchCache = {
-	            shofu: { loaded: false, residents: [] },
-	            meizen: { loaded: false, residents: [] }
-	        };
-	        let crossDormSearchRequestId = 0;
+		        const crossDormSearchCache = {
+		            shofu: { loaded: false, residents: [], searchSignature: '', version: 0 },
+		            meizen: { loaded: false, residents: [], searchSignature: '', version: 0 }
+		        };
+		        let crossDormSearchRequestId = 0;
+		        let crossDormSearchUiSignature = '';
 
 	        function getDormLabel(dormKey) {
 	            return dormKey === 'shofu' ? '松風寮' : (dormKey === 'meizen' ? '明善寮' : '別の寮');
@@ -13875,13 +14081,20 @@ if(elements.changePasswordForm){
 	            return '';
 	        }
 
-	        function setCrossDormSearchCache(dormKey, residents) {
-	            if (!crossDormSearchCache[dormKey]) return;
-	            crossDormSearchCache[dormKey] = {
-	                loaded: true,
-	                residents: Array.isArray(residents) ? residents.slice() : []
-	            };
-	        }
+		        function setCrossDormSearchCache(dormKey, residents) {
+		            if (!crossDormSearchCache[dormKey]) return;
+		            const previous = crossDormSearchCache[dormKey];
+		            const source = Array.isArray(residents) ? residents : [];
+		            const searchSignature = source.map(function(resident){
+		              return [resident.id, resident.name, resident.furigana, resident.roomNumber, resident.circle, resident.dorm].join('|');
+		            }).join('\n');
+		            crossDormSearchCache[dormKey] = {
+		                loaded: true,
+		                residents: source.slice(),
+		                searchSignature: searchSignature,
+		                version: previous.searchSignature === searchSignature ? previous.version : previous.version + 1
+		            };
+		        }
 
 	        function hideCrossDormSearchHint() {
 	            const hint = document.getElementById('cross-dorm-search-hint');
@@ -13916,16 +14129,21 @@ if(elements.changePasswordForm){
 	            hint.classList.add('is-visible');
 	        }
 
-	        async function updateCrossDormSearchHint(searchTerm) {
-	            const requestId = ++crossDormSearchRequestId;
-	            const term = String(searchTerm || '').trim();
-	            const currentDormKey = getCurrentSingleDormKey();
-	            if (!term || !currentDormKey || currentCollectionName === 'all' || !elements.sohmuToggle.checked) {
-	                hideCrossDormSearchHint();
-	                return;
-	            }
-	            const otherDormKey = getOppositeDormKey(currentDormKey);
-	            if (!otherDormKey || !db || typeof db.collection !== 'function') {
+		        async function updateCrossDormSearchHint(searchTerm) {
+		            const term = String(searchTerm || '').trim();
+		            const currentDormKey = getCurrentSingleDormKey();
+		            const otherDormKey = getOppositeDormKey(currentDormKey);
+		            const cacheVersion = otherDormKey && crossDormSearchCache[otherDormKey]
+		              ? crossDormSearchCache[otherDormKey].version : 0;
+		            const uiSignature = [currentCollectionName, term, elements.sohmuToggle.checked ? '1' : '0', cacheVersion].join('|');
+		            if (uiSignature === crossDormSearchUiSignature) return;
+		            crossDormSearchUiSignature = uiSignature;
+		            const requestId = ++crossDormSearchRequestId;
+		            if (!term || !currentDormKey || currentCollectionName === 'all' || !elements.sohmuToggle.checked) {
+		                hideCrossDormSearchHint();
+		                return;
+		            }
+		            if (!otherDormKey || !db || typeof db.collection !== 'function') {
 	                hideCrossDormSearchHint();
 	                return;
 	            }
@@ -13991,7 +14209,7 @@ if(elements.changePasswordForm){
 	          try { updateNotificationSettingsUI(); } catch(_) {}
 	        }
 
-	        window.renderTable = async () => {
+		        window.renderTable = () => {
 	            const searchTerm = elements.searchInput.value;
 	            updateSearchAssistControls();
 	            const sohmuOn = elements.sohmuToggle.checked;
@@ -14126,26 +14344,32 @@ if(elements.changePasswordForm){
 	        }
         
 
-        function renderLogs(snapshot){
-            const list = document.getElementById('log-list');
-            const docs = snapshot && snapshot.docs
-              ? snapshot.docs.filter(doc => isTrackedHistoryAction((doc.data() || {}).action))
-              : [];
+	        function renderLogs(snapshot){
+	            const list = document.getElementById('log-list');
+	            const docs = snapshot && snapshot.docs
+	              ? snapshot.docs.filter(function(doc){
+	                  const data = doc.data() || {};
+	                  if (!isTrackedHistoryAction(data.action)) return false;
+	                  return !(data.historySource === 'morning' && !data.historyCommitId && Number(data.historyConsistencyVersion || 0) < 2);
+	                })
+	              : [];
             if(!docs.length){
                 list.innerHTML = '<li>履歴はありません。</li>';
                 return;
             }
-            list.innerHTML = '';
-            docs.forEach(doc=>{
-                const d = doc.data() || {};
-                const date = d.timestamp ? d.timestamp.toDate().toLocaleString('ja-JP') : '日時不明';
-                const li = document.createElement('li');
-                const action = escapeHtml(d.action || '履歴');
-                const details = escapeHtml(d.details || '');
-                li.innerHTML = `<strong>${action}</strong><br>${details}<span class="log-time">${date}</span>`;
-                list.appendChild(li);
-            });
-        }
+	            const fragment = document.createDocumentFragment();
+	            docs.forEach(doc=>{
+	                const d = doc.data() || {};
+	                const date = formatHistoryTimestamp(d.timestamp);
+	                const li = document.createElement('li');
+	                const action = escapeHtml(d.action || '履歴');
+	                const details = escapeHtml(d.details || '');
+	                li.innerHTML = `<strong>${action}</strong><br>${details}<span class="log-time">${date}</span>`;
+	                fragment.appendChild(li);
+	            });
+	            list.innerHTML = '';
+	            list.appendChild(fragment);
+	        }
 
         // ===== お知らせリストを現在の管理者状態で再描画 =====
         function rebuildAnnouncementList(){
