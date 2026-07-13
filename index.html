@@ -215,7 +215,7 @@
 	            align-items:center;
 	            justify-content:center;
 	            padding:22px;
-	            background:rgba(244,248,252,.96);
+	            background:#f4f8fc;
 	            backdrop-filter:none;
 	            -webkit-backdrop-filter:none;
 	            box-sizing:border-box;
@@ -237,7 +237,7 @@
             display:none !important;
         }
 	        body.dark-theme .workflow-home-screen{
-	            background:rgba(15,25,36,.96);
+	            background:#0f1924;
 	        }
 	        .workflow-home-card{
 	            width:100%;
@@ -2671,10 +2671,13 @@
     color:#f2f8ff;
   }
   .modal-overlay{
-    background:rgba(10,18,28,0.28);
+	background:#f4f8fc;
 	    backdrop-filter:none;
 	    -webkit-backdrop-filter:none;
   }
+	body.dark-theme .modal-overlay{
+	  background:#0f1924;
+	}
   .modal-content{
     border-radius:26px;
     background:var(--glass-bg-strong) !important;
@@ -2934,6 +2937,13 @@
 	  html.dark-theme,
 	  body.dark-theme{
 	    background:#111827 !important;
+	  }
+	  #loading-overlay{
+	    background:#fff !important;
+	  }
+	  body.dark-theme #loading-overlay{
+	    background:#111827 !important;
+	    color:#eef6ff;
 	  }
 	  .container,
 	  .header-area,
@@ -10910,6 +10920,87 @@ function isWorkflowRegisterMode() {
 	  return false;
 	}
 
+	var pageScrollLockState = {
+	  locked: false,
+	  scrollY: 0,
+	  savedStyles: null,
+	  syncTimer: 0,
+	  observer: null
+	};
+
+	function isPageBlockingLayerOpen() {
+	  if (!document.body) return false;
+	  if (document.body.classList.contains('workflow-home')) return true;
+	  if (document.body.classList.contains('admin-auth-busy')) return true;
+	  if (document.querySelector('.modal-overlay.active')) return true;
+	  var loadingOverlay = document.getElementById('loading-overlay');
+	  return !!(loadingOverlay && loadingOverlay.style.display === 'flex');
+	}
+
+	function setPageScrollLocked(locked) {
+	  var body = document.body;
+	  if (!body || locked === pageScrollLockState.locked) return;
+	  if (locked) {
+	    pageScrollLockState.scrollY = window.pageYOffset || document.documentElement.scrollTop || body.scrollTop || 0;
+	    pageScrollLockState.savedStyles = {
+	      position: body.style.position,
+	      top: body.style.top,
+	      left: body.style.left,
+	      right: body.style.right,
+	      width: body.style.width,
+	      overflow: body.style.overflow
+	    };
+	    body.style.position = 'fixed';
+	    body.style.top = (-pageScrollLockState.scrollY) + 'px';
+	    body.style.left = '0';
+	    body.style.right = '0';
+	    body.style.width = '100%';
+	    body.style.overflow = 'hidden';
+	    pageScrollLockState.locked = true;
+	    return;
+	  }
+	  var saved = pageScrollLockState.savedStyles || {};
+	  body.style.position = saved.position || '';
+	  body.style.top = saved.top || '';
+	  body.style.left = saved.left || '';
+	  body.style.right = saved.right || '';
+	  body.style.width = saved.width || '';
+	  body.style.overflow = saved.overflow || '';
+	  pageScrollLockState.locked = false;
+	  window.scrollTo(0, pageScrollLockState.scrollY);
+	}
+
+	function schedulePageScrollLockSync() {
+	  if (pageScrollLockState.syncTimer) return;
+	  pageScrollLockState.syncTimer = window.setTimeout(function(){
+	    pageScrollLockState.syncTimer = 0;
+	    setPageScrollLocked(isPageBlockingLayerOpen());
+	  }, 0);
+	}
+
+	function initializePageScrollLockObserver() {
+	  if (!document.body || pageScrollLockState.observer || typeof MutationObserver !== 'function') {
+	    schedulePageScrollLockSync();
+	    return;
+	  }
+	  pageScrollLockState.observer = new MutationObserver(function(mutations){
+	    for (var i = 0; i < mutations.length; i += 1) {
+	      var target = mutations[i].target;
+	      if (target === document.body || target.id === 'loading-overlay' ||
+	          (target.classList && target.classList.contains('modal-overlay'))) {
+	        schedulePageScrollLockSync();
+	        return;
+	      }
+	    }
+	  });
+	  pageScrollLockState.observer.observe(document.body, {
+	    subtree: true,
+	    attributes: true,
+	    attributeFilter: ['class', 'style']
+	  });
+	  schedulePageScrollLockSync();
+	}
+
 	function syncWorkflowDetailState() {
 	  const detailOpen = isWorkflowDetailOpen();
 	  setBodyClassCompat('workflow-detail-open', detailOpen);
@@ -10919,6 +11010,7 @@ function isWorkflowRegisterMode() {
 	    resetWorkflowHomeTimer();
 	  }
 	  forceWorkflowHomeVisibility();
+	  schedulePageScrollLockSync();
 	}
 
 	function clearWorkflowHomeTimer() {
@@ -11015,6 +11107,7 @@ function closeWorkflowTransientViews() {
 	  if (elements.workflowHomeBtn) {
 	    elements.workflowHomeBtn.style.display = (!enabled || homeActive || detailOpen) ? 'none' : '';
 	  }
+	  schedulePageScrollLockSync();
 	}
 
 function applyWorkflowMode(mode, options) {
@@ -14787,6 +14880,7 @@ if(elements.changePasswordForm){
         // ===== iOS Safari 対策：ユーザー操作で通知許可をリクエスト =====
         initializeTheme();
         initializeResidentSortSelector();
+		initializePageScrollLockObserver();
         initializeWorkflowMode();
         // 30分ごとに lastSeen を更新
         setInterval(updateLastSeen, 30 * 60 * 1000);
