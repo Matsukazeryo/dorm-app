@@ -2993,6 +2993,157 @@
 	    backdrop-filter:none !important;
 	    -webkit-backdrop-filter:none !important;
 	  }
+
+	  /* ===== 横画面タブレット検索 ===== */
+	  .tablet-search-setting-row{
+	    display:none;
+	  }
+	  .tablet-search-panel{
+	    display:none;
+	    position:fixed;
+	    top:16px;
+	    right:16px;
+	    bottom:16px;
+	    width:310px;
+	    box-sizing:border-box;
+	    flex-direction:column;
+	    gap:14px;
+	    padding:16px;
+	    overflow:hidden;
+	    border:1px solid var(--glass-border);
+	    border-radius:8px;
+	    background:#f4f8fc;
+	    box-shadow:0 10px 30px rgba(31,78,121,0.16);
+	    color:var(--text-color);
+	    z-index:850;
+	  }
+	  body.dark-theme .tablet-search-panel{
+	    background:#162235;
+	    border-color:rgba(221,236,255,0.24);
+	  }
+	  body.tablet-landscape-search-active:not(.workflow-home):not(.sohmu-off){
+	    padding:16px 342px 16px 16px !important;
+	  }
+	  body.tablet-landscape-search-active:not(.workflow-home):not(.sohmu-off) .tablet-search-panel{
+	    display:flex;
+	  }
+	  body.tablet-landscape-search-active:not(.workflow-home):not(.sohmu-off) > .container{
+	    width:100%;
+	    max-width:920px;
+	    margin-left:auto;
+	    margin-right:auto;
+	  }
+	  body.tablet-landscape-search-active:not(.workflow-home):not(.sohmu-off) #search-box{
+	    display:none !important;
+	  }
+	  .tablet-search-mode{
+	    display:grid;
+	    grid-template-columns:1fr 1fr;
+	    gap:4px;
+	    padding:4px;
+	    border:1px solid var(--mode-selector-border);
+	    border-radius:8px;
+	    background:var(--mode-label-bg);
+	  }
+	  .tablet-search-mode-btn{
+	    min-height:44px;
+	    border:0;
+	    border-radius:6px;
+	    background:transparent;
+	    color:var(--mode-label-text);
+	    font-size:16px;
+	    font-weight:800;
+	    cursor:pointer;
+	  }
+	  .tablet-search-mode-btn.is-active{
+	    background:var(--accent-blue);
+	    color:#fff;
+	  }
+	  .tablet-search-field-wrap{
+	    position:relative;
+	  }
+	  #tablet-search-input{
+	    width:100%;
+	    min-height:52px;
+	    box-sizing:border-box;
+	    padding:10px 46px 10px 12px;
+	    border:2px solid rgba(36,127,200,0.52);
+	    border-radius:8px;
+	    background:#fff;
+	    color:#142433;
+	    font-size:20px;
+	    font-weight:750;
+	  }
+	  #tablet-search-input::-webkit-search-cancel-button{
+	    -webkit-appearance:none;
+	    appearance:none;
+	  }
+	  body.dark-theme #tablet-search-input{
+	    background:#223149;
+	    color:#eef6ff;
+	    border-color:rgba(134,200,255,0.62);
+	  }
+	  .tablet-search-clear{
+	    position:absolute;
+	    top:50%;
+	    right:8px;
+	    width:32px;
+	    height:32px;
+	    padding:0;
+	    transform:translateY(-50%);
+	    border:1px solid var(--border-color);
+	    border-radius:50%;
+	    background:var(--controls-bg);
+	    color:var(--text-color);
+	    font-size:20px;
+	    font-weight:800;
+	    cursor:pointer;
+	  }
+	  .tablet-search-keyboard{
+	    display:none;
+	    grid-template-columns:repeat(3, minmax(0, 1fr));
+	    gap:9px;
+	    margin-top:auto;
+	  }
+	  .tablet-search-keyboard.is-active{
+	    display:grid;
+	  }
+	  .tablet-search-key{
+	    min-width:0;
+	    min-height:62px;
+	    padding:6px;
+	    border:1px solid rgba(45,72,100,0.28);
+	    border-radius:8px;
+	    background:#fff;
+	    color:#17374f;
+	    box-shadow:0 4px 12px rgba(31,78,121,0.10);
+	    font-size:23px;
+	    font-weight:800;
+	    cursor:pointer;
+	    touch-action:manipulation;
+	  }
+	  .tablet-search-key:active,
+	  .tablet-search-key.is-cycling{
+	    background:#dcefff;
+	    border-color:#247fc8;
+	  }
+	  .tablet-search-key.is-function{
+	    background:#e8eef3;
+	    font-size:17px;
+	  }
+	  body.dark-theme .tablet-search-key{
+	    background:#263750;
+	    border-color:rgba(221,236,255,0.24);
+	    color:#eef6ff;
+	    box-shadow:none;
+	  }
+	  body.dark-theme .tablet-search-key:active,
+	  body.dark-theme .tablet-search-key.is-cycling{
+	    background:#315b7c;
+	  }
+	  body.dark-theme .tablet-search-key.is-function{
+	    background:#334054;
+	  }
 	</style>
 </head>
 <body>
@@ -3094,6 +3245,7 @@
             <label><input type="checkbox" id="toggle-furigana"> ふりがな</label>
             <label><input type="checkbox" id="toggle-circle"> サークル</label>
             <label><input type="checkbox" id="toggle-dorm"> 寮</label>
+	          <label id="tablet-search-setting-row" class="tablet-search-setting-row"><input type="checkbox" id="toggle-tablet-search"> 横画面検索</label>
             <label class="display-inline-select" for="resident-sort-selector">
               <span>並び順</span>
 	              <select id="resident-sort-selector">
@@ -3159,6 +3311,45 @@
       <button id="change-resident-btn" class="header-btn" style="background:#3498db;">寮生変更</button>
     </div>
 </div>
+
+<aside id="tablet-search-panel" class="tablet-search-panel" aria-label="横画面検索">
+  <div class="tablet-search-mode" role="group" aria-label="検索対象">
+    <button type="button" class="tablet-search-mode-btn is-active" data-tablet-search-mode="name" aria-pressed="true">名前</button>
+    <button type="button" class="tablet-search-mode-btn" data-tablet-search-mode="room" aria-pressed="false">部屋番号</button>
+  </div>
+  <div class="tablet-search-field-wrap">
+    <input type="search" id="tablet-search-input" inputmode="text" enterkeyhint="search" autocomplete="off" placeholder="名前で検索">
+    <button type="button" id="tablet-search-clear-btn" class="tablet-search-clear" aria-label="検索文字を消す">×</button>
+  </div>
+  <div id="tablet-kana-keyboard" class="tablet-search-keyboard is-active" aria-label="かなキーボード">
+    <button type="button" class="tablet-search-key" data-kana-group="あいうえお">あ</button>
+    <button type="button" class="tablet-search-key" data-kana-group="かきくけこ">か</button>
+    <button type="button" class="tablet-search-key" data-kana-group="さしすせそ">さ</button>
+    <button type="button" class="tablet-search-key" data-kana-group="たちつてと">た</button>
+    <button type="button" class="tablet-search-key" data-kana-group="なにぬねの">な</button>
+    <button type="button" class="tablet-search-key" data-kana-group="はひふへほ">は</button>
+    <button type="button" class="tablet-search-key" data-kana-group="まみむめも">ま</button>
+    <button type="button" class="tablet-search-key" data-kana-group="やゆよ">や</button>
+    <button type="button" class="tablet-search-key" data-kana-group="らりるれろ">ら</button>
+    <button type="button" class="tablet-search-key is-function" data-tablet-key-action="mark">゛゜小</button>
+    <button type="button" class="tablet-search-key" data-kana-group="わをん">わ</button>
+    <button type="button" class="tablet-search-key is-function" data-tablet-key-action="backspace" aria-label="1文字削除">⌫</button>
+  </div>
+  <div id="tablet-number-keyboard" class="tablet-search-keyboard" aria-label="数字キーボード">
+    <button type="button" class="tablet-search-key" data-number-key="1">1</button>
+    <button type="button" class="tablet-search-key" data-number-key="2">2</button>
+    <button type="button" class="tablet-search-key" data-number-key="3">3</button>
+    <button type="button" class="tablet-search-key" data-number-key="4">4</button>
+    <button type="button" class="tablet-search-key" data-number-key="5">5</button>
+    <button type="button" class="tablet-search-key" data-number-key="6">6</button>
+    <button type="button" class="tablet-search-key" data-number-key="7">7</button>
+    <button type="button" class="tablet-search-key" data-number-key="8">8</button>
+    <button type="button" class="tablet-search-key" data-number-key="9">9</button>
+    <button type="button" class="tablet-search-key is-function" data-tablet-key-action="clear">C</button>
+    <button type="button" class="tablet-search-key" data-number-key="0">0</button>
+    <button type="button" class="tablet-search-key is-function" data-tablet-key-action="backspace" aria-label="1文字削除">⌫</button>
+  </div>
+</aside>
 
 <!-- ==== 自分選択モーダル ==== -->
 <div id="self-select-modal" class="modal-overlay">
@@ -10841,6 +11032,13 @@ function applySohmuUI(){
           toggleFurigana: document.getElementById('toggle-furigana'),
           toggleCircle: document.getElementById('toggle-circle'),
           toggleDorm  : document.getElementById('toggle-dorm'),
+	          toggleTabletSearch: document.getElementById('toggle-tablet-search'),
+	          tabletSearchSettingRow: document.getElementById('tablet-search-setting-row'),
+	          tabletSearchPanel: document.getElementById('tablet-search-panel'),
+	          tabletSearchInput: document.getElementById('tablet-search-input'),
+	          tabletSearchClearBtn: document.getElementById('tablet-search-clear-btn'),
+	          tabletKanaKeyboard: document.getElementById('tablet-kana-keyboard'),
+	          tabletNumberKeyboard: document.getElementById('tablet-number-keyboard'),
           dormSelector: document.getElementById('dorm-selector'),
           topControls: document.querySelector('.top-controls'),
           middleControls: document.querySelector('.middle-controls'),
@@ -14767,6 +14965,7 @@ if(elements.changePasswordForm){
             const keepWorkflowReceive = document.body.classList.contains('workflow-receive-mode');
             const keepWorkflowRegister = document.body.classList.contains('workflow-register-mode');
             const keepWorkflowDisabled = document.body.classList.contains('workflow-disabled');
+	            const keepTabletLandscapeSearch = document.body.classList.contains('tablet-landscape-search-active');
             document.body.className = sessionStorage.getItem('isAdminLoggedIn') === 'true' ? 'admin-logged-in' : '';
             document.body.classList.add(mode);
             const countRadio = document.getElementById('count-edit-mode');
@@ -14780,6 +14979,7 @@ if(elements.changePasswordForm){
             if (keepWorkflowReceive) document.body.classList.add('workflow-receive-mode');
             if (keepWorkflowRegister) document.body.classList.add('workflow-register-mode');
             if (keepWorkflowDisabled) document.body.classList.add('workflow-disabled');
+	            if (keepTabletLandscapeSearch) document.body.classList.add('tablet-landscape-search-active');
             const currentTheme = localStorage.getItem('theme') || 'light';
             handleThemeChange(currentTheme);
             if (mode !== 'resident-edit-mode') elements.selectAllCheckbox.checked = false;
@@ -14891,13 +15091,230 @@ if(elements.changePasswordForm){
 	        function clearSearchInputAfterWorkflowAction(options) {
 	            if (!elements.searchInput) return false;
 	            if (!elements.searchInput.value) {
+	                if (typeof window.__syncTabletSearchFromMain === 'function') window.__syncTabletSearchFromMain('');
 	                updateSearchAssistControls();
 	                return false;
 	            }
 	            elements.searchInput.value = '';
+	            if (typeof window.__syncTabletSearchFromMain === 'function') window.__syncTabletSearchFromMain('');
 	            updateSearchAssistControls();
 	            if (options && options.render) scheduleRenderTable();
 	            return true;
+	        }
+
+	        const TABLET_SEARCH_STORAGE_KEY = 'tabletLandscapeSearchEnabled';
+	        const tabletSearchState = {
+	            mode: 'name',
+	            syncing: false,
+	            lastKanaButton: null,
+	            lastKanaGroup: '',
+	            lastKanaIndex: 0,
+	            lastKanaPosition: -1,
+	            cycleExpiresAt: 0,
+	            cycleTimer: 0,
+	            resizeTimer: 0
+	        };
+
+	        function isTouchTabletDevice() {
+	            const width = Math.max(0, window.innerWidth || document.documentElement.clientWidth || 0);
+	            const height = Math.max(0, window.innerHeight || document.documentElement.clientHeight || 0);
+	            const shortSide = Math.min(width, height);
+	            const touchPoints = Number(navigator.maxTouchPoints || navigator.msMaxTouchPoints || 0);
+	            const touchCapable = touchPoints > 0 || ('ontouchstart' in window);
+	            const ua = String(navigator.userAgent || '');
+	            const platform = String(navigator.platform || '');
+	            const knownTabletPlatform = /iPad/i.test(ua)
+	              || /Android/i.test(ua)
+	              || (platform === 'MacIntel' && touchPoints > 1);
+	            return touchCapable && shortSide >= 600 && (knownTabletPlatform || !/Windows/i.test(ua));
+	        }
+
+	        function isTabletLandscapeViewport() {
+	            return isTouchTabletDevice() && window.innerWidth > window.innerHeight && window.innerWidth >= 900;
+	        }
+
+	        function isTabletSearchPreferenceEnabled() {
+	            try {
+	                return localStorage.getItem(TABLET_SEARCH_STORAGE_KEY) !== '0';
+	            } catch (_) {
+	                return true;
+	            }
+	        }
+
+	        function resetTabletKanaCycle() {
+	            if (tabletSearchState.cycleTimer) window.clearTimeout(tabletSearchState.cycleTimer);
+	            tabletSearchState.cycleTimer = 0;
+	            tabletSearchState.lastKanaGroup = '';
+	            tabletSearchState.lastKanaIndex = 0;
+	            tabletSearchState.lastKanaPosition = -1;
+	            tabletSearchState.cycleExpiresAt = 0;
+	            if (tabletSearchState.lastKanaButton) tabletSearchState.lastKanaButton.classList.remove('is-cycling');
+	            tabletSearchState.lastKanaButton = null;
+	        }
+
+	        function syncTabletSearchAvailability() {
+	            const tabletDevice = isTouchTabletDevice();
+	            const enabled = isTabletSearchPreferenceEnabled();
+	            if (elements.tabletSearchSettingRow) {
+	                elements.tabletSearchSettingRow.style.display = tabletDevice ? 'inline-flex' : 'none';
+	            }
+	            if (elements.toggleTabletSearch) elements.toggleTabletSearch.checked = enabled;
+	            document.body.classList.toggle('tablet-landscape-search-active', enabled && isTabletLandscapeViewport());
+	            if (!(enabled && isTabletLandscapeViewport())) resetTabletKanaCycle();
+	        }
+
+	        function applyTabletSearchValue(value) {
+	            if (!elements.tabletSearchInput || !elements.searchInput) return;
+	            let nextValue = String(value == null ? '' : value);
+	            if (tabletSearchState.mode === 'room') nextValue = nextValue.replace(/[^0-9]/g, '');
+	            tabletSearchState.syncing = true;
+	            elements.tabletSearchInput.value = nextValue;
+	            elements.searchInput.value = nextValue;
+	            tabletSearchState.syncing = false;
+	            updateSearchAssistControls();
+	            scheduleRenderTable();
+	        }
+
+	        window.__syncTabletSearchFromMain = function(value) {
+	            if (tabletSearchState.syncing || !elements.tabletSearchInput) return;
+	            elements.tabletSearchInput.value = String(value == null ? '' : value);
+	            resetTabletKanaCycle();
+	        };
+
+	        function setTabletSearchMode(mode) {
+	            const nextMode = mode === 'room' ? 'room' : 'name';
+	            const changed = tabletSearchState.mode !== nextMode;
+	            tabletSearchState.mode = nextMode;
+	            resetTabletKanaCycle();
+	            const modeButtons = elements.tabletSearchPanel
+	              ? elements.tabletSearchPanel.querySelectorAll('[data-tablet-search-mode]') : [];
+	            for (let i = 0; i < modeButtons.length; i += 1) {
+	                const active = modeButtons[i].getAttribute('data-tablet-search-mode') === tabletSearchState.mode;
+	                modeButtons[i].classList.toggle('is-active', active);
+	                modeButtons[i].setAttribute('aria-pressed', active ? 'true' : 'false');
+	            }
+	            if (elements.tabletKanaKeyboard) elements.tabletKanaKeyboard.classList.toggle('is-active', tabletSearchState.mode === 'name');
+	            if (elements.tabletNumberKeyboard) elements.tabletNumberKeyboard.classList.toggle('is-active', tabletSearchState.mode === 'room');
+	            if (elements.tabletSearchInput) {
+	                elements.tabletSearchInput.setAttribute('inputmode', tabletSearchState.mode === 'room' ? 'numeric' : 'text');
+	                elements.tabletSearchInput.setAttribute('placeholder', tabletSearchState.mode === 'room' ? '部屋番号で検索' : '名前で検索');
+	            }
+	            if (changed) applyTabletSearchValue('');
+	        }
+
+	        function appendTabletKana(group, button) {
+	            if (!elements.tabletSearchInput || !group) return;
+	            elements.tabletSearchInput.blur();
+	            const now = Date.now();
+	            const currentValue = String(elements.tabletSearchInput.value || '');
+	            let nextValue;
+	            if (tabletSearchState.lastKanaGroup === group
+	                && tabletSearchState.lastKanaPosition === currentValue.length - 1
+	                && now <= tabletSearchState.cycleExpiresAt) {
+	                tabletSearchState.lastKanaIndex = (tabletSearchState.lastKanaIndex + 1) % group.length;
+	                nextValue = currentValue.slice(0, -1) + group.charAt(tabletSearchState.lastKanaIndex);
+	            } else {
+	                resetTabletKanaCycle();
+	                tabletSearchState.lastKanaGroup = group;
+	                tabletSearchState.lastKanaIndex = 0;
+	                nextValue = currentValue + group.charAt(0);
+	            }
+	            tabletSearchState.lastKanaPosition = nextValue.length - 1;
+	            tabletSearchState.cycleExpiresAt = now + 1100;
+	            tabletSearchState.lastKanaButton = button || null;
+	            if (tabletSearchState.lastKanaButton) tabletSearchState.lastKanaButton.classList.add('is-cycling');
+	            if (tabletSearchState.cycleTimer) window.clearTimeout(tabletSearchState.cycleTimer);
+	            tabletSearchState.cycleTimer = window.setTimeout(resetTabletKanaCycle, 1100);
+	            applyTabletSearchValue(nextValue);
+	        }
+
+	        function transformLastTabletKana() {
+	            if (!elements.tabletSearchInput) return;
+	            elements.tabletSearchInput.blur();
+	            resetTabletKanaCycle();
+	            const value = String(elements.tabletSearchInput.value || '');
+	            if (!value) return;
+	            const transforms = {
+	                'あ':'ぁ','ぁ':'あ','い':'ぃ','ぃ':'い','う':'ゔ','ゔ':'ぅ','ぅ':'う','え':'ぇ','ぇ':'え','お':'ぉ','ぉ':'お',
+	                'か':'が','が':'か','き':'ぎ','ぎ':'き','く':'ぐ','ぐ':'く','け':'げ','げ':'け','こ':'ご','ご':'こ',
+	                'さ':'ざ','ざ':'さ','し':'じ','じ':'し','す':'ず','ず':'す','せ':'ぜ','ぜ':'せ','そ':'ぞ','ぞ':'そ',
+	                'た':'だ','だ':'た','ち':'ぢ','ぢ':'ち','つ':'っ','っ':'づ','づ':'つ','て':'で','で':'て','と':'ど','ど':'と',
+	                'は':'ば','ば':'ぱ','ぱ':'は','ひ':'び','び':'ぴ','ぴ':'ひ','ふ':'ぶ','ぶ':'ぷ','ぷ':'ふ','へ':'べ','べ':'ぺ','ぺ':'へ','ほ':'ぼ','ぼ':'ぽ','ぽ':'ほ',
+	                'や':'ゃ','ゃ':'や','ゆ':'ゅ','ゅ':'ゆ','よ':'ょ','ょ':'よ','わ':'ゎ','ゎ':'わ'
+	            };
+	            const last = value.charAt(value.length - 1);
+	            if (transforms[last]) applyTabletSearchValue(value.slice(0, -1) + transforms[last]);
+	        }
+
+	        function handleTabletSearchKeyAction(action) {
+	            if (!elements.tabletSearchInput) return;
+	            elements.tabletSearchInput.blur();
+	            resetTabletKanaCycle();
+	            const value = String(elements.tabletSearchInput.value || '');
+	            if (action === 'backspace') applyTabletSearchValue(value.slice(0, -1));
+	            else if (action === 'clear') applyTabletSearchValue('');
+	            else if (action === 'mark') transformLastTabletKana();
+	        }
+
+	        function initializeTabletLandscapeSearch() {
+	            if (!elements.tabletSearchPanel || !elements.tabletSearchInput) return;
+	            if (elements.toggleTabletSearch) {
+	                elements.toggleTabletSearch.addEventListener('change', function(event) {
+	                    try { localStorage.setItem(TABLET_SEARCH_STORAGE_KEY, event.target.checked ? '1' : '0'); } catch (_) {}
+	                    syncTabletSearchAvailability();
+	                });
+	            }
+	            elements.tabletSearchInput.addEventListener('input', function() {
+	                resetTabletKanaCycle();
+	                applyTabletSearchValue(elements.tabletSearchInput.value);
+	            });
+	            elements.tabletSearchInput.addEventListener('keydown', function(event) {
+	                if ((event.key === 'Enter' || event.keyCode === 13) && !event.isComposing && event.keyCode !== 229) {
+	                    event.preventDefault();
+	                    elements.tabletSearchInput.blur();
+	                }
+	            });
+	            elements.tabletSearchInput.addEventListener('search', function() {
+	                applyTabletSearchValue(elements.tabletSearchInput.value);
+	                if (document.activeElement === elements.tabletSearchInput) elements.tabletSearchInput.blur();
+	            });
+	            if (elements.tabletSearchClearBtn) {
+	                elements.tabletSearchClearBtn.addEventListener('click', function() {
+	                    resetTabletKanaCycle();
+	                    applyTabletSearchValue('');
+	                });
+	            }
+	            elements.tabletSearchPanel.addEventListener('click', function(event) {
+	                const button = closestElementCompat(event.target, 'button');
+	                if (!button) return;
+	                const mode = button.getAttribute('data-tablet-search-mode');
+	                const kanaGroup = button.getAttribute('data-kana-group');
+	                const numberKey = button.getAttribute('data-number-key');
+	                const action = button.getAttribute('data-tablet-key-action');
+	                if (mode) setTabletSearchMode(mode);
+	                else if (kanaGroup) appendTabletKana(kanaGroup, button);
+	                else if (numberKey != null) {
+	                    elements.tabletSearchInput.blur();
+	                    resetTabletKanaCycle();
+	                    applyTabletSearchValue(String(elements.tabletSearchInput.value || '') + numberKey);
+	                } else if (action) handleTabletSearchKeyAction(action);
+	            });
+	            elements.searchInput.addEventListener('input', function() {
+	                if (!tabletSearchState.syncing && typeof window.__syncTabletSearchFromMain === 'function') {
+	                    window.__syncTabletSearchFromMain(elements.searchInput.value);
+	                }
+	            });
+	            const scheduleAvailabilitySync = function() {
+	                if (tabletSearchState.resizeTimer) window.clearTimeout(tabletSearchState.resizeTimer);
+	                tabletSearchState.resizeTimer = window.setTimeout(function() {
+	                    tabletSearchState.resizeTimer = 0;
+	                    syncTabletSearchAvailability();
+	                }, 80);
+	            };
+	            window.addEventListener('resize', scheduleAvailabilitySync);
+	            window.addEventListener('orientationchange', scheduleAvailabilitySync);
+	            setTabletSearchMode('name');
+	            syncTabletSearchAvailability();
 	        }
         
         const savedDorm = normalizeDormSelectionValue(localStorage.getItem('currentDorm') || 'all');
@@ -14933,6 +15350,7 @@ if(elements.changePasswordForm){
 	            updateSearchAssistControls();
 	            scheduleRenderTable();
 	        });
+	        initializeTabletLandscapeSearch();
 	        elements.searchInput.addEventListener('keydown', function(event) {
 	            const isEnter = event.key === 'Enter' || event.keyCode === 13;
 	            if (!isEnter || event.isComposing || event.keyCode === 229) return;
