@@ -3052,6 +3052,59 @@
 	    background:#111827 !important;
 	    color:#eef6ff;
 	  }
+	  .receive-complete-toast{
+	    position:fixed;
+	    left:50%;
+	    bottom:20px;
+	    bottom:max(20px, env(safe-area-inset-bottom));
+	    z-index:3400;
+	    display:flex;
+	    align-items:center;
+	    gap:7px;
+	    max-width:calc(100% - 32px);
+	    padding:9px 14px;
+	    box-sizing:border-box;
+	    border:1px solid rgba(24,126,78,0.34);
+	    border-radius:8px;
+	    background:rgba(245,255,250,0.98);
+	    color:#12613d;
+	    box-shadow:0 5px 18px rgba(18,70,47,0.16);
+	    font-size:0.86rem;
+	    font-weight:700;
+	    line-height:1.2;
+	    letter-spacing:0;
+	    opacity:0;
+	    pointer-events:none;
+	    transform:translate3d(-50%, 8px, 0);
+	    transition:opacity 140ms ease, transform 140ms ease;
+	  }
+	  .receive-complete-toast.is-visible{
+	    opacity:1;
+	    transform:translate3d(-50%, 0, 0);
+	  }
+	  .receive-complete-toast-icon{
+	    display:inline-flex;
+	    align-items:center;
+	    justify-content:center;
+	    width:19px;
+	    height:19px;
+	    flex:0 0 19px;
+	    border-radius:50%;
+	    background:#23885b;
+	    color:#fff;
+	    font-size:12px;
+	    line-height:1;
+	  }
+	  body.dark-theme .receive-complete-toast{
+	    border-color:rgba(101,211,157,0.42);
+	    background:#17382b;
+	    color:#d9ffeb;
+	    box-shadow:none;
+	  }
+	  body.legacy-performance-mode .receive-complete-toast{
+	    transition:none;
+	    box-shadow:none;
+	  }
 	  .container,
 	  .header-area,
 	  .header-buttons,
@@ -3295,6 +3348,11 @@
 
 <div id="loading-overlay" style="display:none; position:fixed; inset:0; top:0; right:0; bottom:0; left:0; background:rgba(255,255,255,0.8); z-index:3000; align-items:center; justify-content:center;">
   <div>読み込み中...</div>
+</div>
+
+<div id="receive-complete-toast" class="receive-complete-toast" role="status" aria-live="polite" aria-atomic="true">
+  <span class="receive-complete-toast-icon" aria-hidden="true">&#10003;</span>
+  <span>受け取り完了</span>
 </div>
 
 <div id="workflow-home-screen" class="workflow-home-screen" aria-live="polite">
@@ -11257,6 +11315,7 @@ function applySohmuUI(){
           receiveMailPlus: document.getElementById('receive-mail-plus'),
           receiveCustomConfirmBtn: document.getElementById('receive-custom-confirm-btn'),
 	          receiveCancelBtn: document.getElementById('receive-cancel-btn'),
+	          receiveCompleteToast: document.getElementById('receive-complete-toast'),
 	          mobileCountEditModal: document.getElementById('mobile-count-edit-modal'),
 	          mobileCountEditDoneBtn: document.getElementById('mobile-count-edit-done-btn'),
 	          mobileCountEditName: document.getElementById('mobile-count-edit-name'),
@@ -11402,6 +11461,91 @@ const receiveModalState = {
   showPartial: false,
   showCustom: false
 };
+
+	var receiveCompleteToastTimerId = 0;
+	function showReceiveCompleteToast() {
+	  var toast = elements.receiveCompleteToast;
+	  if (!toast) return;
+	  if (receiveCompleteToastTimerId) window.clearTimeout(receiveCompleteToastTimerId);
+	  toast.classList.add('is-visible');
+	  receiveCompleteToastTimerId = window.setTimeout(function(){
+	    receiveCompleteToastTimerId = 0;
+	    toast.classList.remove('is-visible');
+	  }, 1000);
+	}
+
+	function getQueryParameterCompat(name) {
+	  var query = String(window.location && window.location.search || '').replace(/^\?/, '');
+	  if (!query) return '';
+	  var parts = query.split('&');
+	  for (var i = 0; i < parts.length; i += 1) {
+	    var pair = parts[i].split('=');
+	    var key = pair.shift() || '';
+	    try { key = decodeURIComponent(key.replace(/\+/g, ' ')); } catch (_) {}
+	    if (key !== name) continue;
+	    var value = pair.join('=');
+	    try { value = decodeURIComponent(value.replace(/\+/g, ' ')); } catch (_) {}
+	    return value;
+	  }
+	  return '';
+	}
+
+	function hasNfcReceiveUrlIntent() {
+	  var nfcValue = String(getQueryParameterCompat('nfc') || '').toLowerCase();
+	  var actionValue = String(getQueryParameterCompat('action') || '').toLowerCase();
+	  return nfcValue === 'receive' || actionValue === 'receive';
+	}
+
+	function clearNfcReceiveUrlIntent() {
+	  if (!window.history || typeof window.history.replaceState !== 'function') return;
+	  var query = String(window.location && window.location.search || '').replace(/^\?/, '');
+	  var kept = query ? query.split('&').filter(function(part){
+	    var pair = part.split('=');
+	    var rawKey = (pair.shift() || '').replace(/\+/g, ' ');
+	    var rawValue = pair.join('=').replace(/\+/g, ' ');
+	    try { rawKey = decodeURIComponent(rawKey); } catch (_) {}
+	    try { rawValue = decodeURIComponent(rawValue); } catch (_) {}
+	    return !((rawKey === 'nfc' || rawKey === 'action') && String(rawValue).toLowerCase() === 'receive');
+	  }) : [];
+	  var nextUrl = window.location.pathname + (kept.length ? '?' + kept.join('&') : '') + window.location.hash;
+	  try { window.history.replaceState(window.history.state, document.title, nextUrl); } catch (_) {}
+	}
+
+	var nfcReceiveIntentState = {
+	  requested: hasNfcReceiveUrlIntent(),
+	  handled: false,
+	  switchedToAll: false,
+	  timerId: 0
+	};
+
+	function tryOpenNfcReceiveIntent() {
+	  if (!nfcReceiveIntentState.requested || nfcReceiveIntentState.handled) return;
+	  var residentId = getStoredResidentId();
+	  if (!residentId) return;
+	  var resident = getResidentById(residentId);
+	  if (!resident) {
+	    if (!nfcReceiveIntentState.switchedToAll && currentCollectionName !== 'all' && allResidents.length) {
+	      nfcReceiveIntentState.switchedToAll = true;
+	      try { switchDorm('all'); } catch (_) {}
+	    }
+	    return;
+	  }
+
+	  nfcReceiveIntentState.handled = true;
+	  clearNfcReceiveUrlIntent();
+	  try {
+	    if (isWorkflowFeatureEnabled()) applyWorkflowMode('receive', { reason: 'nfc' });
+	  } catch (_) {}
+	  openReceiveModal(residentId);
+	}
+
+	function scheduleNfcReceiveIntent() {
+	  if (!nfcReceiveIntentState.requested || nfcReceiveIntentState.handled || nfcReceiveIntentState.timerId) return;
+	  nfcReceiveIntentState.timerId = window.setTimeout(function(){
+	    nfcReceiveIntentState.timerId = 0;
+	    tryOpenNfcReceiveIntent();
+	  }, 40);
+	}
 
 const mobileCountEditState = {
   residentId: null,
@@ -13563,6 +13707,9 @@ async function receiveResidentItems(residentId, requestedLuggage, requestedMail)
 
 		    if (result.appliedLuggage || result.appliedMail) {
 		      await maybeClearResidentNoteAfterReceive(residentId, targetCollection, dormKey);
+		      if (elements.sohmuToggle && elements.sohmuToggle.checked) {
+		        showReceiveCompleteToast();
+		      }
 		      clearSearchInputAfterWorkflowAction({ render: true });
 		    } else {
 	      alert('受け取れる荷物・郵便がありませんでした。');
@@ -14758,6 +14905,7 @@ if(elements.changePasswordForm){
               syncMobileCountEditModalUI();
             }
 	            syncNotificationSettingsUiAfterTableRender();
+	            try { scheduleNfcReceiveIntent(); } catch (_) {}
 	        }
         
 
