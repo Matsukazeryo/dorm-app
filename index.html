@@ -9364,14 +9364,25 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 
 	    function normalizeLegacyHistoryEntry(log, resident, itemType){
 	      const d = log || {};
-	      if (d.residentId || d.itemType || d.items) return [];
+	      const residentId = resident && resident.id ? String(resident.id) : '';
+	      if (d.residentId && residentId && String(d.residentId) !== residentId) return [];
+	      if (d.dorm && resident && resident.dorm && d.dorm !== resident.dorm) return [];
       const residentName = resident && resident.name ? String(resident.name) : '';
       const details = String(d.details || '');
       const label = getItemHistoryTypeLabel(itemType);
       if (!residentName || details.indexOf(residentName) === -1 || details.indexOf(label) === -1) return [];
+	      const residentDorm = resident && (resident.dorm === 'shofu' || resident.dorm === 'meizen') ? resident.dorm : '';
+	      if (residentDorm && /^\[(?:shofu|meizen)\]/.test(details)
+	          && details.indexOf(`[${residentDorm}] ${residentName} `) !== 0) return [];
 
       if (d.action === '個数変更') {
-        const delta = details.indexOf('+1') !== -1 ? 1 : (details.indexOf('-1') !== -1 ? -1 : 0);
+	        if (d.itemType) return [];
+	        const detailsAfterLabel = details.slice(details.indexOf(label) + label.length);
+	        const signedMatch = detailsAfterLabel.match(/([+-])\s*(\d+)/);
+	        const arrowMatch = detailsAfterLabel.match(/(\d+)\s*(?:→|->)\s*(\d+)/);
+	        let delta = signedMatch
+	          ? (signedMatch[1] === '-' ? -1 : 1) * (parseInt(signedMatch[2], 10) || 0)
+	          : (arrowMatch ? (parseInt(arrowMatch[2], 10) || 0) - (parseInt(arrowMatch[1], 10) || 0) : 0);
         if (!delta) return [];
         return [{
           delta,
@@ -9382,7 +9393,8 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       }
 
       if (d.action === '受け取り' && details.indexOf('受け取り') !== -1) {
-        const re = new RegExp(label + '(\\d+)件');
+	        if (d.items) return [];
+	        const re = new RegExp(label + '\\s*(\\d+)\\s*件');
         const match = details.match(re);
         const count = match ? Math.max(0, parseInt(match[1], 10) || 0) : 1;
         if (!count) return [];
@@ -9437,7 +9449,22 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 
     async function fetchLegacyItemHistory(resident, itemType){
       if (!resident || !resident.name) return [];
-      const snap = await db.collection('logs').orderBy('timestamp', 'desc').limit(200).get();
+	      let snap;
+	      const dorm = resident.dorm === 'meizen' ? 'meizen' : (resident.dorm === 'shofu' ? 'shofu' : '');
+	      if (dorm) {
+	        const prefix = `[${dorm}] ${resident.name} `;
+	        try {
+	          snap = await db.collection('logs')
+	            .where('details', '>=', prefix)
+	            .where('details', '<', prefix + '\uf8ff')
+	            .get();
+	        } catch (error) {
+	          console.warn('legacy resident history prefix query failed; using recent-log fallback', error);
+	        }
+	      }
+	      if (!snap) {
+	        snap = await db.collection('logs').orderBy('timestamp', 'desc').limit(500).get();
+	      }
       const entries = [];
       snap.forEach(function(doc){
         entries.push.apply(entries, normalizeLegacyHistoryEntry(doc.data() || {}, resident, itemType));
@@ -9461,10 +9488,11 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       modal.classList.add('active');
 
       try {
-	        let entries = await fetchStructuredItemHistory(resident, type);
-        if (!entries.length) {
-          entries = await fetchLegacyItemHistory(resident, type);
-        }
+	        const historyGroups = await Promise.all([
+	          fetchStructuredItemHistory(resident, type),
+	          fetchLegacyItemHistory(resident, type)
+	        ]);
+	        let entries = historyGroups[0].concat(historyGroups[1]);
 	        entries.sort(function(a, b){ return historyTimestampMillis(b) - historyTimestampMillis(a); });
 	        if (entries.length > 200) entries = entries.slice(0, 200);
         renderItemHistoryEntries(entries, type);
