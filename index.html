@@ -1964,6 +1964,9 @@
     justify-content:space-between;
     gap:12px;
     margin:-20px -20px 16px;
+	width:calc(100% + 40px);
+	max-width:none;
+	box-sizing:border-box;
     padding:12px 20px;
     border:1px solid rgba(185, 116, 0, 0.42);
     border-radius:0 0 14px 14px;
@@ -1986,6 +1989,7 @@
     align-items:center;
     gap:10px;
     min-width:0;
+	flex:1 1 auto;
   }
   .morning-reminder-icon{
     width:28px;
@@ -2002,6 +2006,9 @@
   .morning-reminder-title{
     font-weight:900;
     line-height:1.35;
+	min-width:0;
+	overflow-wrap:anywhere;
+	word-break:break-word;
   }
   .morning-reminder-close{
     border:none;
@@ -2012,6 +2019,7 @@
     padding:8px 12px;
     cursor:pointer;
     flex:0 0 auto;
+	white-space:nowrap;
     box-shadow:0 4px 12px rgba(94,67,0,0.10);
   }
   body.dark-theme .morning-reminder-close{
@@ -2023,10 +2031,19 @@
       align-items:center;
       flex-direction:row;
       margin:-12px -12px 12px;
+	  width:calc(100% + 24px);
       padding:10px 12px;
     }
+	.morning-reminder-main{
+	  gap:8px;
+	}
+	.morning-reminder-title{
+	  font-size:0.88rem;
+	}
     .morning-reminder-close{
       min-height:42px;
+	  padding:7px 9px;
+	  font-size:0.78rem;
     }
   }
   .pwa-hint{
@@ -3036,6 +3053,10 @@
 	  body.tablet-landscape-search-active:not(.workflow-home):not(.sohmu-off) #search-box{
 	    display:none !important;
 	  }
+	  body.tablet-landscape-search-active:not(.workflow-home):not(.sohmu-off) .morning-reminder-banner{
+	    margin:-16px 0 16px -16px;
+	    width:calc(100% + 16px);
+	  }
 	  .tablet-search-mode{
 	    display:grid;
 	    grid-template-columns:1fr 1fr;
@@ -3121,9 +3142,12 @@
 	    font-weight:800;
 	    cursor:pointer;
 	    touch-action:manipulation;
+	    -webkit-user-select:none;
+	    user-select:none;
 	  }
 	  .tablet-search-key:active,
-	  .tablet-search-key.is-cycling{
+	  .tablet-search-key.is-cycling,
+	  .tablet-search-key.is-flicking{
 	    background:#dcefff;
 	    border-color:#247fc8;
 	  }
@@ -3138,11 +3162,40 @@
 	    box-shadow:none;
 	  }
 	  body.dark-theme .tablet-search-key:active,
-	  body.dark-theme .tablet-search-key.is-cycling{
+	  body.dark-theme .tablet-search-key.is-cycling,
+	  body.dark-theme .tablet-search-key.is-flicking{
 	    background:#315b7c;
 	  }
 	  body.dark-theme .tablet-search-key.is-function{
 	    background:#334054;
+	  }
+
+	  /* 低性能端末では描画結果を変えず、合成コストだけを抑える。 */
+	  body.legacy-performance-mode{
+	    -webkit-font-smoothing:antialiased;
+	    text-rendering:auto;
+	  }
+	  body.legacy-performance-mode .container,
+	  body.legacy-performance-mode .controls-container,
+	  body.legacy-performance-mode .middle-controls,
+	  body.legacy-performance-mode .table-container,
+	  body.legacy-performance-mode .off-count-card,
+	  body.legacy-performance-mode .announce-item,
+	  body.legacy-performance-mode .announcement-list li,
+	  body.legacy-performance-mode .tablet-search-panel,
+	  body.legacy-performance-mode .tablet-search-key{
+	    box-shadow:none !important;
+	  }
+	  body.legacy-performance-mode tbody tr,
+	  body.legacy-performance-mode button,
+	  body.legacy-performance-mode .slider,
+	  body.legacy-performance-mode .slider:before{
+	    transition:none !important;
+	    animation:none !important;
+	  }
+	  body.legacy-performance-mode .table-container,
+	  body.legacy-performance-mode .tablet-search-panel{
+	    contain:layout paint;
 	  }
 	</style>
 </head>
@@ -8048,7 +8101,8 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 	  const run = function(){
 	    residentTableRenderFrameId = 0;
 	    if (window.__appScrollActive === true) {
-	      residentTableRenderFrameId = window.setTimeout(run, 80);
+	      const retryDelay = document.body && document.body.classList.contains('legacy-performance-mode') ? 120 : 80;
+	      residentTableRenderFrameId = window.setTimeout(run, retryDelay);
 	      return;
 	    }
 	    if (typeof window.renderTable === 'function') window.renderTable();
@@ -14966,6 +15020,7 @@ if(elements.changePasswordForm){
             const keepWorkflowRegister = document.body.classList.contains('workflow-register-mode');
             const keepWorkflowDisabled = document.body.classList.contains('workflow-disabled');
 	            const keepTabletLandscapeSearch = document.body.classList.contains('tablet-landscape-search-active');
+	            const keepLegacyPerformanceMode = document.body.classList.contains('legacy-performance-mode');
             document.body.className = sessionStorage.getItem('isAdminLoggedIn') === 'true' ? 'admin-logged-in' : '';
             document.body.classList.add(mode);
             const countRadio = document.getElementById('count-edit-mode');
@@ -14980,6 +15035,7 @@ if(elements.changePasswordForm){
             if (keepWorkflowRegister) document.body.classList.add('workflow-register-mode');
             if (keepWorkflowDisabled) document.body.classList.add('workflow-disabled');
 	            if (keepTabletLandscapeSearch) document.body.classList.add('tablet-landscape-search-active');
+	            if (keepLegacyPerformanceMode) document.body.classList.add('legacy-performance-mode');
             const currentTheme = localStorage.getItem('theme') || 'light';
             handleThemeChange(currentTheme);
             if (mode !== 'resident-edit-mode') elements.selectAllCheckbox.checked = false;
@@ -15084,8 +15140,36 @@ if(elements.changePasswordForm){
 		            }
 		            updateItemFilterControls();
 		        }
+	        let searchRenderTimerId = 0;
 	        function scheduleRenderTable() {
 	            requestResidentTableRender();
+	        }
+	        function scheduleSearchRenderTable() {
+	            const lowPerformance = document.body && document.body.classList.contains('legacy-performance-mode');
+	            if (!lowPerformance) {
+	                requestResidentTableRender();
+	                return;
+	            }
+	            if (searchRenderTimerId) window.clearTimeout(searchRenderTimerId);
+	            searchRenderTimerId = window.setTimeout(function() {
+	                searchRenderTimerId = 0;
+	                requestResidentTableRender();
+	            }, 55);
+	        }
+	        function initializeLegacyPerformanceMode() {
+	            const nav = window.navigator || {};
+	            const cores = Number(nav.hardwareConcurrency || 0);
+	            const memory = Number(nav.deviceMemory || 0);
+	            const ua = String(nav.userAgent || '');
+	            const iosMatch = ua.match(/OS\s+(\d+)[_.]/i);
+	            const androidMatch = ua.match(/Android\s+(\d+)/i);
+	            const oldIos = !!(iosMatch && Number(iosMatch[1]) <= 13);
+	            const oldAndroid = !!(androidMatch && Number(androidMatch[1]) <= 9);
+	            const limitedCpu = cores > 0 && cores <= 2;
+	            const limitedMemory = memory > 0 && memory <= 2;
+	            const enabled = oldIos || oldAndroid || limitedCpu || limitedMemory;
+	            document.body.classList.toggle('legacy-performance-mode', enabled);
+	            window.__legacyPerformanceMode = enabled;
 	        }
 
 	        function clearSearchInputAfterWorkflowAction(options) {
@@ -15112,7 +15196,12 @@ if(elements.changePasswordForm){
 	            lastKanaPosition: -1,
 	            cycleExpiresAt: 0,
 	            cycleTimer: 0,
-	            resizeTimer: 0
+	            resizeTimer: 0,
+	            flickStartX: 0,
+	            flickStartY: 0,
+	            flickButton: null,
+	            flickGroup: '',
+	            ignoreKanaClickUntil: 0
 	        };
 
 	        function isTouchTabletDevice() {
@@ -15172,7 +15261,7 @@ if(elements.changePasswordForm){
 	            elements.searchInput.value = nextValue;
 	            tabletSearchState.syncing = false;
 	            updateSearchAssistControls();
-	            scheduleRenderTable();
+	            scheduleSearchRenderTable();
 	        }
 
 	        window.__syncTabletSearchFromMain = function(value) {
@@ -15226,6 +15315,81 @@ if(elements.changePasswordForm){
 	            if (tabletSearchState.cycleTimer) window.clearTimeout(tabletSearchState.cycleTimer);
 	            tabletSearchState.cycleTimer = window.setTimeout(resetTabletKanaCycle, 1100);
 	            applyTabletSearchValue(nextValue);
+	        }
+
+	        function appendTabletFlickKana(character) {
+	            if (!elements.tabletSearchInput || !character) return;
+	            elements.tabletSearchInput.blur();
+	            resetTabletKanaCycle();
+	            applyTabletSearchValue(String(elements.tabletSearchInput.value || '') + character);
+	        }
+
+	        function getTabletFlickCharacter(group, deltaX, deltaY) {
+	            const source = String(group || '');
+	            const absX = Math.abs(Number(deltaX || 0));
+	            const absY = Math.abs(Number(deltaY || 0));
+	            if (!source || Math.max(absX, absY) < 18) return '';
+	            const horizontal = absX > absY;
+	            if (source.length >= 5) {
+	                if (horizontal) return deltaX < 0 ? source.charAt(1) : source.charAt(3);
+	                return deltaY < 0 ? source.charAt(2) : source.charAt(4);
+	            }
+	            if (source.length >= 3) {
+	                if (horizontal) return deltaX < 0 ? source.charAt(1) : source.charAt(2);
+	                return deltaY < 0 ? source.charAt(1) : source.charAt(2);
+	            }
+	            return source.charAt(0);
+	        }
+
+	        window.__getTabletFlickCharacter = getTabletFlickCharacter;
+
+	        function bindTabletKanaFlickInput() {
+	            if (!elements.tabletKanaKeyboard) return;
+	            const kanaButtons = elements.tabletKanaKeyboard.querySelectorAll('[data-kana-group]');
+	            const addTouchListener = function(target, eventName, handler) {
+	                try { target.addEventListener(eventName, handler, { passive: false }); }
+	                catch (_) { target.addEventListener(eventName, handler, false); }
+	            };
+	            const clearFlickState = function() {
+	                if (tabletSearchState.flickButton) tabletSearchState.flickButton.classList.remove('is-flicking');
+	                tabletSearchState.flickButton = null;
+	                tabletSearchState.flickGroup = '';
+	            };
+	            for (let i = 0; i < kanaButtons.length; i += 1) {
+	                (function(button) {
+	                    addTouchListener(button, 'touchstart', function(event) {
+	                        if (!event.touches || event.touches.length !== 1) return;
+	                        const touch = event.touches[0];
+	                        tabletSearchState.flickStartX = touch.clientX;
+	                        tabletSearchState.flickStartY = touch.clientY;
+	                        tabletSearchState.flickButton = button;
+	                        tabletSearchState.flickGroup = button.getAttribute('data-kana-group') || '';
+	                        button.classList.add('is-flicking');
+	                        if (event.preventDefault) event.preventDefault();
+	                    });
+	                    addTouchListener(button, 'touchmove', function(event) {
+	                        if (tabletSearchState.flickButton !== button) return;
+	                        if (event.preventDefault) event.preventDefault();
+	                    });
+	                    addTouchListener(button, 'touchend', function(event) {
+	                        if (tabletSearchState.flickButton !== button) return;
+	                        const touch = event.changedTouches && event.changedTouches[0];
+	                        const deltaX = touch ? touch.clientX - tabletSearchState.flickStartX : 0;
+	                        const deltaY = touch ? touch.clientY - tabletSearchState.flickStartY : 0;
+	                        const group = tabletSearchState.flickGroup;
+	                        const character = getTabletFlickCharacter(group, deltaX, deltaY);
+	                        tabletSearchState.ignoreKanaClickUntil = Date.now() + 700;
+	                        clearFlickState();
+	                        if (character) appendTabletFlickKana(character);
+	                        else appendTabletKana(group, button);
+	                        if (event.preventDefault) event.preventDefault();
+	                    });
+	                    addTouchListener(button, 'touchcancel', function(event) {
+	                        if (tabletSearchState.flickButton === button) clearFlickState();
+	                        if (event.preventDefault) event.preventDefault();
+	                    });
+	                })(kanaButtons[i]);
+	            }
 	        }
 
 	        function transformLastTabletKana() {
@@ -15292,7 +15456,10 @@ if(elements.changePasswordForm){
 	                const numberKey = button.getAttribute('data-number-key');
 	                const action = button.getAttribute('data-tablet-key-action');
 	                if (mode) setTabletSearchMode(mode);
-	                else if (kanaGroup) appendTabletKana(kanaGroup, button);
+	                else if (kanaGroup) {
+	                    if (Date.now() < tabletSearchState.ignoreKanaClickUntil) return;
+	                    appendTabletKana(kanaGroup, button);
+	                }
 	                else if (numberKey != null) {
 	                    elements.tabletSearchInput.blur();
 	                    resetTabletKanaCycle();
@@ -15313,6 +15480,7 @@ if(elements.changePasswordForm){
 	            };
 	            window.addEventListener('resize', scheduleAvailabilitySync);
 	            window.addEventListener('orientationchange', scheduleAvailabilitySync);
+	            bindTabletKanaFlickInput();
 	            setTabletSearchMode('name');
 	            syncTabletSearchAvailability();
 	        }
@@ -15348,7 +15516,7 @@ if(elements.changePasswordForm){
 	        updateSearchAssistControls();
 	        elements.searchInput.addEventListener('input', () => {
 	            updateSearchAssistControls();
-	            scheduleRenderTable();
+	            scheduleSearchRenderTable();
 	        });
 	        initializeTabletLandscapeSearch();
 	        elements.searchInput.addEventListener('keydown', function(event) {
@@ -15568,6 +15736,7 @@ if(elements.changePasswordForm){
         // ===== iOS Safari 対策：ユーザー操作で通知許可をリクエスト =====
         initializeTheme();
         initializeResidentSortSelector();
+		initializeLegacyPerformanceMode();
 		initializePageScrollLockObserver();
         initializeWorkflowMode();
         // 30分ごとに lastSeen を更新
