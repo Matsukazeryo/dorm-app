@@ -1780,6 +1780,20 @@
           padding:0;
           margin:0;
         }
+        .announcement-list-toggle{
+          display:none;
+          width:100%;
+          margin-top:10px;
+          padding:9px 12px;
+          border:1px solid var(--border-color);
+          border-radius:6px;
+          background:var(--controls-bg);
+          color:var(--header-text);
+          font-size:13px;
+          font-weight:800;
+          cursor:pointer;
+        }
+        .announcement-list-toggle.is-visible{ display:block; }
         .announcement-list li{
           border-bottom:1px solid var(--border-color);
           padding:0;                /* ぴったり詰める */
@@ -2933,6 +2947,30 @@
 	    cursor:wait;
 	    opacity:.55;
 	  }
+	  .morning-restore-modal-content{ max-width:520px; }
+	  .morning-restore-help{
+	    margin:0 0 12px;
+	    color:var(--secondary-text);
+	    font-size:13px;
+	    line-height:1.5;
+	  }
+	  .morning-restore-select{
+	    width:100%;
+	    min-height:48px;
+	    box-sizing:border-box;
+	    padding:10px 12px;
+	    border:1px solid var(--border-color);
+	    border-radius:8px;
+	    background:var(--controls-bg);
+	    color:var(--text-color);
+	    font-size:16px;
+	  }
+	  .morning-restore-status{
+	    min-height:1.4em;
+	    margin:10px 0 0;
+	    color:var(--secondary-text);
+	    font-size:13px;
+	  }
 	  body.dark-theme #morning-restore-btn{
 	    background:rgba(255,255,255,0.10);
 	    color:rgba(235,245,255,0.72);
@@ -3260,6 +3298,7 @@
 	    border:1px solid var(--mode-selector-border);
 	    border-radius:8px;
 	    background:var(--mode-label-bg);
+	    margin-top:auto;
 	  }
 	  .tablet-search-mode-btn{
 	    min-height:44px;
@@ -3319,7 +3358,7 @@
 	    display:none;
 	    grid-template-columns:repeat(3, minmax(0, 1fr));
 	    gap:9px;
-	    margin-top:auto;
+	    margin-top:0;
 	  }
 	  .tablet-search-keyboard.is-active{
 	    display:grid;
@@ -3563,6 +3602,7 @@
         <ul id="announcement-list" class="announcement-list">
             <li>お知らせはありません。</li>
         </ul>
+        <button id="announcement-list-toggle" class="announcement-list-toggle" type="button" aria-expanded="false"></button>
     </div>
     <!-- ===== お知らせ欄ここまで ===== -->
     <div style="text-align:center; margin-top:20px;">
@@ -3571,13 +3611,13 @@
 </div>
 
 <aside id="tablet-search-panel" class="tablet-search-panel" aria-label="横画面検索">
-  <div class="tablet-search-mode" role="group" aria-label="検索対象">
+  <div class="tablet-search-field-wrap">
+    <input type="search" id="tablet-search-input" inputmode="text" enterkeyhint="search" autocomplete="off" placeholder="名前・部屋番号などで検索">
+    <button type="button" id="tablet-search-clear-btn" class="tablet-search-clear" aria-label="検索文字を消す">×</button>
+  </div>
+  <div class="tablet-search-mode" role="group" aria-label="アプリ内キーボード切り替え">
     <button type="button" class="tablet-search-mode-btn is-active" data-tablet-search-mode="name" aria-pressed="true">名前</button>
     <button type="button" class="tablet-search-mode-btn" data-tablet-search-mode="room" aria-pressed="false">部屋番号</button>
-  </div>
-  <div class="tablet-search-field-wrap">
-    <input type="search" id="tablet-search-input" inputmode="text" enterkeyhint="search" autocomplete="off" placeholder="名前で検索">
-    <button type="button" id="tablet-search-clear-btn" class="tablet-search-clear" aria-label="検索文字を消す">×</button>
   </div>
   <div id="tablet-kana-keyboard" class="tablet-search-keyboard is-active" aria-label="かなキーボード">
     <button type="button" class="tablet-search-key" data-kana-group="あいうえお">あ</button>
@@ -3764,6 +3804,24 @@
   </div>
 </div>
 <!-- ==== 荷物・郵便 個別履歴モーダル ここまで ==== -->
+
+<!-- ==== 朝の庶務 復元データ選択モーダル ==== -->
+<div id="morning-restore-modal" class="modal-overlay">
+  <div class="modal-content morning-restore-modal-content">
+    <div class="modal-header">
+      <h2>朝の庶務前へ復元</h2>
+      <button id="morning-restore-modal-close-btn" class="modal-close-btn" type="button">&times;</button>
+    </div>
+    <p class="morning-restore-help">直近7日間の保存データから、戻したい日時を選択してください。</p>
+    <select id="morning-restore-select" class="morning-restore-select" aria-label="復元する日時"></select>
+    <p id="morning-restore-status" class="morning-restore-status" aria-live="polite"></p>
+    <div class="form-actions">
+      <button id="morning-restore-cancel-btn" type="button" class="header-btn" style="background:#7f8c8d;">キャンセル</button>
+      <button id="morning-restore-confirm-btn" type="button" class="header-btn" style="background:#c77724;">この日時へ戻す</button>
+    </div>
+  </div>
+</div>
+<!-- ==== 朝の庶務 復元データ選択モーダル ここまで ==== -->
 
 <!-- ==== カメラ/OCR 自動登録モーダル ==== -->
 <div id="ocr-modal" class="modal-overlay">
@@ -5724,6 +5782,23 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
             mail: mailCount
           });
         });
+
+	        // 終了時点で荷物・郵便が残っている人を必ず含める。
+	        // 個数が開始前と同じでも、朝の庶務終了通知から漏らさない。
+	        (Array.isArray(allResidents) ? allResidents : []).forEach((resident) => {
+	          const residentId = resident && resident.id ? String(resident.id) : '';
+	          if (!residentId || residentMap.has(residentId)) return;
+	          const luggageCount = __normalizeMorningCountValue(resident.luggage) || 0;
+	          const mailCount = __normalizeMorningCountValue(resident.mail) || 0;
+	          if ((luggageCount + mailCount) <= 0) return;
+	          residentMap.set(residentId, {
+	            residentId,
+	            dorm: resident.dorm === 'shofu' || resident.dorm === 'meizen' ? resident.dorm : null,
+	            name: resident.name || '',
+	            luggage: luggageCount,
+	            mail: mailCount
+	          });
+	        });
       }catch(_){ }
       return Array.from(residentMap.values());
     }
@@ -5733,6 +5808,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       if (!residents.length) return true;
       await db.collection('logs').add({
         action: '__notify_morning_summary__',
+	    summaryMode: 'final_positive_counts',
         runId: runId || __buildMorningNotificationRunId(),
         targetDorm: window.__morningModeTargetDorm || 'all',
         residents: residents,
@@ -7325,7 +7401,9 @@ function unifiedConfirm(action){
     saving: false
   };
   const DEFAULT_COMPOSER_COLOR_PICKER = '#333333';
+  const COLLAPSED_ANNOUNCEMENT_COUNT = 3;
   const pendingAnnouncementIds = new Set();
+  let announcementListExpanded = false;
 
   function isAdmin(){
     return document.body.classList.contains('admin-logged-in');
@@ -7719,17 +7797,23 @@ function unifiedConfirm(action){
 
   function render(){
     const listEl = document.getElementById('announcement-list');
+    const toggleBtn = document.getElementById('announcement-list-toggle');
     if (!listEl) return;
 
     if (!annCache || annCache.length === 0){
       listEl.innerHTML = '<li>お知らせはありません。</li>';
+      if (toggleBtn) toggleBtn.classList.remove('is-visible');
       return;
     }
 
     const admin = isAdmin();
     const frag = document.createDocumentFragment();
 
-    annCache.forEach(({id, data}) => {
+    const visibleAnnouncements = announcementListExpanded
+      ? annCache
+      : annCache.slice(0, COLLAPSED_ANNOUNCEMENT_COUNT);
+
+    visibleAnnouncements.forEach(({id, data}) => {
       const d = data || {};
       const pinned = !!d.pinned;
 
@@ -7789,6 +7873,14 @@ function unifiedConfirm(action){
 
     listEl.innerHTML = '';
     listEl.appendChild(frag);
+    if (toggleBtn) {
+      const canToggle = annCache.length > COLLAPSED_ANNOUNCEMENT_COUNT;
+      toggleBtn.classList.toggle('is-visible', canToggle);
+      toggleBtn.setAttribute('aria-expanded', announcementListExpanded ? 'true' : 'false');
+      toggleBtn.textContent = announcementListExpanded
+        ? 'お知らせを閉じる'
+        : `すべてのお知らせを見る（${annCache.length}件）`;
+    }
   }
 
   // どこかの経路で本文が [color=...]...[/color] に化けても、表示側で強制的に復元する
@@ -7888,6 +7980,21 @@ function unifiedConfirm(action){
       }
     }, true);
   })();
+
+  document.addEventListener('click', function(ev){
+    const toggle = ev.target && ev.target.closest && ev.target.closest('#announcement-list-toggle');
+    if (!toggle) return;
+    ev.preventDefault();
+    announcementListExpanded = !announcementListExpanded;
+    render();
+    if (!announcementListExpanded) {
+      const box = document.getElementById('announcement-container');
+      if (box && box.getBoundingClientRect().top < 0) {
+        try { box.scrollIntoView({ block: 'start' }); }
+        catch(_) { box.scrollIntoView(true); }
+      }
+    }
+  }, false);
 
   // 投稿送信
   (function bindPostSubmit(){
@@ -9029,13 +9136,17 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 	      return { runId: runId, count: entries.length };
 	    }
 
-	    async function markMorningRestorePointCompleted(runId){
+	    async function markMorningRestorePointCompleted(runId, operator){
 	      if (!runId) return;
 	      try {
+	        const operatorData = operator && typeof operator === 'object' ? operator : {};
 	        await Promise.all([
 	          db.collection('morning_refs').doc(runId).set({
 	            status: 'completed',
-	            completedAt: firebase.firestore.FieldValue.serverTimestamp()
+	            completedAt: firebase.firestore.FieldValue.serverTimestamp(),
+	            completedByResidentId: operatorData.residentId || '',
+	            completedByName: operatorData.name || '管理者（寮生未選択）',
+	            completedByDorm: operatorData.dorm || ''
 	          }, { merge: true }),
 	          db.collection('settings').doc(MORNING_RESTORE_SETTINGS_DOC_ID).set({
 	            latestStatus: 'completed',
@@ -9045,6 +9156,23 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 	      } catch(e) {
 	        console.warn('markMorningRestorePointCompleted failed', e);
 	      }
+	    }
+
+	    function getMorningOperatorInfo(residentList){
+	      const residentId = typeof getStoredResidentId === 'function' ? getStoredResidentId() : '';
+	      const residents = Array.isArray(residentList) ? residentList : (Array.isArray(allResidents) ? allResidents : []);
+	      let resident = null;
+	      for (let i = 0; i < residents.length; i++) {
+	        if (residents[i] && String(residents[i].id || '') === String(residentId || '')) {
+	          resident = residents[i];
+	          break;
+	        }
+	      }
+	      return {
+	        residentId: residentId || '',
+	        name: resident && resident.name ? String(resident.name) : '管理者（寮生未選択）',
+	        dorm: resident && (resident.dorm === 'shofu' || resident.dorm === 'meizen') ? resident.dorm : ''
+	      };
 	    }
 
 	    function formatMorningRestoreDateLabel(data){
@@ -9192,7 +9320,56 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 	      }
 	    }
 
-	    async function restoreLatestMorningCounts(){
+	    let morningRestoreChoices = [];
+
+	    function morningRestoreTimestampMillis(data){
+	      const source = data && (data.createdAt || data.latestCreatedAt);
+	      try {
+	        if (source && typeof source.toMillis === 'function') return source.toMillis();
+	        if (source && typeof source.toDate === 'function') return source.toDate().getTime();
+	        const seconds = source && Number(source.seconds != null ? source.seconds : source._seconds);
+	        if (isFinite(seconds)) return seconds * 1000;
+	      } catch(_) {}
+	      const dateKey = data && (data.createdDate || data.latestCreatedDate);
+	      const parsed = dateKey ? new Date(String(dateKey) + 'T00:00:00') : null;
+	      return parsed && !isNaN(parsed.getTime()) ? parsed.getTime() : 0;
+	    }
+
+	    function formatMorningRestoreChoice(data){
+	      const millis = morningRestoreTimestampMillis(data);
+	      if (!millis) return formatMorningRestoreDateLabel(data);
+	      const date = new Date(millis);
+	      const pad = function(value){ return value < 10 ? '0' + value : String(value); };
+	      return `${date.getMonth() + 1}月${date.getDate()}日 ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+	    }
+
+	    function closeMorningRestoreModal(){
+	      const modal = document.getElementById('morning-restore-modal');
+	      if (modal) modal.classList.remove('active');
+	    }
+
+	    async function loadRecentMorningRestoreChoices(){
+	      let snapshot;
+	      try {
+	        snapshot = await db.collection('morning_refs').orderBy('createdAt', 'desc').limit(20).get();
+	      } catch(error) {
+	        console.warn('ordered morning restore query failed; using fallback', error);
+	        snapshot = await db.collection('morning_refs').limit(30).get();
+	      }
+	      const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
+	      const choices = [];
+	      snapshot.forEach(function(doc){
+	        const data = doc.data() || {};
+	        if (data.type !== 'morning_restore_point') return;
+	        const millis = morningRestoreTimestampMillis(data);
+	        if (millis && millis < cutoff) return;
+	        choices.push({ runId: doc.id, data: data, millis: millis });
+	      });
+	      choices.sort(function(a, b){ return b.millis - a.millis; });
+	      return choices.slice(0, 10);
+	    }
+
+	    async function openMorningRestorePicker(){
 	      if (window.__morningRestoreInProgress) return;
 	      if (sessionStorage.getItem('isAdminLoggedIn') !== 'true') {
 	        alert('管理者ログインが必要です。');
@@ -9203,57 +9380,81 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 	        return;
 	      }
 	      const btn = document.getElementById('morning-restore-btn');
+	      const select = document.getElementById('morning-restore-select');
+	      const status = document.getElementById('morning-restore-status');
 	      window.__morningRestoreInProgress = true;
-	      if (btn) {
-	        btn.disabled = true;
-	        btn.textContent = '復元確認中...';
-	      }
+	      if (btn) { btn.disabled = true; btn.textContent = '復元確認中...'; }
+	      if (select) select.innerHTML = '<option>読み込み中...</option>';
+	      if (status) status.textContent = '';
 	      try {
-	        const settingsSnap = await db.collection('settings').doc(MORNING_RESTORE_SETTINGS_DOC_ID).get();
-	        const settings = settingsSnap.exists ? (settingsSnap.data() || {}) : {};
-	        const runId = settings.latestRunId ? String(settings.latestRunId) : '';
-	        if (!runId) {
-	          alert('復元できる朝の庶務前データがまだありません。');
+	        morningRestoreChoices = await loadRecentMorningRestoreChoices();
+	        if (!morningRestoreChoices.length) {
+	          alert('直近7日間に復元できる朝の庶務前データがありません。');
 	          return;
 	        }
-	        const topRef = db.collection('morning_refs').doc(runId);
+	        if (select) {
+	          select.innerHTML = '';
+	          morningRestoreChoices.forEach(function(choice){
+	            const option = document.createElement('option');
+	            option.value = choice.runId;
+	            option.textContent = formatMorningRestoreChoice(choice.data) + `（${Number(choice.data.count || 0)}人）`;
+	            select.appendChild(option);
+	          });
+	        }
+	        if (status) status.textContent = `${morningRestoreChoices.length}件の保存データがあります。`;
+	        const modal = document.getElementById('morning-restore-modal');
+	        if (modal) modal.classList.add('active');
+	      } catch(e) {
+	        console.error('loadRecentMorningRestoreChoices failed', e);
+	        alert('復元データの一覧を読み込めませんでした。通信状態を確認してください。');
+	      } finally {
+	        window.__morningRestoreInProgress = false;
+	        if (btn) { btn.disabled = false; btn.textContent = '朝の庶務前に戻す'; }
+	      }
+	    }
+
+	    async function restoreSelectedMorningCounts(){
+	      if (window.__morningRestoreInProgress) return;
+	      const select = document.getElementById('morning-restore-select');
+	      const runId = select ? String(select.value || '') : '';
+	      const choice = morningRestoreChoices.find(function(item){ return item.runId === runId; });
+	      if (!runId || !choice) return;
+	      const topRef = db.collection('morning_refs').doc(runId);
+	      const confirmButton = document.getElementById('morning-restore-confirm-btn');
+	      const status = document.getElementById('morning-restore-status');
+	      window.__morningRestoreInProgress = true;
+	      if (confirmButton) confirmButton.disabled = true;
+	      if (status) status.textContent = '復元データを確認しています...';
+	      try {
 	        const residentsSnap = await topRef.collection('residents').get();
 	        const entries = [];
 	        residentsSnap.forEach(function(doc){
 	          const data = doc.data() || {};
 	          if (data && data.path && data.residentId) entries.push(data);
 	        });
-	        if (!entries.length) {
-	          alert('復元データを読み込めませんでした。');
-	          return;
-	        }
-	        const dateLabel = formatMorningRestoreDateLabel(settings);
+	        if (!entries.length) throw new Error('復元対象がありません。');
+	        const dateLabel = formatMorningRestoreChoice(choice.data);
 	        const ok = confirm(
-	          '最後に開始した朝の庶務前の荷物・郵便数へ戻します。\n\n' +
-	          '対象: ' + entries.length + '人\n' +
-	          '保存日時: ' + dateLabel + '\n\n' +
+	          dateLabel + ' の朝の庶務前へ戻します。\n\n' +
+	          '対象: ' + entries.length + '人\n\n' +
 	          '現在の荷物・郵便数を上書きします。実行しますか？'
 	        );
 	        if (!ok) return;
-	        if (btn) btn.textContent = '復元中...';
+	        closeMorningRestoreModal();
 	        setMorningOverlayVisible(true);
 	        const restoreMarker = 'morning_restore_' + Date.now();
 	        const currentCountsByPath = await loadCurrentMorningCountsByPath(entries);
 	        const result = await commitMorningRestoreEntries(entries, restoreMarker, currentCountsByPath);
-	        if (!result.restored && result.failed) {
-	          throw new Error('復元対象の更新にすべて失敗しました。');
-	        }
+	        if (!result.restored && result.failed) throw new Error('復元対象の更新にすべて失敗しました。');
 	        await Promise.all([
 	          topRef.set({
-	            status: result.failed ? 'restore_partial' : 'restored',
-	            restoredAt: firebase.firestore.FieldValue.serverTimestamp(),
+	            lastRestoredAt: firebase.firestore.FieldValue.serverTimestamp(),
 	            restoredCount: result.restored,
 	            restoreFailedCount: result.failed
 	          }, { merge: true }),
 	          db.collection('settings').doc(MORNING_RESTORE_SETTINGS_DOC_ID).set({
 	            latestRestoredRunId: runId,
 	            latestRestoredAt: firebase.firestore.FieldValue.serverTimestamp(),
-	            latestStatus: result.failed ? 'restore_partial' : 'restored',
 	            latestRestoreCount: result.restored,
 	            latestRestoreFailedCount: result.failed
 	          }, { merge: true })
@@ -9261,22 +9462,18 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 	        applyMorningRestoreToLocalResidents(entries);
 	        refreshMorningTable();
 	        resumeResidentListenersAfterMorning();
-	        if (result.failed) {
-	          alert('一部を除いて朝の庶務前の状態に復元しました。\n復元: ' + result.restored + '人 / 失敗: ' + result.failed + '人');
-	        } else {
-	          alert('朝の庶務前の状態に復元しました（' + result.restored + '人）。');
-	        }
+	        await addLog('朝の庶務復元', dateLabel + ' の開始前データへ復元', { restoreRunId: runId });
+	        alert(result.failed
+	          ? '一部を除いて復元しました。\n復元: ' + result.restored + '人 / 失敗: ' + result.failed + '人'
+	          : '選択した朝の庶務前の状態に復元しました（' + result.restored + '人）。');
 	      } catch(e) {
-	        console.error('restoreLatestMorningCounts failed', e);
+	        console.error('restoreSelectedMorningCounts failed', e);
 	        const detail = (e && (e.code || e.message)) ? '\n[' + (e.code || 'error') + '] ' + e.message : '';
 	        alert('朝の庶務前の状態への復元に失敗しました。通信状態を確認してください。' + detail);
 	      } finally {
 	        setMorningOverlayVisible(false);
 	        window.__morningRestoreInProgress = false;
-	        if (btn) {
-	          btn.disabled = false;
-	          btn.textContent = '朝の庶務前に戻す';
-	        }
+	        if (confirmButton) confirmButton.disabled = false;
 	      }
 	    }
 
@@ -9403,6 +9600,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 
       try{
         syncMorningTargetDormFromRef();
+	        const morningOperator = morningRef.operator || getMorningOperatorInfo();
 
         const ok = await commitMorningStagedWrites({ enqueueSummary: true });
         if (ok === false) {
@@ -9414,7 +9612,13 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 
 		        window.__morningFinishRequested = false;
 		        await markMorningCompletedToday();
-		        await markMorningRestorePointCompleted(morningRef.restoreRunId);
+		        await markMorningRestorePointCompleted(morningRef.restoreRunId, morningOperator);
+		        await addLog('朝の庶務完了', morningOperator.name + ' が朝の庶務を完了', {
+		          operatorResidentId: morningOperator.residentId || '',
+		          operatorName: morningOperator.name || '',
+		          operatorDorm: morningOperator.dorm || '',
+		          morningRunId: morningRef.restoreRunId || ''
+		        });
 		        closeMorningModeUI();
 	        refreshMorningTable();
         resumeResidentListenersAfterMorning();
@@ -9464,6 +9668,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 	        morningRef.startedAt   = Date.now();
 	        morningRef.restoreRunId = restorePoint && restorePoint.runId ? restorePoint.runId : '';
 	        morningRef.restoreCount = restorePoint && restorePoint.count ? restorePoint.count : 0;
+	        morningRef.operator = getMorningOperatorInfo(shofuResidents.concat(meizenResidents));
 	        window.__morningCommitRunId = morningRef.restoreRunId || __buildMorningNotificationRunId();
 
         try {
@@ -9690,7 +9895,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 	        }
 	    }
 
-    const TRACKED_HISTORY_ACTIONS = new Set(['受け取り', '個数変更']);
+    const TRACKED_HISTORY_ACTIONS = new Set(['受け取り', '個数変更', '朝の庶務完了', '朝の庶務復元']);
 
     function isTrackedHistoryAction(action){
       return TRACKED_HISTORY_ACTIONS.has(String(action || ''));
@@ -9931,6 +10136,16 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
         try { return value.toDate(); } catch (_) {}
       }
       if (value instanceof Date) return value;
+      if (typeof value === 'object') {
+        const seconds = Number(value.seconds != null ? value.seconds : value._seconds);
+        const nanos = Number(value.nanoseconds != null ? value.nanoseconds : value._nanoseconds) || 0;
+        if (isFinite(seconds)) return new Date((seconds * 1000) + Math.floor(nanos / 1000000));
+      }
+      if (typeof value === 'number') {
+        const millis = value > 0 && value < 100000000000 ? value * 1000 : value;
+        const numericDate = new Date(millis);
+        return isNaN(numericDate.getTime()) ? null : numericDate;
+      }
       const parsed = new Date(value);
       return isNaN(parsed.getTime()) ? null : parsed;
     }
@@ -9938,13 +10153,9 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
     function formatHistoryTimestamp(value){
       const date = getHistoryTimestampDate(value);
       if (!date) return '日時不明';
-      return date.toLocaleString('ja-JP', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
+      const pad = function(number){ return number < 10 ? '0' + number : String(number); };
+      return date.getFullYear() + '/' + pad(date.getMonth() + 1) + '/' + pad(date.getDate()) +
+        ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes());
     }
 
 	function getHistoryDisplayDateParts(value){
@@ -10086,8 +10297,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
         return `
 		  <li class="${plus ? 'is-arrival' : ''}">
 		    <div class="item-history-datetime">
-		      <span class="item-history-date">${escapeHtml(dateParts.date)}</span>
-		      <span class="item-history-clock">${escapeHtml(dateParts.time)}</span>
+		      <span class="item-history-date">${escapeHtml([dateParts.date, dateParts.time].filter(Boolean).join('　'))}</span>
 		    </div>
             <div class="item-history-row">
               <span class="item-history-badge ${plus ? 'is-plus' : 'is-minus'}">${badgeText}</span>
@@ -10852,7 +11062,19 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 	        if (restoreEl) {
 	          ev.preventDefault();
 	          ev.stopImmediatePropagation();
-	          try { restoreLatestMorningCounts(); } catch(_) {}
+	          try { openMorningRestorePicker(); } catch(_) {}
+	          return;
+	        }
+	        const restoreCloseEl = closestEventTargetCompat(ev, '#morning-restore-modal-close-btn, #morning-restore-cancel-btn');
+	        if (restoreCloseEl) {
+	          ev.preventDefault();
+	          closeMorningRestoreModal();
+	          return;
+	        }
+	        const restoreConfirmEl = closestEventTargetCompat(ev, '#morning-restore-confirm-btn');
+	        if (restoreConfirmEl) {
+	          ev.preventDefault();
+	          try { restoreSelectedMorningCounts(); } catch(_) {}
 	          return;
 	        }
 	        // 朝の庶務開始ボタン（DOM再描画にも強い委任ハンドラ）
@@ -15775,8 +15997,7 @@ if(elements.changePasswordForm){
 
 	        function applyTabletSearchValue(value) {
 	            if (!elements.tabletSearchInput || !elements.searchInput) return;
-	            let nextValue = String(value == null ? '' : value);
-	            if (tabletSearchState.mode === 'room') nextValue = nextValue.replace(/[^0-9]/g, '');
+	            const nextValue = String(value == null ? '' : value);
 	            tabletSearchState.syncing = true;
 	            elements.tabletSearchInput.value = nextValue;
 	            elements.searchInput.value = nextValue;
@@ -15793,7 +16014,6 @@ if(elements.changePasswordForm){
 
 	        function setTabletSearchMode(mode) {
 	            const nextMode = mode === 'room' ? 'room' : 'name';
-	            const changed = tabletSearchState.mode !== nextMode;
 	            tabletSearchState.mode = nextMode;
 	            resetTabletKanaCycle();
 	            const modeButtons = elements.tabletSearchPanel
@@ -15806,10 +16026,9 @@ if(elements.changePasswordForm){
 	            if (elements.tabletKanaKeyboard) elements.tabletKanaKeyboard.classList.toggle('is-active', tabletSearchState.mode === 'name');
 	            if (elements.tabletNumberKeyboard) elements.tabletNumberKeyboard.classList.toggle('is-active', tabletSearchState.mode === 'room');
 	            if (elements.tabletSearchInput) {
-	                elements.tabletSearchInput.setAttribute('inputmode', tabletSearchState.mode === 'room' ? 'numeric' : 'text');
-	                elements.tabletSearchInput.setAttribute('placeholder', tabletSearchState.mode === 'room' ? '部屋番号で検索' : '名前で検索');
+	                elements.tabletSearchInput.setAttribute('inputmode', 'text');
+	                elements.tabletSearchInput.setAttribute('placeholder', '名前・部屋番号などで検索');
 	            }
-	            if (changed) applyTabletSearchValue('');
 	        }
 
 	        function appendTabletKana(group, button) {
