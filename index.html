@@ -9,10 +9,10 @@
     <meta http-equiv="Expires" content="0">
     <title>荷物管理アプリ</title>
     <!-- ===== アプリアイコン設定 ===== -->
-    <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png?v=20260717">
-    <link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png?v=20260717">
-    <link rel="icon" type="image/png" sizes="16x16" href="icons/icon-16.png?v=20260717">
-    <link rel="manifest" href="/manifest.json?v=20260717">
+    <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180-20260717.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32-20260717.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="icons/icon-16-20260717.png">
+    <link rel="manifest" href="/manifest.json?v=20260717b">
     <!-- ===== PWA / Standalone meta for iOS & others ===== -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -3048,10 +3048,67 @@
 	  }
 	  #loading-overlay{
 	    background:#fff !important;
+	    flex-direction:column;
+	    gap:14px;
+	    padding:24px;
+	    box-sizing:border-box;
+	    text-align:center;
 	  }
 	  body.dark-theme #loading-overlay{
 	    background:#111827 !important;
 	    color:#eef6ff;
+	  }
+	  .loading-recovery-panel{
+	    display:none;
+	    width:min(360px, calc(100vw - 40px));
+	    padding:15px;
+	    box-sizing:border-box;
+	    border:1px solid #cbd9e6;
+	    border-radius:8px;
+	    background:#f7fbff;
+	    color:#243746;
+	  }
+	  .loading-recovery-panel.is-visible{
+	    display:block;
+	  }
+	  .loading-recovery-title{
+	    margin:0 0 6px;
+	    font-size:1rem;
+	    font-weight:800;
+	    line-height:1.35;
+	  }
+	  .loading-recovery-note{
+	    margin:0 0 12px;
+	    font-size:0.82rem;
+	    line-height:1.55;
+	    color:#53697b;
+	  }
+	  .loading-recovery-btn{
+	    width:100%;
+	    min-height:46px;
+	    border:1px solid #2072b8;
+	    border-radius:7px;
+	    background:#287fc5;
+	    color:#fff;
+	    font-size:0.95rem;
+	    font-weight:800;
+	    cursor:pointer;
+	    touch-action:manipulation;
+	  }
+	  .loading-recovery-btn:disabled{
+	    opacity:0.68;
+	    cursor:default;
+	  }
+	  body.dark-theme .loading-recovery-panel{
+	    border-color:#456174;
+	    background:#192b38;
+	    color:#f0f7fc;
+	  }
+	  body.dark-theme .loading-recovery-note{
+	    color:#bfd0dc;
+	  }
+	  body.legacy-performance-mode .loading-recovery-panel{
+	    box-shadow:none;
 	  }
 	  .receive-complete-toast{
 	    position:fixed;
@@ -3348,7 +3405,12 @@
 </div>
 
 <div id="loading-overlay" style="display:none; position:fixed; inset:0; top:0; right:0; bottom:0; left:0; background:rgba(255,255,255,0.8); z-index:3000; align-items:center; justify-content:center;">
-  <div>読み込み中...</div>
+  <div id="loading-overlay-message">読み込み中...</div>
+  <div id="loading-recovery-panel" class="loading-recovery-panel" role="status" aria-live="polite">
+    <div class="loading-recovery-title">読み込みに時間がかかっています</div>
+    <p id="loading-recovery-note" class="loading-recovery-note">自動で再接続を試しています。改善しない場合は、このタブを再読み込みしてください。</p>
+    <button id="loading-force-reload-btn" type="button" class="loading-recovery-btn">このタブを再読み込み</button>
+  </div>
 </div>
 
 <div id="receive-complete-toast" class="receive-complete-toast" role="status" aria-live="polite" aria-atomic="true">
@@ -4542,6 +4604,179 @@
         if (tbody) tbody.innerHTML = `<tr><td colspan="6">${message || '読み込み中...'}</td></tr>`;
       } catch(_) {}
     }
+
+	var residentLoadRecoveryState = {
+	  started: false,
+	  ready: false,
+	  reconnecting: false,
+	  ownsOverlay: false,
+	  softTimerId: 0,
+	  buttonTimerId: 0,
+	  reloadStarted: false
+	};
+
+	function clearResidentLoadRecoveryTimers() {
+	  if (residentLoadRecoveryState.softTimerId) window.clearTimeout(residentLoadRecoveryState.softTimerId);
+	  if (residentLoadRecoveryState.buttonTimerId) window.clearTimeout(residentLoadRecoveryState.buttonTimerId);
+	  residentLoadRecoveryState.softTimerId = 0;
+	  residentLoadRecoveryState.buttonTimerId = 0;
+	}
+
+	function hideResidentLoadRecovery() {
+	  var panel = document.getElementById('loading-recovery-panel');
+	  var overlay = document.getElementById('loading-overlay');
+	  var button = document.getElementById('loading-force-reload-btn');
+	  if (panel) panel.classList.remove('is-visible');
+	  if (button) {
+	    button.disabled = false;
+	    button.textContent = 'このタブを再読み込み';
+	  }
+	  if (overlay && residentLoadRecoveryState.ownsOverlay) overlay.style.display = 'none';
+	  residentLoadRecoveryState.ownsOverlay = false;
+	}
+
+	function markResidentDataReady(source) {
+	  if (residentLoadRecoveryState.ready) return;
+	  residentLoadRecoveryState.ready = true;
+	  residentLoadRecoveryState.reconnecting = false;
+	  clearResidentLoadRecoveryTimers();
+	  hideResidentLoadRecovery();
+	  try { sessionStorage.removeItem('residentLoadRecoveryReloadAt'); } catch (_) {}
+	  try { console.log('Resident data ready:', source || 'snapshot'); } catch (_) {}
+	}
+
+	function showResidentLoadRecovery() {
+	  if (residentLoadRecoveryState.ready || residentLoadRecoveryState.reloadStarted) return;
+	  var overlay = document.getElementById('loading-overlay');
+	  var panel = document.getElementById('loading-recovery-panel');
+	  var note = document.getElementById('loading-recovery-note');
+	  if (!overlay || !panel) return;
+	  if (overlay.style.display !== 'flex') {
+	    residentLoadRecoveryState.ownsOverlay = true;
+	    overlay.style.display = 'flex';
+	  }
+	  if (note) {
+	    note.textContent = navigator.onLine === false
+	      ? '現在オフラインです。通信が戻っても改善しない場合は、このタブを再読み込みしてください。'
+	      : '自動で再接続を試しています。改善しない場合は、このタブを再読み込みしてください。';
+	  }
+	  panel.classList.add('is-visible');
+	}
+
+	function restartResidentRealtimeConnection(reason) {
+	  if (residentLoadRecoveryState.ready || residentLoadRecoveryState.reconnecting) return;
+	  residentLoadRecoveryState.reconnecting = true;
+	  try { showResidentLoadingRow('接続をやり直しています...'); } catch (_) {}
+	  try {
+	    if (db && typeof db.enableNetwork === 'function') {
+	      db.enableNetwork().catch(function(error){
+	        console.warn('Firestore enableNetwork recovery failed:', (error && (error.code || error.message)) || error);
+	      });
+	    }
+	  } catch (_) {}
+	  try {
+	    if (currentCollectionName === 'all' && typeof listenToAllCollections === 'function') {
+	      listenToAllCollections();
+	    } else if (typeof listenToCollection === 'function') {
+	      listenToCollection(currentCollectionName || 'residents_shofu');
+	    }
+	  } catch (error) {
+	    console.warn('Resident listener recovery failed:', (error && (error.code || error.message)) || error);
+	  }
+	  try {
+	    if ('serviceWorker' in navigator && typeof navigator.serviceWorker.getRegistration === 'function') {
+	      navigator.serviceWorker.getRegistration('/').then(function(registration){
+	        if (registration && typeof registration.update === 'function') registration.update().catch(function(){});
+	      }).catch(function(){});
+	    }
+	  } catch (_) {}
+	  window.setTimeout(function(){
+	    residentLoadRecoveryState.reconnecting = false;
+	  }, 1800);
+	  try { console.warn('Resident connection recovery:', reason || 'watchdog'); } catch (_) {}
+	}
+
+	function buildForcedReloadUrl() {
+	  var href = String(window.location.href || '');
+	  var hashIndex = href.indexOf('#');
+	  var hash = hashIndex >= 0 ? href.slice(hashIndex) : '';
+	  var withoutHash = hashIndex >= 0 ? href.slice(0, hashIndex) : href;
+	  var queryIndex = withoutHash.indexOf('?');
+	  var base = queryIndex >= 0 ? withoutHash.slice(0, queryIndex) : withoutHash;
+	  var query = queryIndex >= 0 ? withoutHash.slice(queryIndex + 1) : '';
+	  var parts = query ? query.split('&').filter(function(part){
+	    return part && part.split('=')[0] !== 'recovery_reload';
+	  }) : [];
+	  parts.push('recovery_reload=' + String(Date.now()));
+	  return base + '?' + parts.join('&') + hash;
+	}
+
+	function forceReloadCurrentTab() {
+	  if (residentLoadRecoveryState.reloadStarted) return;
+	  residentLoadRecoveryState.reloadStarted = true;
+	  var button = document.getElementById('loading-force-reload-btn');
+	  var message = document.getElementById('loading-overlay-message');
+	  if (button) {
+	    button.disabled = true;
+	    button.textContent = '再読み込み中...';
+	  }
+	  if (message) message.textContent = '接続をリセットしています...';
+	  try { sessionStorage.setItem('residentLoadRecoveryReloadAt', String(Date.now())); } catch (_) {}
+	  var navigated = false;
+	  var navigate = function(){
+	    if (navigated) return;
+	    navigated = true;
+	    window.location.replace(buildForcedReloadUrl());
+	  };
+	  window.setTimeout(navigate, 500);
+	  try {
+	    if ('serviceWorker' in navigator && typeof navigator.serviceWorker.getRegistration === 'function') {
+	      navigator.serviceWorker.getRegistration('/').then(function(registration){
+	        if (registration && typeof registration.update === 'function') {
+	          registration.update().then(navigate, navigate);
+	        } else {
+	          navigate();
+	        }
+	      }, navigate);
+	    } else {
+	      navigate();
+	    }
+	  } catch (_) {
+	    navigate();
+	  }
+	}
+
+	function startResidentLoadRecoveryWatchdog() {
+	  if (residentLoadRecoveryState.started || residentLoadRecoveryState.ready) return;
+	  residentLoadRecoveryState.started = true;
+	  var button = document.getElementById('loading-force-reload-btn');
+	  if (button && !button.dataset.bound) {
+	    button.dataset.bound = '1';
+	    button.addEventListener('click', forceReloadCurrentTab);
+	  }
+	  residentLoadRecoveryState.softTimerId = window.setTimeout(function(){
+	    residentLoadRecoveryState.softTimerId = 0;
+	    restartResidentRealtimeConnection('startup-timeout');
+	  }, 6000);
+	  residentLoadRecoveryState.buttonTimerId = window.setTimeout(function(){
+	    residentLoadRecoveryState.buttonTimerId = 0;
+	    showResidentLoadRecovery();
+	  }, navigator.onLine === false ? 1200 : 12000);
+	}
+
+	window.addEventListener('online', function(){
+	  if (!residentLoadRecoveryState.ready) restartResidentRealtimeConnection('online');
+	});
+	window.addEventListener('pageshow', function(event){
+	  if (!residentLoadRecoveryState.ready && event && event.persisted) {
+	    window.setTimeout(function(){ restartResidentRealtimeConnection('pageshow'); }, 100);
+	  }
+	});
+	document.addEventListener('visibilitychange', function(){
+	  if (document.visibilityState === 'visible' && residentLoadRecoveryState.started && !residentLoadRecoveryState.ready) {
+	    window.setTimeout(function(){ restartResidentRealtimeConnection('visible'); }, 100);
+	  }
+	});
 
     function getElementValueById(id, fallbackValue) {
       var el = document.getElementById(id);
@@ -14499,6 +14734,7 @@ if(elements.changePasswordForm){
             if (unsubscribe) unsubscribe();
 	            unsubscribe = db.collection(collectionName).onSnapshot(snapshot => {
 	                if (document.body.classList.contains('morning-mode')) return;
+	                markResidentDataReady('single-dorm');
 	                const dormKey = collectionName.split('_')[1];
 	                allResidents = snapshot.docs.map(doc => mergeResidentDocData(doc, dormKey));
 	                setCrossDormSearchCache(dormKey, allResidents);
@@ -14562,6 +14798,7 @@ if(elements.changePasswordForm){
             }, error => {
                 console.error("データの読み込みに失敗しました:", error);
                 showResidentLoadingRow('寮生の読み込みに失敗しました。通信状態を確認して再読み込みしてください。');
+	                showResidentLoadRecovery();
             });
         }
         
@@ -14581,9 +14818,12 @@ if(elements.changePasswordForm){
 
             let shofuDocs = [];
             let meizenDocs = [];
+	            let shofuLoaded = false;
+	            let meizenLoaded = false;
 
 	            const renderMerged = () => {
 	                if (document.body.classList.contains('morning-mode')) return;
+	                if (shofuLoaded && meizenLoaded) markResidentDataReady('both-dorms');
 	                const shofuResidents = shofuDocs.map(function(doc){
 	                    return mergeResidentDocData(doc, 'shofu');
 	                });
@@ -14598,18 +14838,22 @@ if(elements.changePasswordForm){
 
             const unsubShofu = shofuRef.onSnapshot(snap => {
                 shofuDocs = snap.docs;
+	                shofuLoaded = true;
                 renderMerged();
             }, error => {
                 console.error('shofu listen failed', error);
                 showResidentLoadingRow('松風寮の読み込みに失敗しました。通信状態を確認して再読み込みしてください。');
+	                showResidentLoadRecovery();
             });
 
             const unsubMeizen = meizenRef.onSnapshot(snap => {
                 meizenDocs = snap.docs;
+	                meizenLoaded = true;
                 renderMerged();
             }, error => {
                 console.error('meizen listen failed', error);
                 showResidentLoadingRow('明善寮の読み込みに失敗しました。通信状態を確認して再読み込みしてください。');
+	                showResidentLoadRecovery();
             });
 
             // unify into one unsubscribe
@@ -15764,6 +16008,7 @@ if(elements.changePasswordForm){
         
         const savedDorm = normalizeDormSelectionValue(localStorage.getItem('currentDorm') || 'all');
         switchDorm(savedDorm);
+	        startResidentLoadRecoveryWatchdog();
         
 	        elements.dormSelector.addEventListener('click', (e) => {
 	            if(e.target.tagName === 'BUTTON') switchDorm(e.target.dataset.dorm);
