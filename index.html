@@ -61,9 +61,10 @@
         h1 { text-align: center; color: var(--header-text); border-bottom: 2px solid var(--header-border); padding-bottom: 10px; margin: 0; flex-grow: 1; }
         .header-buttons { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
         .header-btn { padding: 6px 12px; font-size: 12px; font-weight: bold; color: white; border: none; border-radius: 5px; cursor: pointer; white-space: nowrap; }
-        /* 管理者以外には操作履歴ボタンを非表示 */
+        /* 操作履歴は管理者、または庶務モード中に表示 */
         #log-view-btn{ display:none; }
-        body.admin-logged-in #log-view-btn{ display:inline-block; }
+        body.admin-logged-in #log-view-btn,
+        body:not(.sohmu-off) #log-view-btn{ display:inline-block; }
         #change-password-btn{ display:none; }
         body.admin-logged-in #change-password-btn{ display:inline-block; }
         #admin-message-btn{ display:none; }
@@ -101,9 +102,55 @@
         .modal-close-btn{
             background:none; border:none; font-size:24px; cursor:pointer; color:var(--text-color);
         }
-        #log-list{ list-style:none; padding:0; margin:0; }
-        #log-list li{ padding:6px 0; border-bottom:1px solid var(--border-color); font-size:.9rem; }
-        #log-list .log-time{ display:block; font-size:.75rem; color:#7f8c8d; }
+        .log-modal-content{ width:min(94vw, 720px); max-width:720px; max-height:90vh; }
+        .log-toolbar{
+          display:grid;
+          grid-template-columns:minmax(0, 1fr) 140px 120px;
+          gap:8px;
+          margin-bottom:10px;
+        }
+        .log-toolbar input,
+        .log-toolbar select{
+          width:100%;
+          min-height:42px;
+          box-sizing:border-box;
+          padding:8px 10px;
+          border:1px solid var(--border-color);
+          border-radius:7px;
+          background:var(--controls-bg);
+          color:var(--text-color);
+          font:inherit;
+        }
+        .log-result-summary{ min-height:1.4em; margin:0 0 8px; color:var(--secondary-text); font-size:.78rem; }
+        #log-list{ list-style:none; padding:0; margin:0; display:grid; gap:8px; }
+        #log-list li{
+          padding:11px 12px;
+          border:1px solid var(--border-color);
+          border-radius:8px;
+          background:var(--controls-bg);
+          font-size:.9rem;
+        }
+        .log-entry-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:7px; }
+        .log-action-badge{ font-weight:900; color:var(--header-text); }
+        #log-list .log-time{ flex:0 0 auto; font-size:.76rem; font-weight:700; color:#667786; white-space:nowrap; }
+        .log-entry-details{ line-height:1.5; overflow-wrap:anywhere; }
+        .log-entry-meta{ display:flex; flex-wrap:wrap; gap:5px; margin-top:7px; }
+        .log-meta-badge{
+          display:inline-flex;
+          padding:2px 7px;
+          border-radius:999px;
+          background:rgba(52,152,219,.12);
+          color:#245f8a;
+          font-size:.7rem;
+          font-weight:800;
+        }
+        body.dark-theme .log-meta-badge{ background:rgba(93,173,226,.18); color:#bde3ff; }
+        .log-empty{ text-align:center; color:var(--secondary-text); }
+        @media(max-width:600px){
+          .log-toolbar{ grid-template-columns:1fr 1fr; }
+          .log-toolbar input{ grid-column:1 / -1; }
+          .log-entry-head{ align-items:flex-start; }
+        }
         
         .controls-container {
             display: flex; flex-direction: column; gap: 15px; padding: 15px; margin: 20px 0 10px 0;
@@ -426,6 +473,19 @@
 	          backdrop-filter:none;
 	          -webkit-backdrop-filter:none;
 	        }
+	        .workflow-history-btn{
+	          display:none;
+	          min-height:34px;
+	          padding:6px 10px;
+	          border:1px solid rgba(52,152,219,.28);
+	          border-radius:7px;
+	          background:#247fc8;
+	          color:#fff;
+	          font-size:.78rem;
+	          font-weight:900;
+	          cursor:pointer;
+	        }
+	        body:not(.sohmu-off) .workflow-history-btn{ display:inline-flex; align-items:center; }
         .workflow-sohmu-switch-wrap .switch{
           margin-left:0 !important;
         }
@@ -3479,6 +3539,7 @@
 
 <div id="workflow-home-screen" class="workflow-home-screen" aria-live="polite">
   <div class="workflow-sohmu-switch-wrap">
+    <button id="workflow-log-view-btn" type="button" class="workflow-history-btn">履歴</button>
     <label class="switch">
       <input type="checkbox" id="workflow-sohmu-toggle" checked>
       <span class="slider round"></span>
@@ -3504,7 +3565,7 @@
     <div class="header-area">
         <h1>荷物管理アプリ</h1>
         <div class="header-buttons">
-            <button id="log-view-btn" class="header-btn" style="background:#8e44ad;">履歴</button>
+            <button id="log-view-btn" class="header-btn" style="background:#8e44ad;">全体履歴</button>
             <button id="admin-message-btn" class="header-btn" style="background:#2c7fb8;">メッセージ</button>
             <button id="change-password-btn" class="header-btn" style="background:#16a085;">パスワード変更</button>
             <button id="admin-logout-btn" class="header-btn" type="button" style="background:#e74c3c;">ログアウト</button>
@@ -3889,11 +3950,27 @@
 
 <!-- ==== 操作履歴モーダル ==== -->
 <div id="log-modal" class="modal-overlay">
-  <div class="modal-content">
+  <div class="modal-content log-modal-content">
     <div class="modal-header">
-      <h2>受け取り・個数変更の履歴</h2>
+      <h2 id="log-modal-title">受け取り・個数変更の履歴</h2>
       <button id="modal-close-btn" class="modal-close-btn">&times;</button>
     </div>
+    <div class="log-toolbar">
+      <input id="log-search-input" type="search" autocomplete="off" enterkeyhint="search" placeholder="名前・操作内容・日時で検索">
+      <select id="log-type-filter" aria-label="履歴の種類">
+        <option value="all">すべての種類</option>
+        <option value="luggage">荷物</option>
+        <option value="mail">郵便</option>
+        <option value="receive">受け取り</option>
+        <option value="morning">朝の庶務</option>
+      </select>
+      <select id="log-dorm-filter" aria-label="寮で絞り込み">
+        <option value="all">両寮</option>
+        <option value="shofu">松風寮</option>
+        <option value="meizen">明善寮</option>
+      </select>
+    </div>
+    <p id="log-result-summary" class="log-result-summary" aria-live="polite"></p>
     <ul id="log-list"></ul>
   </div>
 </div>
@@ -7339,12 +7416,13 @@ function unifiedConfirm(action){
 
   document.addEventListener('click', (ev) => {
     // 「履歴」ボタンが押されたときにモーダルを開く
-    const openBtn = ev.target && ev.target.closest && ev.target.closest('#log-view-btn');
+    const openBtn = ev.target && ev.target.closest && ev.target.closest('#log-view-btn, #workflow-log-view-btn');
     if (openBtn) {
       ev.preventDefault();
-      if (!document.body.classList.contains('admin-logged-in')) {
-        // 念のため：管理者ログインしていないときは何もしない
-        alert('管理者ログインすると履歴を表示できます。');
+      const canView = document.body.classList.contains('admin-logged-in') ||
+        !document.body.classList.contains('sohmu-off');
+      if (!canView) {
+        alert('履歴は庶務モード中、または管理者ログイン中に表示できます。');
         return;
       }
       openLogModal();
@@ -15418,31 +15496,116 @@ if(elements.changePasswordForm){
 	        }
         
 
+	        let logDocsCache = [];
+
+	        function canViewGlobalHistory(){
+	          return document.body.classList.contains('admin-logged-in') ||
+	            !document.body.classList.contains('sohmu-off');
+	        }
+
+	        function getLogDorm(data){
+	          const d = data || {};
+	          if (d.dorm === 'shofu' || d.dorm === 'meizen') return d.dorm;
+	          if (d.operatorDorm === 'shofu' || d.operatorDorm === 'meizen') return d.operatorDorm;
+	          const match = String(d.details || '').match(/\[(shofu|meizen)\]/i);
+	          return match ? match[1].toLowerCase() : '';
+	        }
+
+	        function getLogDormLabel(dorm){
+	          if (dorm === 'shofu') return '松風寮';
+	          if (dorm === 'meizen') return '明善寮';
+	          return '';
+	        }
+
+	        function cleanGlobalLogDetails(details){
+	          return String(details || '')
+	            .replace(/\[(?:shofu|meizen)\]\s*/gi, '')
+	            .replace(/^\s+|\s+$/g, '');
+	        }
+
+	        function getLogTypeFlags(data){
+	          const d = data || {};
+	          const details = String(d.details || '');
+	          const items = d.items || {};
+	          return {
+	            luggage: d.itemType === 'luggage' || Number(items.luggage || 0) > 0 || details.indexOf('荷物') !== -1,
+	            mail: d.itemType === 'mail' || Number(items.mail || 0) > 0 || details.indexOf('郵便') !== -1,
+	            receive: d.action === '受け取り',
+	            morning: String(d.action || '').indexOf('朝の庶務') === 0
+	          };
+	        }
+
+	        function isHistoryVisibleToCurrentViewer(data){
+	          const d = data || {};
+	          if (!isTrackedHistoryAction(d.action)) return false;
+	          if (d.historySource === 'morning' && !d.historyCommitId && Number(d.historyConsistencyVersion || 0) < 2) return false;
+	          if (!document.body.classList.contains('admin-logged-in')) {
+	            return d.action === '受け取り' || d.action === '個数変更';
+	          }
+	          return true;
+	        }
+
+	        function matchesGlobalHistoryFilters(data){
+	          const searchInput = document.getElementById('log-search-input');
+	          const typeFilter = document.getElementById('log-type-filter');
+	          const dormFilter = document.getElementById('log-dorm-filter');
+	          const query = String(searchInput && searchInput.value || '').toLowerCase().replace(/\s+/g, '');
+	          const type = String(typeFilter && typeFilter.value || 'all');
+	          const dorm = getLogDorm(data);
+	          if (dormFilter && dormFilter.value !== 'all' && dorm !== dormFilter.value) return false;
+	          const flags = getLogTypeFlags(data);
+	          if (type !== 'all' && !flags[type]) return false;
+	          if (!query) return true;
+	          const searchable = [
+	            data.action,
+	            cleanGlobalLogDetails(data.details),
+	            data.residentName,
+	            data.operatorName,
+	            getLogDormLabel(dorm),
+	            formatHistoryTimestamp(data.timestamp),
+	            flags.luggage ? '荷物' : '',
+	            flags.mail ? '郵便' : ''
+	          ].join(' ').toLowerCase().replace(/\s+/g, '');
+	          return searchable.indexOf(query) !== -1;
+	        }
+
 	        function renderLogs(snapshot){
-	            const list = document.getElementById('log-list');
-	            const docs = snapshot && snapshot.docs
-	              ? snapshot.docs.filter(function(doc){
-	                  const data = doc.data() || {};
-	                  if (!isTrackedHistoryAction(data.action)) return false;
-	                  return !(data.historySource === 'morning' && !data.historyCommitId && Number(data.historyConsistencyVersion || 0) < 2);
-	                })
-	              : [];
-            if(!docs.length){
-                list.innerHTML = '<li>履歴はありません。</li>';
-                return;
-            }
-	            const fragment = document.createDocumentFragment();
-	            docs.forEach(doc=>{
-	                const d = doc.data() || {};
-	                const date = formatHistoryTimestamp(d.timestamp);
-	                const li = document.createElement('li');
-	                const action = escapeHtml(d.action || '履歴');
-	                const details = escapeHtml(d.details || '');
-	                li.innerHTML = `<strong>${action}</strong><br>${details}<span class="log-time">${date}</span>`;
-	                fragment.appendChild(li);
-	            });
-	            list.innerHTML = '';
-	            list.appendChild(fragment);
+	          const list = document.getElementById('log-list');
+	          const summary = document.getElementById('log-result-summary');
+	          if (!list) return;
+	          if (snapshot && snapshot.docs) {
+	            logDocsCache = snapshot.docs.map(function(doc){ return { id: doc.id, data: doc.data() || {} }; });
+	          }
+	          const permitted = logDocsCache.map(function(item){ return item.data; }).filter(isHistoryVisibleToCurrentViewer);
+	          const visible = permitted.filter(matchesGlobalHistoryFilters);
+	          if (summary) summary.textContent = visible.length + '件表示 / 全' + permitted.length + '件';
+	          if (!visible.length) {
+	            list.innerHTML = '<li class="log-empty">条件に一致する履歴はありません。</li>';
+	            return;
+	          }
+	          const fragment = document.createDocumentFragment();
+	          visible.forEach(function(d){
+	            const dorm = getLogDorm(d);
+	            const flags = getLogTypeFlags(d);
+	            const meta = [];
+	            const dormLabel = getLogDormLabel(dorm);
+	            if (dormLabel) meta.push(dormLabel);
+	            if (flags.luggage) meta.push('荷物');
+	            if (flags.mail) meta.push('郵便');
+	            const li = document.createElement('li');
+	            li.className = 'log-entry';
+	            li.innerHTML = `
+	              <div class="log-entry-head">
+	                <span class="log-action-badge">${escapeHtml(d.action || '履歴')}</span>
+	                <span class="log-time">${escapeHtml(formatHistoryTimestamp(d.timestamp))}</span>
+	              </div>
+	              <div class="log-entry-details">${escapeHtml(cleanGlobalLogDetails(d.details) || '詳細なし')}</div>
+	              ${meta.length ? '<div class="log-entry-meta">' + meta.map(function(label){ return '<span class="log-meta-badge">' + escapeHtml(label) + '</span>'; }).join('') + '</div>' : ''}
+	            `;
+	            fragment.appendChild(li);
+	          });
+	          list.innerHTML = '';
+	          list.appendChild(fragment);
 	        }
 
         // ===== お知らせリストを現在の管理者状態で再描画 =====
@@ -15453,12 +15616,28 @@ if(elements.changePasswordForm){
         }
 
         function showLogModal(){
-            if (!document.body.classList.contains('admin-logged-in')) {
-                alert('管理者ログインすると履歴を表示できます。');
-                return;
-            }
-            elements.logModal.classList.add('active');
-            document.getElementById('log-list').innerHTML = '<li>読み込み中...</li>';
+	            if (!canViewGlobalHistory()) {
+	                alert('履歴は庶務モード中、または管理者ログイン中に表示できます。');
+	                return;
+	            }
+	            const searchInput = document.getElementById('log-search-input');
+	            const typeFilter = document.getElementById('log-type-filter');
+	            const dormFilter = document.getElementById('log-dorm-filter');
+	            const modalTitle = document.getElementById('log-modal-title');
+	            const isAdminViewer = document.body.classList.contains('admin-logged-in');
+	            if (modalTitle) modalTitle.textContent = isAdminViewer ? '全体の操作履歴' : '受け取り・個数変更の履歴';
+	            if (searchInput) searchInput.value = '';
+	            if (typeFilter) {
+	              typeFilter.value = 'all';
+	              const morningOption = typeFilter.querySelector('option[value="morning"]');
+	              if (morningOption) {
+	                morningOption.hidden = !isAdminViewer;
+	                morningOption.disabled = !isAdminViewer;
+	              }
+	            }
+	            if (dormFilter) dormFilter.value = 'all';
+	            elements.logModal.classList.add('active');
+	            document.getElementById('log-list').innerHTML = '<li>読み込み中...</li>';
             if(logUnsubscribe) logUnsubscribe();
             logUnsubscribe = db.collection('logs')
                   .orderBy('timestamp','desc')
@@ -15476,6 +15655,13 @@ if(elements.changePasswordForm){
 
         window.showHistoryModal = showLogModal;
         window.hideHistoryModal = hideLogModal;
+
+	        ['log-search-input', 'log-type-filter', 'log-dorm-filter'].forEach(function(id){
+	          const control = document.getElementById(id);
+	          if (!control || control.dataset.historyFilterBound) return;
+	          control.dataset.historyFilterBound = '1';
+	          control.addEventListener(id === 'log-search-input' ? 'input' : 'change', function(){ renderLogs(); });
+	        });
 
 
         // async function fetchLogs() {
