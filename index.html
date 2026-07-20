@@ -102,8 +102,11 @@
         .modal-close-btn{
             background:none; border:none; font-size:24px; cursor:pointer; color:var(--text-color);
         }
-        .log-modal-content{ width:min(94vw, 720px); max-width:720px; max-height:90vh; }
+        #log-modal{ z-index:2800; }
+        .log-modal-content{ width:94vw; max-width:720px; max-height:90vh; box-sizing:border-box; }
         .log-toolbar{
+          display:flex;
+          flex-wrap:wrap;
           display:grid;
           grid-template-columns:minmax(0, 1fr) 140px 120px;
           gap:8px;
@@ -121,6 +124,8 @@
           color:var(--text-color);
           font:inherit;
         }
+        .log-toolbar input{ flex:1 1 100%; }
+        .log-toolbar select{ flex:1 1 130px; }
         .log-result-summary{ min-height:1.4em; margin:0 0 8px; color:var(--secondary-text); font-size:.78rem; }
         #log-list{ list-style:none; padding:0; margin:0; display:grid; gap:8px; }
         #log-list li{
@@ -12399,6 +12404,13 @@ function closeWorkflowTransientViews() {
   try { closeReceiveModal(); } catch(_) {}
   try { closeMobileCountEditModal(); } catch(_) {}
   try { closeItemHistoryModal(); } catch(_) {}
+  try {
+    if (typeof window.hideHistoryModal === 'function') window.hideHistoryModal();
+    else {
+      const logModal = document.getElementById('log-modal');
+      if (logModal) logModal.classList.remove('active');
+    }
+  } catch(_) {}
 }
 
 	function setWorkflowSohmuOn() {
@@ -15629,11 +15641,6 @@ if(elements.changePasswordForm){
 	            if (searchInput) searchInput.value = '';
 	            if (typeFilter) {
 	              typeFilter.value = 'all';
-	              const morningOption = typeFilter.querySelector('option[value="morning"]');
-	              if (morningOption) {
-	                morningOption.hidden = !isAdminViewer;
-	                morningOption.disabled = !isAdminViewer;
-	              }
 	            }
 	            if (dormFilter) dormFilter.value = 'all';
 	            elements.logModal.classList.add('active');
