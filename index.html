@@ -1794,6 +1794,26 @@
           cursor:pointer;
         }
         .announcement-list-toggle.is-visible{ display:block; }
+        .announcement-notify-option{
+          display:flex;
+          align-items:center;
+          justify-content:space-between;
+          gap:14px;
+          padding:12px 14px;
+          border:1px solid var(--border-color);
+          border-radius:8px;
+          background:var(--controls-bg);
+          cursor:pointer;
+        }
+        .announcement-notify-option[hidden]{ display:none !important; }
+        .announcement-notify-copy{
+          display:flex;
+          flex-direction:column;
+          gap:3px;
+          min-width:0;
+        }
+        .announcement-notify-copy strong{ color:var(--header-text); font-size:14px; }
+        .announcement-notify-copy span{ color:var(--secondary-text); font-size:12px; line-height:1.4; }
         .announcement-list li{
           border-bottom:1px solid var(--border-color);
           padding:0;                /* ぴったり詰める */
@@ -4024,6 +4044,18 @@
       <div class="form-group">
         <label for="post-body">本文</label>
         <textarea id="post-body" rows="6" placeholder="本文を入力（改行可）"></textarea>
+      </div>
+      <div class="form-group">
+        <label id="post-notify-option" class="announcement-notify-option" for="post-notify-toggle">
+          <span class="announcement-notify-copy">
+            <strong>みんなに通知する</strong>
+            <span>オフにすると、お知らせの掲載だけ行います。</span>
+          </span>
+          <span class="notification-switch">
+            <input id="post-notify-toggle" type="checkbox" checked>
+            <span class="notification-switch-slider"></span>
+          </span>
+        </label>
       </div>
       <div class="form-group">
         <label for="post-color-hex-input">文字色</label>
@@ -7735,6 +7767,8 @@ function unifiedConfirm(action){
     const modal = document.getElementById('post-announcement-modal');
     const titleInput = document.getElementById('post-title');
     const bodyInput = document.getElementById('post-body');
+    const notifyOption = document.getElementById('post-notify-option');
+    const notifyToggle = document.getElementById('post-notify-toggle');
     const modalTitle = document.querySelector('#post-announcement-modal h2');
     const submitBtn = document.querySelector('#post-announcement-form button[type="submit"]');
     if (!modal || !titleInput || !bodyInput || !modalTitle || !submitBtn) return;
@@ -7747,6 +7781,8 @@ function unifiedConfirm(action){
     submitBtn.textContent = composerState.editingId ? '更新' : '投稿';
     titleInput.value = htmlToComposerMarkup(data.title || '');
     bodyInput.value = htmlToComposerMarkup(data.body || '');
+    if (notifyOption) notifyOption.hidden = !!composerState.editingId;
+    if (notifyToggle) notifyToggle.checked = composerState.editingId ? data.sendNotification !== false : true;
     setComposerSelectedColor(data.color || '');
     modal.classList.add('active');
     setComposerTarget(bodyInput);
@@ -7759,11 +7795,15 @@ function unifiedConfirm(action){
     const modal = document.getElementById('post-announcement-modal');
     const titleInput = document.getElementById('post-title');
     const bodyInput = document.getElementById('post-body');
+    const notifyOption = document.getElementById('post-notify-option');
+    const notifyToggle = document.getElementById('post-notify-toggle');
     if (modal) modal.classList.remove('active');
     composerState.editingId = null;
     composerState.saving = false;
     if (titleInput) titleInput.value = '';
     if (bodyInput) bodyInput.value = '';
+    if (notifyOption) notifyOption.hidden = false;
+    if (notifyToggle) notifyToggle.checked = true;
     setComposerSelectedColor('');
     refreshComposerPreview();
     setComposerTarget(bodyInput);
@@ -8011,6 +8051,7 @@ function unifiedConfirm(action){
 
       const titleInput = document.getElementById('post-title');
       const bodyInput  = document.getElementById('post-body');
+      const notifyToggle = document.getElementById('post-notify-toggle');
       const submitBtn = document.querySelector('#post-announcement-form button[type="submit"]');
       const titleRaw = (titleInput && titleInput.value || '').trim();
       const bodyRaw  = (bodyInput && bodyInput.value  || '').trim();
@@ -8037,6 +8078,7 @@ function unifiedConfirm(action){
           await db.collection(COL).doc(composerState.editingId).set(payload, { merge:true });
         } else {
           payload.pinned = false;
+          payload.sendNotification = !notifyToggle || notifyToggle.checked;
           payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
           payload.timestamp = firebase.firestore.FieldValue.serverTimestamp();
           await db.collection(COL).add(payload);
