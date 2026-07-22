@@ -1179,6 +1179,11 @@
 	          box-shadow: none;
 	          cursor: not-allowed;
 	        }
+	        .off-receive-btn.is-empty {
+	          background: #bdc3c7;
+	          box-shadow: none;
+	          cursor: pointer;
+	        }
         .receive-modal-content {
           max-width: 560px;
         }
@@ -15746,7 +15751,7 @@ if(elements.changePasswordForm){
 	                              </div>
 	                              ${offNoteAreaHtml}
 	                              <div class="off-mode-actions">
-	                                <button type="button" class="off-receive-btn" data-resident-id="${resident.id}" ${hasReceivableItems ? '' : 'disabled'}>受け取る</button>
+	                                <button type="button" class="off-receive-btn${hasReceivableItems ? '' : ' is-empty'}" data-resident-id="${resident.id}">受け取る</button>
                               </div>
                             </div>
                           </td>
