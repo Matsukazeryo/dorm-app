@@ -79,10 +79,6 @@
             opacity:.65;
             cursor:wait;
         }
-        body.admin-auth-busy #loading-overlay{
-            display:flex !important;
-        }
-
         /* ==== 操作履歴モーダル ==== */
         .modal-overlay{
             position:fixed; inset:0; top:0; right:0; bottom:0; left:0;
@@ -4483,10 +4479,16 @@
 	    try { window.db = db; } catch(_){ }
 	    // Enable local persistence (multi-tab safe)
     try {
-      if (db && typeof db.enablePersistence === 'function') {
+      var disablePersistenceForRecovery = false;
+      try {
+        disablePersistenceForRecovery = sessionStorage.getItem('disableFirestorePersistenceForSession') === '1';
+      } catch(_) {}
+      if (!disablePersistenceForRecovery && db && typeof db.enablePersistence === 'function') {
         db.enablePersistence({ synchronizeTabs: true }).catch(function(e){
           console.warn('enablePersistence warning:', (e && (e.code || e.message)) || e);
         });
+	      } else if (disablePersistenceForRecovery) {
+	        console.warn('Firestore persistence skipped for this recovered tab session.');
       }
 	    } catch (e) {
 	      console.warn('enablePersistence failed:', (e && (e.code || e.message)) || e);
@@ -4773,18 +4775,167 @@
 
     function showResidentLoadingRow(message){
       try {
+        window.__residentTableLastSignature = '';
         const tbody = document.querySelector('#resident-table tbody');
         if (tbody) tbody.innerHTML = `<tr><td colspan="6">${message || '読み込み中...'}</td></tr>`;
       } catch(_) {}
     }
 
+	/*
+	 * 全画面の読み込み表示は複数機能で共有するため、直接 display を切り替えない。
+	 * 処理ごとに所有権を持たせることで、別処理の終了が表示を消したり残したりする競合を防ぐ。
+	 */
+	var appLoadingOverlayState = {
+	  owners: Object.create(null),
+	  timeoutIds: Object.create(null),
+	  recoveryTimerIds: Object.create(null),
+	  sequence: 0
+	};
+
+	function getLatestAppLoadingOwner(){
+	  var latest = null;
+	  var keys = Object.keys(appLoadingOverlayState.owners);
+	  for (var i = 0; i < keys.length; i += 1) {
+	    var entry = appLoadingOverlayState.owners[keys[i]];
+	    if (entry && (!latest || entry.sequence > latest.sequence)) latest = entry;
+	  }
+	  return latest;
+	}
+
+	function hideAppLoadingRecoveryForOwner(owner){
+	  var panel = document.getElementById('loading-recovery-panel');
+	  if (!panel) return;
+	  var panelOwner = panel.getAttribute('data-loading-owner') || '';
+	  if (owner && panelOwner && panelOwner !== owner) return;
+	  panel.classList.remove('is-visible');
+	  panel.removeAttribute('data-loading-owner');
+	}
+
+	function showAppLoadingRecoveryForOwner(owner, noteText){
+	  if (!appLoadingOverlayState.owners[owner]) return;
+	  var panel = document.getElementById('loading-recovery-panel');
+	  var note = document.getElementById('loading-recovery-note');
+	  var button = document.getElementById('loading-force-reload-btn');
+	  if (!panel) return;
+	  panel.setAttribute('data-loading-owner', owner);
+	  if (note) {
+	    note.textContent = noteText || (navigator.onLine === false
+	      ? '現在オフラインです。通信が戻っても改善しない場合は、このタブを再読み込みしてください。'
+	      : '自動で復旧を試しています。改善しない場合は、このタブを再読み込みしてください。');
+	  }
+	  if (button && !button.dataset.bound) {
+	    button.dataset.bound = '1';
+	    button.addEventListener('click', forceReloadCurrentTab);
+	  }
+	  panel.classList.add('is-visible');
+	}
+
+	function syncAppLoadingOverlay(){
+	  var overlay = document.getElementById('loading-overlay');
+	  if (!overlay) return;
+	  var latest = getLatestAppLoadingOwner();
+	  var message = document.getElementById('loading-overlay-message');
+	  if (latest) {
+	    if (message) message.textContent = latest.label || '読み込み中...';
+	    if (overlay.style.display !== 'flex') overlay.style.display = 'flex';
+	  } else {
+	    hideAppLoadingRecoveryForOwner('');
+	    if (message) message.textContent = '読み込み中...';
+	    if (overlay.style.display !== 'none') overlay.style.display = 'none';
+	  }
+	  try {
+	    if (typeof schedulePageScrollLockSync === 'function') schedulePageScrollLockSync();
+	  } catch(_) {}
+	}
+
+	function clearAppLoadingTimers(owner){
+	  if (appLoadingOverlayState.timeoutIds[owner]) {
+	    window.clearTimeout(appLoadingOverlayState.timeoutIds[owner]);
+	    delete appLoadingOverlayState.timeoutIds[owner];
+	  }
+	  if (appLoadingOverlayState.recoveryTimerIds[owner]) {
+	    window.clearTimeout(appLoadingOverlayState.recoveryTimerIds[owner]);
+	    delete appLoadingOverlayState.recoveryTimerIds[owner];
+	  }
+	}
+
+	function setAppLoading(owner, visible, options){
+	  owner = String(owner || 'default');
+	  options = options || {};
+	  clearAppLoadingTimers(owner);
+	  if (!visible) {
+	    delete appLoadingOverlayState.owners[owner];
+	    hideAppLoadingRecoveryForOwner(owner);
+	    syncAppLoadingOverlay();
+	    return;
+	  }
+
+	  var timeoutMs = Math.max(0, Number(options.timeoutMs || 0));
+	  var entry = {
+	    owner: owner,
+	    label: options.label || '読み込み中...',
+	    sequence: ++appLoadingOverlayState.sequence,
+	    transient: options.transient === true,
+	    expiresAt: timeoutMs ? Date.now() + timeoutMs : 0,
+	    onTimeout: typeof options.onTimeout === 'function' ? options.onTimeout : null
+	  };
+	  appLoadingOverlayState.owners[owner] = entry;
+	  syncAppLoadingOverlay();
+
+	  if (timeoutMs) {
+	    appLoadingOverlayState.timeoutIds[owner] = window.setTimeout(function(){
+	      var current = appLoadingOverlayState.owners[owner];
+	      if (current !== entry) return;
+	      delete appLoadingOverlayState.timeoutIds[owner];
+	      delete appLoadingOverlayState.owners[owner];
+	      hideAppLoadingRecoveryForOwner(owner);
+	      syncAppLoadingOverlay();
+	      try { if (entry.onTimeout) entry.onTimeout(); } catch(_) {}
+	      try { console.warn('Loading overlay safety timeout:', owner); } catch(_) {}
+	    }, timeoutMs);
+	  }
+
+	  var recoveryAfterMs = Math.max(0, Number(options.recoveryAfterMs || 0));
+	  if (recoveryAfterMs) {
+	    appLoadingOverlayState.recoveryTimerIds[owner] = window.setTimeout(function(){
+	      delete appLoadingOverlayState.recoveryTimerIds[owner];
+	      if (appLoadingOverlayState.owners[owner] !== entry) return;
+	      showAppLoadingRecoveryForOwner(owner, options.recoveryNote || '処理に時間がかかっています。改善しない場合は、このタブを再読み込みしてください。');
+	    }, recoveryAfterMs);
+	  }
+	}
+
+	function clearExpiredTransientAppLoading(){
+	  var now = Date.now();
+	  var changed = false;
+	  var keys = Object.keys(appLoadingOverlayState.owners);
+	  for (var i = 0; i < keys.length; i += 1) {
+	    var owner = keys[i];
+	    var entry = appLoadingOverlayState.owners[owner];
+	    if (!entry || !entry.transient || !entry.expiresAt || entry.expiresAt > now) continue;
+	    clearAppLoadingTimers(owner);
+	    delete appLoadingOverlayState.owners[owner];
+	    hideAppLoadingRecoveryForOwner(owner);
+	    try { if (entry.onTimeout) entry.onTimeout(); } catch(_) {}
+	    changed = true;
+	  }
+	  if (changed) syncAppLoadingOverlay();
+	}
+
+	window.addEventListener('pageshow', function(){
+	  window.setTimeout(clearExpiredTransientAppLoading, 0);
+	});
+	document.addEventListener('visibilitychange', function(){
+	  if (document.visibilityState === 'visible') clearExpiredTransientAppLoading();
+	});
+
 	var residentLoadRecoveryState = {
 	  started: false,
 	  ready: false,
 	  reconnecting: false,
-	  ownsOverlay: false,
 	  softTimerId: 0,
 	  buttonTimerId: 0,
+	  retryAttempt: 0,
 	  reloadStarted: false
 	};
 
@@ -4796,22 +4947,32 @@
 	}
 
 	function hideResidentLoadRecovery() {
-	  var panel = document.getElementById('loading-recovery-panel');
-	  var overlay = document.getElementById('loading-overlay');
 	  var button = document.getElementById('loading-force-reload-btn');
-	  if (panel) panel.classList.remove('is-visible');
 	  if (button) {
 	    button.disabled = false;
 	    button.textContent = 'このタブを再読み込み';
 	  }
-	  if (overlay && residentLoadRecoveryState.ownsOverlay) overlay.style.display = 'none';
-	  residentLoadRecoveryState.ownsOverlay = false;
+	  setAppLoading('resident-data', false);
+	}
+
+	function markResidentDataPending(reason) {
+	  if (residentLoadRecoveryState.reloadStarted) return;
+	  residentLoadRecoveryState.ready = false;
+	  residentLoadRecoveryState.reconnecting = false;
+	  residentLoadRecoveryState.started = false;
+	  residentLoadRecoveryState.retryAttempt = 0;
+	  clearResidentLoadRecoveryTimers();
+	  hideResidentLoadRecovery();
+	  startResidentLoadRecoveryWatchdog();
+	  try { console.log('Resident data pending:', reason || 'subscription'); } catch (_) {}
 	}
 
 	function markResidentDataReady(source) {
 	  if (residentLoadRecoveryState.ready) return;
+	  try { residentListenerFailed = false; } catch(_) {}
 	  residentLoadRecoveryState.ready = true;
 	  residentLoadRecoveryState.reconnecting = false;
+	  residentLoadRecoveryState.retryAttempt = 0;
 	  clearResidentLoadRecoveryTimers();
 	  hideResidentLoadRecovery();
 	  try { sessionStorage.removeItem('residentLoadRecoveryReloadAt'); } catch (_) {}
@@ -4820,26 +4981,20 @@
 
 	function showResidentLoadRecovery() {
 	  if (residentLoadRecoveryState.ready || residentLoadRecoveryState.reloadStarted) return;
-	  var overlay = document.getElementById('loading-overlay');
-	  var panel = document.getElementById('loading-recovery-panel');
-	  var note = document.getElementById('loading-recovery-note');
-	  if (!overlay || !panel) return;
-	  if (overlay.style.display !== 'flex') {
-	    residentLoadRecoveryState.ownsOverlay = true;
-	    overlay.style.display = 'flex';
-	  }
-	  if (note) {
-	    note.textContent = navigator.onLine === false
-	      ? '現在オフラインです。通信が戻っても改善しない場合は、このタブを再読み込みしてください。'
-	      : '自動で再接続を試しています。改善しない場合は、このタブを再読み込みしてください。';
-	  }
-	  panel.classList.add('is-visible');
+	  setAppLoading('resident-data', true, { label: '寮生情報を読み込んでいます...' });
+	  showAppLoadingRecoveryForOwner('resident-data', navigator.onLine === false
+	    ? '現在オフラインです。通信が戻っても改善しない場合は、このタブを再読み込みしてください。'
+	    : '自動で再接続を試しています。改善しない場合は、このタブを再読み込みしてください。');
 	}
 
 	function restartResidentRealtimeConnection(reason) {
 	  if (residentLoadRecoveryState.ready || residentLoadRecoveryState.reconnecting) return;
 	  residentLoadRecoveryState.reconnecting = true;
-	  try { showResidentLoadingRow('接続をやり直しています...'); } catch (_) {}
+	  try {
+	    if (residentDataSubscriptionKey !== currentCollectionName || !Array.isArray(allResidents) || !allResidents.length) {
+	      showResidentLoadingRow('接続をやり直しています...');
+	    }
+	  } catch (_) {}
 	  try {
 	    if (db && typeof db.enableNetwork === 'function') {
 	      db.enableNetwork().catch(function(error){
@@ -4894,7 +5049,10 @@
 	    button.textContent = '再読み込み中...';
 	  }
 	  if (message) message.textContent = '接続をリセットしています...';
-	  try { sessionStorage.setItem('residentLoadRecoveryReloadAt', String(Date.now())); } catch (_) {}
+	  try {
+	    sessionStorage.setItem('residentLoadRecoveryReloadAt', String(Date.now()));
+	    sessionStorage.setItem('disableFirestorePersistenceForSession', '1');
+	  } catch (_) {}
 	  var navigated = false;
 	  var navigate = function(){
 	    if (navigated) return;
@@ -4927,10 +5085,17 @@
 	    button.dataset.bound = '1';
 	    button.addEventListener('click', forceReloadCurrentTab);
 	  }
-	  residentLoadRecoveryState.softTimerId = window.setTimeout(function(){
-	    residentLoadRecoveryState.softTimerId = 0;
-	    restartResidentRealtimeConnection('startup-timeout');
-	  }, 6000);
+	  var scheduleReconnectAttempt = function(delay){
+	    if (residentLoadRecoveryState.ready || residentLoadRecoveryState.reloadStarted) return;
+	    residentLoadRecoveryState.softTimerId = window.setTimeout(function(){
+	      residentLoadRecoveryState.softTimerId = 0;
+	      restartResidentRealtimeConnection('watchdog-' + String(residentLoadRecoveryState.retryAttempt + 1));
+	      residentLoadRecoveryState.retryAttempt += 1;
+	      var nextDelay = Math.min(20000, 6000 + residentLoadRecoveryState.retryAttempt * 4000);
+	      scheduleReconnectAttempt(nextDelay);
+	    }, delay);
+	  };
+	  scheduleReconnectAttempt(6000);
 	  residentLoadRecoveryState.buttonTimerId = window.setTimeout(function(){
 	    residentLoadRecoveryState.buttonTimerId = 0;
 	    showResidentLoadRecovery();
@@ -8618,10 +8783,11 @@ window.addEventListener('load', function(){
         if (opened && opened.classList.contains('active')) return;
 
         // 初回の寮生選択画面が出るまでは全画面をブロックしておく
-        var overlay = document.getElementById('loading-overlay');
-        if (overlay) {
-          overlay.style.display = 'flex';
-        }
+        setAppLoading('startup-self-select', true, {
+          label: '寮生情報を読み込んでいます...',
+          transient: true,
+          timeoutMs: 12000
+        });
 
         // 寮生リスト(allResidents)がロードされるまで待ってから開く
         var tries = 0;
@@ -8630,7 +8796,7 @@ window.addEventListener('load', function(){
           // 途中で myResidentId が設定されたら中止
           if (hasMyId()) {
             clearInterval(timer);
-            if (overlay) overlay.style.display = 'none';
+            setAppLoading('startup-self-select', false);
             return;
           }
 
@@ -8638,7 +8804,7 @@ window.addEventListener('load', function(){
           var modalNow = document.getElementById('self-select-modal');
           if (modalNow && modalNow.classList.contains('active')) {
             clearInterval(timer);
-            if (overlay) overlay.style.display = 'none';
+            setAppLoading('startup-self-select', false);
             return;
           }
 
@@ -8649,18 +8815,18 @@ window.addEventListener('load', function(){
 
               var b = document.getElementById('change-resident-btn');
               if (!b) {
-                if (overlay) overlay.style.display = 'none';
+                setAppLoading('startup-self-select', false);
                 return;
               }
 
               var modal = document.getElementById('self-select-modal');
               if (modal && modal.classList.contains('active')) {
-                if (overlay) overlay.style.display = 'none';
+                setAppLoading('startup-self-select', false);
                 return;
               }
 
               try { b.click(); } catch(_) {}
-              if (overlay) overlay.style.display = 'none';
+              setAppLoading('startup-self-select', false);
               return;
             }
           } catch(_) {}
@@ -8669,7 +8835,7 @@ window.addEventListener('load', function(){
           if (tries >= maxTries) {
             // 住民リストが取得できなかった場合はあきらめる（ブロックも解除）
             clearInterval(timer);
-            if (overlay) overlay.style.display = 'none';
+            setAppLoading('startup-self-select', false);
           }
         }, 250);
       });
@@ -8710,7 +8876,27 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
     let allResidents = []; 
     let unsubscribe; 
     let logUnsubscribe = null;  // 操作履歴 listener
+	let residentListenerGeneration = 0;
+	let residentActiveSubscriptionKey = '';
+	let residentListenerFailed = false;
+	let residentDataSubscriptionKey = '';
 	let residentTableRenderFrameId = 0;
+
+	function beginResidentListenerSubscription(subscriptionKey){
+	  residentListenerGeneration += 1;
+	  residentActiveSubscriptionKey = subscriptionKey || '';
+	  residentListenerFailed = false;
+	  if (typeof unsubscribe === 'function') {
+	    try { unsubscribe(); } catch(_) {}
+	  }
+	  unsubscribe = null;
+	  return residentListenerGeneration;
+	}
+
+	function isCurrentResidentListener(generation, subscriptionKey){
+	  return generation === residentListenerGeneration &&
+	    String(subscriptionKey || '') === String(residentActiveSubscriptionKey || '');
+	}
 
 	function requestResidentTableRender(){
 	  if (residentTableRenderFrameId) return;
@@ -8860,8 +9046,11 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 	    const MORNING_RESTORE_SETTINGS_DOC_ID = 'morning_restore';
 
     function setMorningOverlayVisible(visible){
-      const overlay = document.getElementById('loading-overlay');
-      if (overlay) overlay.style.display = visible ? 'flex' : 'none';
+      setAppLoading('morning-operation', !!visible, visible ? {
+        label: '朝の庶務を処理しています...',
+        recoveryAfterMs: 15000,
+        recoveryNote: '朝の庶務の処理に時間がかかっています。通信状態を確認し、改善しない場合はこのタブを再読み込みしてください。'
+      } : null);
     }
 
     function refreshMorningTable(){
@@ -11075,77 +11264,33 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
     /* ==== 自分選択（寮生変更） ==== */
     (function bindSelfSelect(){
       if (window.__selfBind) return; window.__selfBind = true;
-      const modal = document.getElementById('self-select-modal');
-      const selectEl = document.getElementById('self-select');
-      const cancelBtn = document.getElementById('self-cancel-btn');
-      const okBtn = document.getElementById('self-select-btn');
-
-      function labelOf(r){
-        const dorm = r && r.dorm === 'meizen' ? '明' : r && r.dorm === 'shofu' ? '松' : '';
-        const room = (r && r.roomNumber) ? String(r.roomNumber) : '';
-        const name = (r && r.name) ? String(r.name) : '(名称未設定)';
-        return `${dorm}${room ? room + ' ' : ''}${name}`.trim();
-      }
-
-    　
-      function populate(){
-        if (!selectEl) return;
-        const mine = getStoredResidentId();
-        const src = (Array.isArray(window.allResidents) && window.allResidents.length)
-         ? window.allResidents
-         : (Array.isArray(allResidents) ? allResidents : []);
-        const list = src.slice();
-        const sortedList = sortResidentsForSelfSelect(list);
-        selectEl.innerHTML = '';
-        // 空行
-        const empty = document.createElement('option');
-        empty.value = '';
-        empty.textContent = '（未選択）';
-        selectEl.appendChild(empty);
-        // 実データ
-        sortedList.forEach(r=>{
-          if (!r || !r.id) return;
-          const opt = document.createElement('option');
-          opt.value = r.id;
-          opt.textContent = labelOf(r);
-          if (mine && mine === r.id) opt.selected = true;
-          selectEl.appendChild(opt);
-        });
-      }
-
-      function open(){ if (modal){ populate(); modal.classList.add('active'); } }
-      function close(){ if (modal){ modal.classList.remove('active'); } }
-
-      // ボタンでモーダルを開く
-      document.addEventListener('click', (ev)=>{
-        const btn = closestElementCompat(ev.target, '#change-resident-btn');
-        if (!btn) return;
-        ev.preventDefault();
-        open();
+      document.addEventListener('click', function(ev){
+        const changeButton = closestElementCompat(ev.target, '#change-resident-btn');
+        const confirmButton = closestElementCompat(ev.target, '#self-select-btn');
+        const cancelButton = closestElementCompat(ev.target, '#self-cancel-btn');
+        if (!changeButton && !confirmButton && !cancelButton) return;
+        try {
+          ev.preventDefault();
+          ev.stopImmediatePropagation();
+        } catch(_) {}
+        if (changeButton) {
+          try { openSelfSelectModal(); } catch(error) {
+            console.error('open self-select failed', error);
+          }
+          return;
+        }
+        if (cancelButton) {
+          try { closeSelfSelectModal(); } catch(_) {}
+          return;
+        }
+        try {
+          Promise.resolve(handleSelfSelectConfirm()).catch(function(error){
+            console.error('self-select confirm failed', error);
+          });
+        } catch(error) {
+          console.error('self-select confirm failed', error);
+        }
       }, true);
-
-      // モーダル内の操作
-      if (cancelBtn) cancelBtn.addEventListener('click', (e)=>{ e.preventDefault(); close(); });
-      if (okBtn) okBtn.addEventListener('click', async (e)=>{
-        e.preventDefault();
-        if (!selectEl) { close(); return; }
-        const id = (selectEl.value || '').trim();
-        try { setStoredResidentId(id || ''); } catch(_){}
-        // 画面更新（既存の強調等のロジックに委ねる）
-        try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_){}
-        try { window.addLog && addLog('自分選択', id ? ('residentId=' + id) : '(未選択)'); } catch(_){}
-        close();
-        // 通知トークン同期は画面遷移をブロックしない
-        setTimeout(function(){
-          try {
-            if (typeof window.resyncFcmToken === 'function') {
-              Promise.resolve(window.resyncFcmToken()).catch(function(e){
-                console.warn('resyncFcmToken skipped:', (e && (e.code || e.message)) || e);
-              });
-            }
-          } catch(_) {}
-        }, 0);
-      });
     })();
 
     // ===== 朝の庶務「取り消し」ボタン処理 =====
@@ -11608,12 +11753,6 @@ function applySohmuUI(){
 	      try {
 	        window.__adminAuthBusy = !!busy;
 	        document.body.classList.toggle('admin-auth-busy', !!busy);
-	        const overlay = document.getElementById('loading-overlay');
-	        if (overlay) {
-	          const text = overlay.querySelector('div');
-	          if (text) text.textContent = busy ? (label || 'ログイン中...') : '読み込み中...';
-	          overlay.style.display = busy ? 'flex' : 'none';
-	        }
 	        const loginBtn = document.getElementById('login-logout-btn');
 	        const logoutBtn = document.getElementById('admin-logout-btn');
 	        [loginBtn, logoutBtn].forEach(function(btn){
@@ -11622,6 +11761,20 @@ function applySohmuUI(){
 	          if (busy) btn.setAttribute('aria-busy', 'true');
 	          else btn.removeAttribute('aria-busy');
 	        });
+	        setAppLoading('admin-auth', !!busy, busy ? {
+	          label: label || 'ログイン中...',
+	          transient: true,
+	          timeoutMs: 8000,
+	          onTimeout: function(){
+	            window.__adminAuthBusy = false;
+	            document.body.classList.remove('admin-auth-busy');
+	            [loginBtn, logoutBtn].forEach(function(btn){
+	              if (!btn) return;
+	              btn.disabled = false;
+	              btn.removeAttribute('aria-busy');
+	            });
+	          }
+	        } : null);
 	      } catch(_) {}
 	    }
 	    function forceSohmuOffAfterLogout(){
@@ -11641,32 +11794,39 @@ function applySohmuUI(){
 	      const input = window.prompt('管理者パスワードを入力してください');
 	      if (input == null) return; // cancel
 	      setAdminAuthBusy(true, 'ログイン中...');
+	      var loggedIn = false;
 	      try {
-	        await Promise.race([
-	          initAdminPassword(),
-	          new Promise(resolve => setTimeout(resolve, 1200))
-	        ]);
-	      } catch(_){}
-	      if (String(input) === String(ADMIN_PASSWORD)) {
-	        sessionStorage.setItem('isAdminLoggedIn', 'true');
-	        applyAdminUI();
-	        try { if (typeof updateLoginStatus === 'function') updateLoginStatus(); } catch(_){}
-	        try { if (typeof rebuildAnnouncementList === 'function') rebuildAnnouncementList(); } catch(_){}
-	        setAdminAuthBusy(false);
 	        try {
-	          if (typeof auth !== 'undefined' && auth && typeof auth.signInAnonymously === 'function') {
-	            auth.signInAnonymously().catch(function(e){
-	              console.warn('auth signInAnonymously failed', e);
-	            });
-	          }
+	          await Promise.race([
+	            initAdminPassword(),
+	            new Promise(resolve => setTimeout(resolve, 1200))
+	          ]);
 	        } catch(e) {
-	          console.warn('auth signInAnonymously failed', e);
+	          console.warn('admin login initialization failed', (e && (e.code || e.message)) || e);
 	        }
-	        alert('管理者ログインしました。');
-	      } else {
+	        if (String(input) === String(ADMIN_PASSWORD)) {
+	          loggedIn = true;
+	          sessionStorage.setItem('isAdminLoggedIn', 'true');
+	          applyAdminUI();
+	          try { if (typeof updateLoginStatus === 'function') updateLoginStatus(); } catch(_){}
+	          try { if (typeof rebuildAnnouncementList === 'function') rebuildAnnouncementList(); } catch(_){}
+	          try {
+	            if (typeof auth !== 'undefined' && auth && typeof auth.signInAnonymously === 'function') {
+	              auth.signInAnonymously().catch(function(e){
+	                console.warn('auth signInAnonymously failed', e);
+	              });
+	            }
+	          } catch(e) {
+	            console.warn('auth signInAnonymously failed', e);
+	          }
+	        }
+	      } catch(e){
+	        loggedIn = false;
+	        console.warn('admin login failed', (e && (e.code || e.message)) || e);
+	      } finally {
 	        setAdminAuthBusy(false);
-	        alert('パスワードが違います。');
 	      }
+	      alert(loggedIn ? '管理者ログインしました。' : 'パスワードが違います。');
 	    }
     function populateSelfSelect(dormKey){
       const sel = document.getElementById('self-select');
@@ -12180,7 +12340,6 @@ const mobileCountEditState = {
 	}
 
 	let workflowTransitionBusy = false;
-	let workflowTransitionOverlayWasVisible = false;
 
 	function requestWorkflowFrame(callback) {
 	  if (window.requestAnimationFrame) window.requestAnimationFrame(callback);
@@ -12189,18 +12348,22 @@ const mobileCountEditState = {
 
 	function setWorkflowTransitionBusy(busy) {
 	  workflowTransitionBusy = !!busy;
-	  const overlay = elements.loadingOverlay;
-	  if (busy) {
-	    workflowTransitionOverlayWasVisible = !!(overlay && overlay.style.display === 'flex');
-	    if (overlay) overlay.style.display = 'flex';
-	  } else if (overlay && !workflowTransitionOverlayWasVisible) {
-	    overlay.style.display = 'none';
-	  }
 	  if (elements.workflowHomeScreen) {
 	    elements.workflowHomeScreen.setAttribute('aria-busy', busy ? 'true' : 'false');
 	  }
 	  if (elements.workflowReceiveBtn) elements.workflowReceiveBtn.disabled = !!busy;
 	  if (elements.workflowRegisterBtn) elements.workflowRegisterBtn.disabled = !!busy;
+	  setAppLoading('workflow-transition', !!busy, busy ? {
+	    label: '表示を切り替えています...',
+	    transient: true,
+	    timeoutMs: 6000,
+	    onTimeout: function(){
+	      workflowTransitionBusy = false;
+	      if (elements.workflowHomeScreen) elements.workflowHomeScreen.setAttribute('aria-busy', 'false');
+	      if (elements.workflowReceiveBtn) elements.workflowReceiveBtn.disabled = false;
+	      if (elements.workflowRegisterBtn) elements.workflowRegisterBtn.disabled = false;
+	    }
+	  } : null);
 	}
 
 	function beginWorkflowModeTransition(mode) {
@@ -12327,21 +12490,27 @@ function isWorkflowRegisterMode() {
 	    schedulePageScrollLockSync();
 	    return;
 	  }
-	  pageScrollLockState.observer = new MutationObserver(function(mutations){
-	    for (var i = 0; i < mutations.length; i += 1) {
-	      var target = mutations[i].target;
-	      if (target === document.body || target.id === 'loading-overlay' ||
-	          (target.classList && target.classList.contains('modal-overlay'))) {
-	        schedulePageScrollLockSync();
-	        return;
-	      }
-	    }
+	  pageScrollLockState.observer = new MutationObserver(function(){
+	    schedulePageScrollLockSync();
 	  });
 	  pageScrollLockState.observer.observe(document.body, {
-	    subtree: true,
 	    attributes: true,
-	    attributeFilter: ['class', 'style']
+	    attributeFilter: ['class']
 	  });
+	  var loadingOverlay = document.getElementById('loading-overlay');
+	  if (loadingOverlay) {
+	    pageScrollLockState.observer.observe(loadingOverlay, {
+	      attributes: true,
+	      attributeFilter: ['style']
+	    });
+	  }
+	  var blockingModals = document.querySelectorAll('.modal-overlay');
+	  for (var i = 0; i < blockingModals.length; i += 1) {
+	    pageScrollLockState.observer.observe(blockingModals[i], {
+	      attributes: true,
+	      attributeFilter: ['class']
+	    });
+	  }
 	  schedulePageScrollLockSync();
 	}
 
@@ -14985,26 +15154,74 @@ if(elements.changePasswordForm){
         // ===== 強調ツールここまで =====
         // 編集中の announcement ドキュメント参照（null = 新規投稿モード）
         // === 寮生選択用プルダウンを最新データで埋め直す ===
+        function renderSelfSelectOptions(residents){
+            const select = document.getElementById('self-select');
+            if (!select) return;
+            const mine = String(getStoredResidentId() || '');
+            const combined = sortResidentsForSelfSelect(Array.isArray(residents) ? residents.slice() : []);
+            select.innerHTML = combined.map(function(r){
+              const dormLabel = r.dorm === 'shofu' ? '松風寮' : '明善寮';
+              const selected = mine && mine === String(r.id || '') ? ' selected' : '';
+              return `<option value="${escapeHtml(r.id || '')}" data-dorm="${escapeHtml(r.dorm || '')}"${selected}>${dormLabel} - ${escapeHtml(r.roomNumber || '')} ${escapeHtml(r.name || '')}</option>`;
+            }).join('');
+        }
+
+        function getCachedSelfSelectResidents(){
+            const merged = [];
+            const seen = Object.create(null);
+            function append(list){
+              if (!Array.isArray(list)) return;
+              list.forEach(function(resident){
+                if (!resident || !resident.id) return;
+                const key = String(resident.dorm || '') + '/' + String(resident.id);
+                if (seen[key]) return;
+                seen[key] = true;
+                merged.push(resident);
+              });
+            }
+            append(allResidents);
+            try {
+              if (crossDormSearchCache.shofu.loaded) append(crossDormSearchCache.shofu.residents);
+              if (crossDormSearchCache.meizen.loaded) append(crossDormSearchCache.meizen.residents);
+            } catch(_) {}
+            return merged;
+        }
+
         async function populateSelfSelectOptions(){
             const select = document.getElementById('self-select');
             if(!select) return;
-            select.innerHTML = '<option>読み込み中...</option>';
+            const requestId = (window.__selfSelectPopulateRequestId || 0) + 1;
+            window.__selfSelectPopulateRequestId = requestId;
+            const cached = getCachedSelfSelectResidents();
+            if (cached.length) renderSelfSelectOptions(cached);
+            else select.innerHTML = '<option value="">読み込み中...</option>';
+
+            const cachedDorms = Object.create(null);
+            cached.forEach(function(resident){ if (resident && resident.dorm) cachedDorms[resident.dorm] = true; });
+            if (cachedDorms.shofu && cachedDorms.meizen) return;
+
             const dorms = ['shofu','meizen'];
+            let timeoutId = 0;
             try{
-                const lists = await Promise.all(dorms.map(d =>
-                   db.collection(`residents_${d}`).get().then(snap =>
-                     snap.docs.map(doc => mergeResidentDocData(doc, d))
-                   )
+                const fetchPromise = Promise.all(dorms.map(d =>
+                  db.collection(`residents_${d}`).get().then(snap =>
+                    snap.docs.map(doc => mergeResidentDocData(doc, d))
+                  )
                 ));
+                const timeoutPromise = new Promise(function(resolve, reject){
+                  timeoutId = window.setTimeout(function(){ reject(new Error('self-select-timeout')); }, 8000);
+                });
+                const lists = await Promise.race([fetchPromise, timeoutPromise]);
+                if (requestId !== window.__selfSelectPopulateRequestId) return;
                 const combined = sortResidentsForSelfSelect(flattenOneLevel(lists));
-                select.innerHTML = combined.map(r =>
-                  `<option value="${r.id}" data-dorm="${r.dorm}">
-                      ${r.dorm==='shofu'?'松風寮':'明善寮'} - ${r.roomNumber} ${r.name}
-                   </option>`
-                ).join('');
+                renderSelfSelectOptions(combined);
             }catch(e){
                 console.error('populateSelfSelectOptions',e);
-                select.innerHTML='<option value="">読み込み失敗</option>';
+                if (requestId === window.__selfSelectPopulateRequestId && !cached.length) {
+                  select.innerHTML='<option value="">読み込み失敗</option>';
+                }
+            }finally{
+                if (timeoutId) window.clearTimeout(timeoutId);
             }
         }
         window.populateSelfSelectOptions = populateSelfSelectOptions;
@@ -15012,9 +15229,10 @@ if(elements.changePasswordForm){
         // ======= Inserted Self-Select Modal Functions =======
         function openSelfSelectModal(){
           const selectModal = document.getElementById('self-select-modal');
-          populateSelfSelectOptions();
+          if (!selectModal) return;
           selectModal.classList.add('active');
           selectModal.style.pointerEvents = 'auto';
+          populateSelfSelectOptions();
         }
 
         function closeSelfSelectModal(){
@@ -15027,26 +15245,58 @@ if(elements.changePasswordForm){
         }
 
         async function handleSelfSelectConfirm(){
+          if (window.__selfSelectSaving) return;
           const select = document.getElementById('self-select');
           const btn = document.getElementById('self-select-btn');
           if(!select) return;
-          const overlay = document.getElementById('loading-overlay');
-          if (overlay) overlay.style.display = 'flex';
+          const id = String(select.value || '').trim();
+          if (!id) {
+            alert('寮生を選択してください。');
+            return;
+          }
+          window.__selfSelectSaving = true;
+          setAppLoading('self-select', true, {
+            label: '寮生を設定しています...',
+            transient: true,
+            timeoutMs: 8000,
+            onTimeout: function(){
+              window.__selfSelectSaving = false;
+              if (btn) { btn.disabled = false; btn.textContent = '決定'; }
+            }
+          });
           if (btn){ btn.disabled = true; btn.textContent = '読み込み中...'; }
-          const tbody = document.querySelector('#resident-table tbody');
-          if (tbody) tbody.innerHTML = '<tr><td colspan="6">読み込み中...</td></tr>';
-          const id = select.value;
-          setStoredResidentId(id);
-          var opt = select.options[select.selectedIndex];
-          const selectedDorm = (opt && opt.getAttribute('data-dorm')) || 'shofu';
-          switchDorm(selectedDorm);
-          closeSelfSelectModal();
-          renderTable();
-          setTimeout(function(){
-            try { maybeRequestNotifAfterSelfSelect(); } catch(_) {}
-          }, 0);
-          if (btn){ btn.disabled = false; btn.textContent = '決定'; }
-          if (overlay) overlay.style.display = 'none';
+          try {
+            setStoredResidentId(id);
+            var opt = select.options[select.selectedIndex];
+            var selectedDorm = (opt && opt.getAttribute('data-dorm')) || '';
+            if (!selectedDorm) {
+              var selectedResident = getCachedSelfSelectResidents().find(function(resident){
+                return String(resident.id || '') === id;
+              });
+              selectedDorm = selectedResident && selectedResident.dorm ? selectedResident.dorm : 'shofu';
+            }
+            switchDorm(selectedDorm);
+            closeSelfSelectModal();
+            requestResidentTableRender();
+            try { window.addLog && addLog('自分選択', 'residentId=' + id); } catch(_) {}
+            setTimeout(function(){
+              try { maybeRequestNotifAfterSelfSelect(); } catch(_) {}
+              try {
+                if (typeof window.resyncFcmToken === 'function') {
+                  Promise.resolve(window.resyncFcmToken()).catch(function(error){
+                    console.warn('resyncFcmToken skipped:', (error && (error.code || error.message)) || error);
+                  });
+                }
+              } catch(_) {}
+            }, 0);
+          } catch(error) {
+            console.error('handleSelfSelectConfirm', error);
+            alert('寮生の選択に失敗しました。もう一度お試しください。');
+          } finally {
+            window.__selfSelectSaving = false;
+            if (btn){ btn.disabled = false; btn.textContent = '決定'; }
+            setAppLoading('self-select', false);
+          }
         }
         // ======= End Inserted Self-Select Modal Functions =======
         let editingDocRef = null;  // 旧実装互換用（現在は未使用）
@@ -15086,74 +15336,29 @@ if(elements.changePasswordForm){
                 });
                 return;
             }
-            if (unsubscribe) unsubscribe();
+	            const listenerGeneration = beginResidentListenerSubscription(collectionName);
 	            unsubscribe = db.collection(collectionName).onSnapshot(snapshot => {
+	                if (!isCurrentResidentListener(listenerGeneration, collectionName)) return;
 	                if (document.body.classList.contains('morning-mode')) return;
 	                markResidentDataReady('single-dorm');
 	                const dormKey = collectionName.split('_')[1];
 	                allResidents = snapshot.docs.map(doc => mergeResidentDocData(doc, dormKey));
+	                residentDataSubscriptionKey = collectionName;
 	                setCrossDormSearchCache(dormKey, allResidents);
 	                // Show self-select modal if first visit
 	                if (!getStoredResidentId()) {
-                  const selectModal = document.getElementById('self-select-modal');
-                  (async () => {
-                    const select = document.getElementById('self-select');
-                    const dorms = ['shofu', 'meizen'];
-                    const lists = await Promise.all(dorms.map(d =>
-                      db.collection(`residents_${d}`).get().then(snap =>
-                        snap.docs.map(doc => mergeResidentDocData(doc, d))
-                      )
-                    ));
-                    const combined = sortResidentsForSelfSelect(flattenOneLevel(lists));
-                    select.innerHTML = combined.map(r =>
-                      `<option value="${r.id}" data-dorm="${r.dorm}">${r.dorm === 'shofu' ? '松風寮' : '明善寮'} - ${r.roomNumber} ${r.name}</option>`
-                    ).join('');
-                    selectModal.classList.add('active');
-                    selectModal.style.pointerEvents = 'auto';
-                    document.getElementById('self-select-btn').onclick = async () => {
-                      const overlayEl = document.getElementById('loading-overlay');
-                      const btn = document.getElementById('self-select-btn');
-                      try {
-                        if (overlayEl) overlayEl.style.display = 'flex';
-                        if (btn) { btn.disabled = true; btn.textContent = '読み込み中...'; }
-
-                        const tbody = document.querySelector('#resident-table tbody');
-                        if (tbody) tbody.innerHTML = '<tr><td colspan="6">読み込み中...</td></tr>';
-
-                        const id = select.value;
-                        setStoredResidentId(id);
-
-                        // Switch dorm view to match selected resident
-                        const selectedDorm = select.options[select.selectedIndex].getAttribute('data-dorm');
-                        switchDorm(selectedDorm);
-
-                        selectModal.classList.remove('active');
-                        selectModal.style.pointerEvents = 'none';
-                        renderTable();
-                        setTimeout(function(){
-                          try { maybeRequestNotifAfterSelfSelect(); } catch(_) {}
-                        }, 0);
-                      } catch (e) {
-                        console.error('self-select confirm failed', e);
-                        alert('寮生の選択に失敗しました。もう一度お試しください。');
-                      } finally {
-                        if (btn) { btn.disabled = false; btn.textContent = '決定'; }
-                        if (overlayEl) overlayEl.style.display = 'none';
-                      }
-                    };
-                    document.getElementById('self-cancel-btn').addEventListener('click', () => {
-                      const selectModal = document.getElementById('self-select-modal');
-                      selectModal.classList.remove('active');
-                      selectModal.style.pointerEvents = 'none';
-                    });
-                  })();
+                  openSelfSelectModal();
                   return;
                 }
                 requestResidentTableRender();
             }, error => {
+	                if (!isCurrentResidentListener(listenerGeneration, collectionName)) return;
+	                residentListenerFailed = true;
                 console.error("データの読み込みに失敗しました:", error);
-                showResidentLoadingRow('寮生の読み込みに失敗しました。通信状態を確認して再読み込みしてください。');
-	                showResidentLoadRecovery();
+	                const hadResidentData = residentDataSubscriptionKey === collectionName && Array.isArray(allResidents) && allResidents.length > 0;
+	                if (!hadResidentData) showResidentLoadingRow('寮生の読み込みに失敗しました。通信状態を確認して再読み込みしてください。');
+	                markResidentDataPending('single-dorm-error');
+	                if (!hadResidentData) showResidentLoadRecovery();
             });
         }
         
@@ -15166,7 +15371,8 @@ if(elements.changePasswordForm){
                 });
                 return;
             }
-            if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+	            const subscriptionKey = 'all';
+	            const listenerGeneration = beginResidentListenerSubscription(subscriptionKey);
 
             const shofuRef = db.collection('residents_shofu');
             const meizenRef = db.collection('residents_meizen');
@@ -15177,6 +15383,7 @@ if(elements.changePasswordForm){
 	            let meizenLoaded = false;
 
 	            const renderMerged = () => {
+	                if (!isCurrentResidentListener(listenerGeneration, subscriptionKey)) return;
 	                if (document.body.classList.contains('morning-mode')) return;
 	                if (shofuLoaded && meizenLoaded) markResidentDataReady('both-dorms');
 	                const shofuResidents = shofuDocs.map(function(doc){
@@ -15188,27 +15395,38 @@ if(elements.changePasswordForm){
 	                setCrossDormSearchCache('shofu', shofuResidents);
 	                setCrossDormSearchCache('meizen', meizenResidents);
 	                allResidents = shofuResidents.concat(meizenResidents);
+	                residentDataSubscriptionKey = subscriptionKey;
 	                requestResidentTableRender();
 	            };
 
             const unsubShofu = shofuRef.onSnapshot(snap => {
+	                if (!isCurrentResidentListener(listenerGeneration, subscriptionKey)) return;
                 shofuDocs = snap.docs;
 	                shofuLoaded = true;
                 renderMerged();
             }, error => {
+	                if (!isCurrentResidentListener(listenerGeneration, subscriptionKey)) return;
+	                residentListenerFailed = true;
                 console.error('shofu listen failed', error);
-                showResidentLoadingRow('松風寮の読み込みに失敗しました。通信状態を確認して再読み込みしてください。');
-	                showResidentLoadRecovery();
+	                const hadResidentData = residentDataSubscriptionKey === subscriptionKey && Array.isArray(allResidents) && allResidents.length > 0;
+	                if (!hadResidentData) showResidentLoadingRow('松風寮の読み込みに失敗しました。通信状態を確認して再読み込みしてください。');
+	                markResidentDataPending('shofu-listener-error');
+	                if (!hadResidentData) showResidentLoadRecovery();
             });
 
             const unsubMeizen = meizenRef.onSnapshot(snap => {
+	                if (!isCurrentResidentListener(listenerGeneration, subscriptionKey)) return;
                 meizenDocs = snap.docs;
 	                meizenLoaded = true;
                 renderMerged();
             }, error => {
+	                if (!isCurrentResidentListener(listenerGeneration, subscriptionKey)) return;
+	                residentListenerFailed = true;
                 console.error('meizen listen failed', error);
-                showResidentLoadingRow('明善寮の読み込みに失敗しました。通信状態を確認して再読み込みしてください。');
-	                showResidentLoadRecovery();
+	                const hadResidentData = residentDataSubscriptionKey === subscriptionKey && Array.isArray(allResidents) && allResidents.length > 0;
+	                if (!hadResidentData) showResidentLoadingRow('明善寮の読み込みに失敗しました。通信状態を確認して再読み込みしてください。');
+	                markResidentDataPending('meizen-listener-error');
+	                if (!hadResidentData) showResidentLoadRecovery();
             });
 
             // unify into one unsubscribe
@@ -15330,6 +15548,9 @@ if(elements.changePasswordForm){
 
 	        function switchDorm(dorm) {
 	            dorm = normalizeDormSelectionValue(dorm);
+	            const nextCollectionName = dorm === 'all' ? 'all' : `residents_${dorm}`;
+	            const hasCurrentListener = residentActiveSubscriptionKey === nextCollectionName &&
+	              typeof unsubscribe === 'function' && !residentListenerFailed;
 	            try { localStorage.setItem('currentDorm', dorm === 'all' ? 'all' : `residents_${dorm}`); } catch(_) {}
             // Update active button UI
             document.querySelectorAll('#dorm-selector button').forEach(btn => {
@@ -15343,12 +15564,45 @@ if(elements.changePasswordForm){
 	                const cachedMeizen = crossDormSearchCache.meizen;
 	                if (cachedShofu && cachedShofu.loaded && cachedMeizen && cachedMeizen.loaded) {
 	                    allResidents = cachedShofu.residents.concat(cachedMeizen.residents);
+	                    residentDataSubscriptionKey = 'all';
 	                    requestResidentTableRender();
 	                }
-	                listenToAllCollections();
+	                if (!hasCurrentListener) {
+	                    markResidentDataPending('switch-all');
+	                    try {
+	                      listenToAllCollections();
+	                    } catch(error) {
+	                      residentListenerFailed = true;
+	                      console.error('both dorm listener setup failed', error);
+	                      showResidentLoadingRow('寮生の読み込みに失敗しました。通信状態を確認して再読み込みしてください。');
+	                      markResidentDataPending('switch-all-setup-error');
+	                      showResidentLoadRecovery();
+	                    }
+	                } else {
+	                    requestResidentTableRender();
+	                }
             } else {
                 currentCollectionName = `residents_${dorm}`;
-                listenToCollection(currentCollectionName);
+	                const cachedDorm = crossDormSearchCache[dorm];
+	                if (cachedDorm && cachedDorm.loaded) {
+	                    allResidents = cachedDorm.residents.slice();
+	                    residentDataSubscriptionKey = currentCollectionName;
+	                    requestResidentTableRender();
+	                }
+	                if (!hasCurrentListener) {
+	                    markResidentDataPending('switch-' + dorm);
+	                    try {
+	                      listenToCollection(currentCollectionName);
+	                    } catch(error) {
+	                      residentListenerFailed = true;
+	                      console.error('resident listener setup failed', error);
+	                      showResidentLoadingRow('寮生の読み込みに失敗しました。通信状態を確認して再読み込みしてください。');
+	                      markResidentDataPending('switch-' + dorm + '-setup-error');
+	                      showResidentLoadRecovery();
+	                    }
+	                } else {
+	                    requestResidentTableRender();
+	                }
             }
             // Update reset button label based on selected dorm
             const resetBtn = document.getElementById('reset-all-btn');
@@ -15394,11 +15648,45 @@ if(elements.changePasswordForm){
 		            const searchedResidents = preparedSearchTerms.length
 		              ? baseList.filter(r => residentMatchesSearch(r, searchTerm, preparedSearchTerms))
 		              : baseList;
-		            const filteredResidents = itemFilterActive
-		              ? searchedResidents.filter(r => hasResidentReceivableItems(r))
-		              : searchedResidents;
-		            updateCrossDormSearchHint(searchTerm);
-		            const nextDisplayedResidentRowsById = Object.create(null);
+	            const filteredResidents = itemFilterActive
+	              ? searchedResidents.filter(r => hasResidentReceivableItems(r))
+	              : searchedResidents;
+	            updateCrossDormSearchHint(searchTerm);
+	            const renderSignatureParts = [
+	              currentCollectionName,
+	              sohmuOn ? '1' : '0',
+	              morningInlineEdit ? '1' : '0',
+	              String(myId || ''),
+	              String(searchTerm || ''),
+	              itemFilterActive ? '1' : '0',
+	              currentSortOrder
+	            ];
+	            for (let signatureIndex = 0; signatureIndex < filteredResidents.length; signatureIndex += 1) {
+	              const signatureResident = filteredResidents[signatureIndex] || {};
+	              renderSignatureParts.push([
+	                signatureResident.id || '',
+	                signatureResident.dorm || '',
+	                signatureResident.roomNumber || '',
+	                signatureResident.name || '',
+	                signatureResident.furigana || '',
+	                signatureResident.circle || '',
+	                Math.max(0, parseInt(signatureResident.luggage, 10) || 0),
+	                Math.max(0, parseInt(signatureResident.mail, 10) || 0),
+	                signatureResident.note || signatureResident.memo || signatureResident.notes || ''
+	              ].join('\u001e'));
+	            }
+	            const renderSignature = renderSignatureParts.join('\u001f');
+	            if (window.__residentTableLastSignature === renderSignature) {
+	              updateDeleteButtonState();
+	              if (elements.mobileCountEditModal && elements.mobileCountEditModal.classList.contains('active')) {
+	                syncMobileCountEditModalUI();
+	              }
+	              syncNotificationSettingsUiAfterTableRender();
+	              try { scheduleNfcReceiveIntent(); } catch (_) {}
+	              return;
+	            }
+	            window.__residentTableLastSignature = renderSignature;
+	            const nextDisplayedResidentRowsById = Object.create(null);
 		            const tableRowsFragment = document.createDocumentFragment();
 	            if (filteredResidents.length === 0) {
 		                const emptyMessage = itemFilterActive
@@ -16634,10 +16922,28 @@ if(elements.changePasswordForm){
             else document.body.classList.remove(cls);
         }
         function initDisplayToggles(){
-            // 保存された状態を復元（'1' を ON とする）
-            var f = localStorage.getItem('showFurigana') === '1';
-            var c = localStorage.getItem('showCircle') === '1';
-            var d = localStorage.getItem('showDorm') === '1';
+            function readSavedToggle(primaryKey, legacyKey){
+                var primary = null;
+                var legacy = null;
+                try {
+                    primary = localStorage.getItem(primaryKey);
+                    legacy = localStorage.getItem(legacyKey);
+                } catch(_) {}
+                var value = primary != null ? primary : legacy;
+                return value === '1' || value === 'true' || value === 'on';
+            }
+            function persistToggle(primaryKey, legacyKey, on){
+                try {
+                    localStorage.setItem(primaryKey, on ? '1' : '0');
+                    localStorage.setItem(legacyKey, on ? '1' : '0');
+                } catch(_) {}
+            }
+            var f = readSavedToggle('show_furigana', 'showFurigana');
+            var c = readSavedToggle('show_circle', 'showCircle');
+            var d = readSavedToggle('show_dorm', 'showDorm');
+            persistToggle('show_furigana', 'showFurigana', f);
+            persistToggle('show_circle', 'showCircle', c);
+            persistToggle('show_dorm', 'showDorm', d);
             if (elements.toggleFurigana) elements.toggleFurigana.checked = f;
             if (elements.toggleCircle)   elements.toggleCircle.checked = c;
             if (elements.toggleDorm)     elements.toggleDorm.checked = d;
@@ -16646,28 +16952,30 @@ if(elements.changePasswordForm){
             setBodyClass('show-dorm',     d);
             // 変更イベント（古いブラウザ対応で function を使用）
             if (elements.toggleFurigana) {
+                elements.toggleFurigana.dataset.bound = '1';
                 elements.toggleFurigana.addEventListener('change', function(e){
                     var on = !!e.target.checked;
                     setBodyClass('show-furigana', on);
-                    try { localStorage.setItem('showFurigana', on ? '1' : '0'); } catch(_){}
-                    // テーブルの再描画で表示が即反映されるように
-                    if (typeof renderTable === 'function') renderTable();
+                    persistToggle('show_furigana', 'showFurigana', on);
+                    requestResidentTableRender();
                 });
             }
             if (elements.toggleCircle) {
+                elements.toggleCircle.dataset.bound = '1';
                 elements.toggleCircle.addEventListener('change', function(e){
                     var on = !!e.target.checked;
                     setBodyClass('show-circle', on);
-                    try { localStorage.setItem('showCircle', on ? '1' : '0'); } catch(_){}
-                    if (typeof renderTable === 'function') renderTable();
+                    persistToggle('show_circle', 'showCircle', on);
+                    requestResidentTableRender();
                 });
             }
             if (elements.toggleDorm) {
+                elements.toggleDorm.dataset.bound = '1';
                 elements.toggleDorm.addEventListener('change', function(e){
                     var on = !!e.target.checked;
                     setBodyClass('show-dorm', on);
-                    try { localStorage.setItem('showDorm', on ? '1' : '0'); } catch(_){}
-                    if (typeof renderTable === 'function') renderTable();
+                    persistToggle('show_dorm', 'showDorm', on);
+                    requestResidentTableRender();
                 });
             }
         }
@@ -16677,11 +16985,6 @@ if(elements.changePasswordForm){
         elements.opsContainer.style.display = elements.sohmuToggle.checked ? '' : 'none';
         // Initial display setting for "寮生変更" button
         elements.changeResidentBtn.style.display = elements.sohmuToggle.checked ? 'none' : 'inline-block';
-        elements.changeResidentBtn.addEventListener('click', () => {
-          const cancelBtn = document.getElementById('self-cancel-btn');
-            if (cancelBtn) cancelBtn.style.display = '';
-            openSelfSelectModal();
-        });
         // 初期表示：お知らせ欄を庶務モードに応じて表示/非表示
         updateAnnouncementVisibility();
         elements.selectAllCheckbox.addEventListener('change', e => {
@@ -16727,58 +17030,10 @@ if(elements.changePasswordForm){
         elements.addFormEntryBtn.addEventListener('click', () => {
             elements.bulkFormEntries.appendChild(createBulkFormEntry());
         });
-        elements.toggleFurigana.addEventListener('change', e => document.body.classList.toggle('show-furigana', e.target.checked));
-        elements.toggleCircle.addEventListener('change', e => document.body.classList.toggle('show-circle', e.target.checked));
-        // Restore dorm marker toggle state
-        if (localStorage.getItem('showDorm') === 'true') {
-            elements.toggleDorm.checked = true;
-            document.body.classList.add('show-dorm');
-        }
-        // Dorm marker toggle with persistence
-        elements.toggleDorm.addEventListener('change', e => {
-            document.body.classList.toggle('show-dorm', e.target.checked);
-            localStorage.setItem('showDorm', e.target.checked);
-        });
-
         elements.logViewBtn.addEventListener('click', showLogModal);
         elements.modalCloseBtn.addEventListener('click', hideLogModal);
         elements.logModal.addEventListener('click', e=>{ if(e.target===elements.logModal) hideLogModal(); });
 
-        // 寮生変更ボタン：毎回リストを再取得してモーダルを開く
-        elements.changeResidentBtn.addEventListener('click', async () => {
-          if (window.__selfBind) return;
-          // Reset stored ID and reload list each time
-          clearStoredResidentId();
-          try { updateNotificationSettingsUI(); } catch(_){}
-          await populateSelfSelectOptions();
-          const cancelBtn = document.getElementById('self-cancel-btn');
-          if (cancelBtn) cancelBtn.style.display = '';
-          document.getElementById('self-select-modal').classList.add('active');
-          // Setup self-select-btn handler again (with loading overlay)
-          const btn = document.getElementById('self-select-btn');
-          btn.onclick = async () => {
-            // Show loading overlay
-            document.getElementById('loading-overlay').style.display = 'flex';
-            btn.disabled = true;
-            btn.textContent = '読み込み中...';
-            document.querySelector('#resident-table tbody').innerHTML = '<tr><td colspan="6">読み込み中...</td></tr>';
-            const select = document.getElementById('self-select');
-            const id = select.value;
-            setStoredResidentId(id);
-            const selectedDorm = select.options[select.selectedIndex].getAttribute('data-dorm');
-            switchDorm(selectedDorm);
-            document.getElementById('self-select-modal').classList.remove('active');
-            document.getElementById('self-select-modal').style.pointerEvents = 'none';
-            renderTable();
-            setTimeout(function(){
-              try { maybeRequestNotifAfterSelfSelect(); } catch(_) {}
-            }, 0);
-            btn.disabled = false;
-            btn.textContent = '決定';
-            // Hide loading overlay
-            document.getElementById('loading-overlay').style.display = 'none';
-          };
-        });
         // --- Safety cleanup: もし誤ってコードがテキストとしてDOM直下に出てしまった場合は除去 ---
         (function cleanupLeakedCode(){
           try{
