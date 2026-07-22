@@ -1,5 +1,6 @@
 // Firebase Cloud Messaging service worker (compat API)
-// 背景通知の二重表示対策入り
+// 背景通知の二重表示対策 + 古いPWAキャッシュ対策入り
+const APP_SW_VERSION = '20260723-icon-fix';
 
 // 1) SDK（compat）
 importScripts('https://www.gstatic.com/firebasejs/9.6.7/firebase-app-compat.js');
@@ -24,8 +25,28 @@ self.addEventListener('install', () => {
 });
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
+    try {
+      if (self.caches && caches.keys) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((key) => caches.delete(key)));
+      }
+    } catch(_) {}
     try { await self.clients.claim(); } catch(_) {}
   })());
+});
+
+// iOSのホーム画面追加済みWebアプリで古いHTMLが残るのを抑える。
+// 通知用SWなので通常の静的キャッシュは持たず、ページ表示だけネットワーク優先にする。
+self.addEventListener('fetch', (event) => {
+  try {
+    const req = event.request;
+    if (!req || req.method !== 'GET') return;
+    if (req.mode !== 'navigate') return;
+    event.respondWith((async () => {
+      try { return await fetch(req, { cache: 'no-store' }); }
+      catch(_) { return fetch(req); }
+    })());
+  } catch(_) {}
 });
 
 // 直近表示のゆるい重複除去（同じ内容が2秒以内に来たら捨てる）

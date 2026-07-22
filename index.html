@@ -9,10 +9,11 @@
     <meta http-equiv="Expires" content="0">
     <title>荷物管理アプリ</title>
     <!-- ===== アプリアイコン設定 ===== -->
-    <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180-20260717.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32-20260717.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="icons/icon-16-20260717.png">
-    <link rel="manifest" href="/manifest.json?v=20260717b">
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png?v=20260723">
+    <link rel="apple-touch-icon-precomposed" sizes="180x180" href="/icons/icon-180.png?v=20260723">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png?v=20260723">
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png?v=20260723">
+    <link rel="manifest" href="/manifest.json?v=20260723">
     <!-- ===== PWA / Standalone meta for iOS & others ===== -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -6855,7 +6856,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
             console.warn('Firebase Messaging instance is not available; skip getToken');
             return null;
           }
-          const swUrl = '/firebase-messaging-sw.js?v=20260702-workflow-cache';
+          const swUrl = '/firebase-messaging-sw.js?v=20260723-icon-fix';
           const registration = await navigator.serviceWorker.register(swUrl, { scope: '/' });
 
           // Use the registration we just created for getToken (avoid waiting on controller SW)
