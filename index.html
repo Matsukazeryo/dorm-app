@@ -3288,6 +3288,81 @@
 	    transition:none;
 	    box-shadow:none;
 	  }
+	  .last-action-undo-toast{
+	    position:fixed;
+	    left:50%;
+	    bottom:66px;
+	    bottom:max(66px, calc(env(safe-area-inset-bottom) + 54px));
+	    z-index:3450;
+	    display:flex;
+	    align-items:center;
+	    gap:10px;
+	    width:max-content;
+	    max-width:calc(100% - 24px);
+	    padding:9px 10px 9px 13px;
+	    box-sizing:border-box;
+	    border:1px solid rgba(42,102,134,0.34);
+	    border-radius:8px;
+	    background:#f8fcfe;
+	    color:#173f55;
+	    box-shadow:0 5px 18px rgba(24,66,89,0.16);
+	    font-size:0.84rem;
+	    font-weight:700;
+	    line-height:1.35;
+	    letter-spacing:0;
+	    opacity:0;
+	    pointer-events:none;
+	    transform:translate3d(-50%, 8px, 0);
+	    transition:opacity 140ms ease, transform 140ms ease;
+	  }
+	  .last-action-undo-toast.is-visible{
+	    opacity:1;
+	    pointer-events:auto;
+	    transform:translate3d(-50%, 0, 0);
+	  }
+	  .last-action-undo-message{
+	    min-width:0;
+	    overflow-wrap:anywhere;
+	  }
+	  .last-action-undo-btn{
+	    flex:0 0 auto;
+	    min-height:34px;
+	    padding:7px 12px;
+	    border:1px solid #2a6686;
+	    border-radius:7px;
+	    background:#2a6686;
+	    color:#fff;
+	    font:inherit;
+	    font-size:0.84rem;
+	    line-height:1;
+	    letter-spacing:0;
+	    cursor:pointer;
+	    touch-action:manipulation;
+	  }
+	  .last-action-undo-btn:disabled{
+	    opacity:0.58;
+	    cursor:default;
+	  }
+	  .last-action-undo-toast.is-error{
+	    border-color:rgba(176,62,62,0.36);
+	    background:#fff8f8;
+	    color:#7b2626;
+	  }
+	  body.dark-theme .last-action-undo-toast{
+	    border-color:rgba(107,178,216,0.42);
+	    background:#17313f;
+	    color:#e3f5ff;
+	    box-shadow:none;
+	  }
+	  body.dark-theme .last-action-undo-toast.is-error{
+	    border-color:rgba(232,126,126,0.46);
+	    background:#402323;
+	    color:#ffe4e4;
+	  }
+	  body.legacy-performance-mode .last-action-undo-toast{
+	    transition:none;
+	    box-shadow:none;
+	  }
 	  .container,
 	  .header-area,
 	  .header-buttons,
@@ -3542,6 +3617,11 @@
 <div id="receive-complete-toast" class="receive-complete-toast" role="status" aria-live="polite" aria-atomic="true">
   <span class="receive-complete-toast-icon" aria-hidden="true">&#10003;</span>
   <span>受け取り完了</span>
+</div>
+
+<div id="last-action-undo-toast" class="last-action-undo-toast" role="status" aria-live="polite" aria-atomic="true">
+  <span id="last-action-undo-message" class="last-action-undo-message"></span>
+  <button id="last-action-undo-btn" type="button" class="last-action-undo-btn">取り消す</button>
 </div>
 
 <div id="workflow-home-screen" class="workflow-home-screen" aria-live="polite">
@@ -10507,12 +10587,15 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 	            morning: '朝の庶務で変更',
 	            morning_restore: '朝の庶務前へ復元',
 	            ocr: 'OCR登録で変更',
-	            manual: '個数変更ボタンで変更'
+	            manual: '個数変更ボタンで変更',
+	            undo: '直前の操作を取り消しました'
 	          };
 	          entries.push({
 	            delta,
-	            reason: delta > 0 ? '増えました' : '減りました',
+	            reason: d.historySource === 'undo' ? '取り消し' : (delta > 0 ? '増えました' : '減りました'),
 	            note: sourceNotes[d.historySource] || '個数変更で変更',
+	            historySource: d.historySource || '',
+	            isArrival: delta > 0 && d.historySource !== 'undo',
 	            timestamp: d.timestamp
 	          });
         }
@@ -10588,7 +10671,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       if (!list) return;
 	  let latestArrival = null;
 	  (entries || []).forEach(function(entry){
-	    if (Number(entry && entry.delta || 0) <= 0) return;
+	    if (Number(entry && entry.delta || 0) <= 0 || entry.isArrival === false) return;
 	    if (!latestArrival || historyTimestampMillis(entry) > historyTimestampMillis(latestArrival)) latestArrival = entry;
 	  });
 	  if (summary) {
@@ -10611,7 +10694,9 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       list.innerHTML = entries.map(function(entry){
         const delta = Number(entry.delta || 0);
         const plus = delta > 0;
-		const badgeText = plus ? '到着登録' : (entry.reason === '受け取り' ? '受取' : '減少');
+		const badgeText = entry.reason === '取り消し'
+		  ? '取消'
+		  : (plus ? '到着登録' : (entry.reason === '受け取り' ? '受取' : '減少'));
         const countText = `${plus ? '+' : ''}${delta}件`;
 		const dateParts = getHistoryDisplayDateParts(entry.timestamp);
         return `
@@ -11425,6 +11510,17 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 	        source: sourceHint === 'ocr' ? 'ocr' : 'manual'
 	      }).then(function(result){
 	        settleOptimisticCountChange(token, result, true);
+	        if (result && result.changed && !result.staged) {
+	          registerLastActionUndo({
+	            kind: 'count',
+	            residentId: residentId,
+	            residentName: residentName || (resident && resident.name) || '',
+	            collectionName: targetCollection,
+	            type: safeType,
+	            restoreValue: result.previousValue,
+	            expectedValue: result.nextValue
+	          });
+	        }
 	        if (result && result.changed && delta > 0) {
 	          clearSearchInputAfterWorkflowAction({ render: true });
 	        }
@@ -12065,6 +12161,9 @@ function applySohmuUI(){
           receiveCustomConfirmBtn: document.getElementById('receive-custom-confirm-btn'),
 	          receiveCancelBtn: document.getElementById('receive-cancel-btn'),
 	          receiveCompleteToast: document.getElementById('receive-complete-toast'),
+	          lastActionUndoToast: document.getElementById('last-action-undo-toast'),
+	          lastActionUndoMessage: document.getElementById('last-action-undo-message'),
+	          lastActionUndoBtn: document.getElementById('last-action-undo-btn'),
 	          mobileCountEditModal: document.getElementById('mobile-count-edit-modal'),
 	          mobileCountEditDoneBtn: document.getElementById('mobile-count-edit-done-btn'),
 	          mobileCountEditName: document.getElementById('mobile-count-edit-name'),
@@ -12221,6 +12320,219 @@ const receiveModalState = {
 	    receiveCompleteToastTimerId = 0;
 	    toast.classList.remove('is-visible');
 	  }, 1000);
+	}
+
+	var lastActionUndoState = {
+	  action: null,
+	  timerId: 0,
+	  busy: false,
+	  sequence: 0
+	};
+
+	function clearLastActionUndoTimer() {
+	  if (!lastActionUndoState.timerId) return;
+	  window.clearTimeout(lastActionUndoState.timerId);
+	  lastActionUndoState.timerId = 0;
+	}
+
+	function hideLastActionUndoToast(clearAction) {
+	  clearLastActionUndoTimer();
+	  if (clearAction !== false) lastActionUndoState.action = null;
+	  lastActionUndoState.busy = false;
+	  if (elements.lastActionUndoToast) {
+	    elements.lastActionUndoToast.classList.remove('is-visible', 'is-error');
+	  }
+	  if (elements.lastActionUndoBtn) {
+	    elements.lastActionUndoBtn.disabled = false;
+	    elements.lastActionUndoBtn.style.display = '';
+	    elements.lastActionUndoBtn.textContent = '取り消す';
+	  }
+	}
+
+	function showLastActionUndoResult(message, isError) {
+	  clearLastActionUndoTimer();
+	  lastActionUndoState.action = null;
+	  lastActionUndoState.busy = false;
+	  if (!elements.lastActionUndoToast || !elements.lastActionUndoMessage) return;
+	  elements.lastActionUndoMessage.textContent = message || '';
+	  elements.lastActionUndoToast.classList.toggle('is-error', !!isError);
+	  elements.lastActionUndoToast.classList.add('is-visible');
+	  if (elements.lastActionUndoBtn) elements.lastActionUndoBtn.style.display = 'none';
+	  lastActionUndoState.timerId = window.setTimeout(function(){
+	    hideLastActionUndoToast(true);
+	  }, isError ? 2600 : 1500);
+	}
+
+	function describeUndoableAction(action) {
+	  var name = String(action && action.residentName || '').trim();
+	  var prefix = name ? name + 'さんの' : '';
+	  if (action && action.kind === 'receive') {
+	    var receivedParts = [];
+	    var luggageCount = Math.max(0, Number(action.restoreValues && action.restoreValues.luggage || 0)
+	      - Number(action.expectedValues && action.expectedValues.luggage || 0));
+	    var mailCount = Math.max(0, Number(action.restoreValues && action.restoreValues.mail || 0)
+	      - Number(action.expectedValues && action.expectedValues.mail || 0));
+	    if (luggageCount) receivedParts.push('荷物' + luggageCount + '件');
+	    if (mailCount) receivedParts.push('郵便' + mailCount + '件');
+	    return prefix + (receivedParts.join('・') || '荷物・郵便') + 'を受け取りました';
+	  }
+	  var typeLabel = action && action.type === 'mail' ? '郵便' : '荷物';
+	  var difference = Number(action && action.expectedValue || 0) - Number(action && action.restoreValue || 0);
+	  return prefix + typeLabel + 'を' + Math.abs(difference) + '件' + (difference > 0 ? '増やしました' : '減らしました');
+	}
+
+	function registerLastActionUndo(action) {
+	  if (!action || (typeof __isMorningMode === 'function' && __isMorningMode())) return;
+	  if (!elements.lastActionUndoToast || !elements.lastActionUndoMessage || !elements.lastActionUndoBtn) return;
+	  clearLastActionUndoTimer();
+	  lastActionUndoState.sequence += 1;
+	  action.undoId = lastActionUndoState.sequence;
+	  action.expiresAt = Date.now() + 10000;
+	  lastActionUndoState.action = action;
+	  lastActionUndoState.busy = false;
+	  elements.lastActionUndoMessage.textContent = describeUndoableAction(action);
+	  elements.lastActionUndoBtn.disabled = false;
+	  elements.lastActionUndoBtn.style.display = '';
+	  elements.lastActionUndoBtn.textContent = '取り消す';
+	  elements.lastActionUndoToast.classList.remove('is-error');
+	  elements.lastActionUndoToast.classList.add('is-visible');
+	  lastActionUndoState.timerId = window.setTimeout(function(){
+	    hideLastActionUndoToast(true);
+	  }, 10000);
+	}
+
+	function makeUndoConflictError() {
+	  var error = new Error('undo conflict');
+	  error.code = 'undo-conflict';
+	  return error;
+	}
+
+	function buildUndoCountLog(action, type, previousValue, nextValue, undoKind) {
+	  var collectionName = String(action.collectionName || '');
+	  var dormKey = collectionName.split('_')[1] || '';
+	  var typeLabel = getItemHistoryTypeLabel(type);
+	  var delta = nextValue - previousValue;
+	  var details = '[' + dormKey + '] ' + String(action.residentName || '') + ' の' + typeLabel +
+	    'を ' + previousValue + '→' + nextValue + '（直前操作を取り消し）';
+	  var meta = buildItemHistoryLogMeta(
+	    action.residentId,
+	    action.residentName,
+	    collectionName,
+	    type,
+	    delta,
+	    previousValue,
+	    nextValue,
+	    'undo'
+	  );
+	  meta.historyConsistencyVersion = 2;
+	  meta.undoKind = undoKind || action.kind || 'count';
+	  return buildTrackedLogPayload('個数変更', details, meta);
+	}
+
+	async function undoLastAction() {
+	  var action = lastActionUndoState.action;
+	  if (!action || lastActionUndoState.busy) return;
+	  if (Date.now() > Number(action.expiresAt || 0)) {
+	    showLastActionUndoResult('取り消せる時間を過ぎました', true);
+	    return;
+	  }
+
+	  lastActionUndoState.busy = true;
+	  clearLastActionUndoTimer();
+	  if (elements.lastActionUndoBtn) {
+	    elements.lastActionUndoBtn.disabled = true;
+	    elements.lastActionUndoBtn.textContent = '戻しています...';
+	  }
+
+	  var residentPath = String(action.collectionName || '') + '/' + String(action.residentId || '');
+	  var docRef = db.collection(action.collectionName).doc(action.residentId);
+	  try {
+	    var result = await enqueueResidentMutation(residentPath, function(){
+	      clearSettledCountOverlayForResident(residentPath);
+	      return db.runTransaction(async function(transaction){
+	        var snap = await transaction.get(docRef);
+	        if (!snap.exists) throw makeUndoConflictError();
+	        var data = snap.data() || {};
+	        var updatePayload = {
+	          __skipCountNotificationOnce: 'undo-' + Date.now() + '-' + String(action.undoId || '')
+	        };
+	        var restored = {};
+	        var noteRestored = false;
+
+	        if (action.kind === 'receive') {
+	          var expectedLuggage = normalizeCountDisplayValue(action.expectedValues && action.expectedValues.luggage);
+	          var expectedMail = normalizeCountDisplayValue(action.expectedValues && action.expectedValues.mail);
+	          if (normalizeCountDisplayValue(data.luggage) !== expectedLuggage
+	              || normalizeCountDisplayValue(data.mail) !== expectedMail) {
+	            throw makeUndoConflictError();
+	          }
+	          restored.luggage = normalizeCountDisplayValue(action.restoreValues && action.restoreValues.luggage);
+	          restored.mail = normalizeCountDisplayValue(action.restoreValues && action.restoreValues.mail);
+	          updatePayload.luggage = restored.luggage;
+	          updatePayload.mail = restored.mail;
+	          ['luggage', 'mail'].forEach(function(type){
+	            var previousValue = type === 'mail' ? expectedMail : expectedLuggage;
+	            var nextValue = restored[type];
+	            if (nextValue === previousValue) return;
+	            var logRef = db.collection('logs').doc();
+	            transaction.set(logRef, buildUndoCountLog(action, type, previousValue, nextValue, 'receive'));
+	          });
+	          if (action.noteWasCleared && normalizeResidentNote(data.note || '') === '') {
+	            updatePayload.note = String(action.previousNote || '');
+	            noteRestored = true;
+	          }
+	        } else {
+	          var safeType = action.type === 'mail' ? 'mail' : 'luggage';
+	          var expectedValue = normalizeCountDisplayValue(action.expectedValue);
+	          if (normalizeCountDisplayValue(data[safeType]) !== expectedValue) {
+	            throw makeUndoConflictError();
+	          }
+	          restored[safeType] = normalizeCountDisplayValue(action.restoreValue);
+	          updatePayload[safeType] = restored[safeType];
+	          var countLogRef = db.collection('logs').doc();
+	          transaction.set(countLogRef,
+	            buildUndoCountLog(action, safeType, expectedValue, restored[safeType], 'count'));
+	        }
+
+	        transaction.update(docRef, updatePayload);
+	        return { restored: restored, noteRestored: noteRestored };
+	      });
+	    });
+
+	    if (action.kind === 'receive') {
+	      rebasePendingCountOverlayForResident(action.residentId, residentPath, {
+	        luggage: result.restored.luggage,
+	        mail: result.restored.mail
+	      });
+	      if (action.noteWasCleared && result.noteRestored) {
+	        var receiveResident = getResidentForMutation(action.residentId, residentPath);
+	        if (receiveResident) receiveResident.note = String(action.previousNote || '');
+	      }
+	    } else {
+	      var restoredType = action.type === 'mail' ? 'mail' : 'luggage';
+	      pendingCountUiStates.delete(getPendingCountStateKey(residentPath, restoredType));
+	      setLocalResidentCount(action.residentId, residentPath, restoredType, result.restored[restoredType]);
+	    }
+	    try { requestResidentTableRender(); } catch (_) {}
+	    if (mobileCountEditState && mobileCountEditState.residentId === action.residentId) {
+	      try { syncMobileCountEditModalUI(); } catch (_) {}
+	    }
+	    showLastActionUndoResult('直前の操作を取り消しました', false);
+	  } catch (error) {
+	    console.error('undo last action failed', error);
+	    if (error && error.code === 'undo-conflict') {
+	      showLastActionUndoResult('その後に変更があるため取り消せません', true);
+	    } else {
+	      showLastActionUndoResult('取り消しに失敗しました', true);
+	    }
+	  }
+	}
+
+	if (elements.lastActionUndoBtn) {
+	  elements.lastActionUndoBtn.addEventListener('click', function(ev){
+	    if (ev && ev.preventDefault) ev.preventDefault();
+	    undoLastAction();
+	  });
 	}
 
 	function getQueryParameterCompat(name) {
@@ -14376,9 +14688,9 @@ function openRegisterFromReceiveModal() {
 async function maybeClearResidentNoteAfterReceive(residentId, targetCollection, dormKey) {
   const resident = getResidentById(residentId);
   const currentNote = normalizeResidentNote(resident && (resident.note || resident.memo || resident.notes || ''));
-  if (!resident || !currentNote) return;
+  if (!resident || !currentNote) return { cleared: false, previousNote: '' };
   const shouldClear = window.confirm('この寮生には備考があります。受け取り後に備考を消しますか？');
-  if (!shouldClear) return;
+  if (!shouldClear) return { cleared: false, previousNote: currentNote };
   try {
     await db.collection(targetCollection).doc(residentId).update({ note: '' });
 	    resident.note = '';
@@ -14386,9 +14698,11 @@ async function maybeClearResidentNoteAfterReceive(residentId, targetCollection, 
 	    resident.notes = '';
 	    try { requestResidentTableRender(); } catch (_) {}
     try { addLog('備考削除', `[${dormKey}] ${resident.name || ''} の備考を受け取り後に削除`); } catch (_) {}
+    return { cleared: true, previousNote: currentNote };
   } catch (error) {
     console.error('clear resident note after receive failed', error);
     alert('備考の削除に失敗しました。通信状態や権限をご確認ください。');
+    return { cleared: false, previousNote: currentNote };
   }
 }
 
@@ -14460,7 +14774,14 @@ async function receiveResidentItems(residentId, requestedLuggage, requestedMail)
 	          transaction.set(logRef, logPayload);
 	        }
 
-	        return { appliedLuggage, appliedMail, nextLuggage, nextMail };
+	        return {
+	          appliedLuggage,
+	          appliedMail,
+	          previousLuggage: currentLuggage,
+	          previousMail: currentMail,
+	          nextLuggage,
+	          nextMail
+	        };
 	      });
 	    });
 
@@ -14471,7 +14792,23 @@ async function receiveResidentItems(residentId, requestedLuggage, requestedMail)
 	    try { requestResidentTableRender(); } catch (_) {}
 
 		    if (result.appliedLuggage || result.appliedMail) {
-		      await maybeClearResidentNoteAfterReceive(residentId, targetCollection, dormKey);
+		      const noteUndo = await maybeClearResidentNoteAfterReceive(residentId, targetCollection, dormKey);
+		      registerLastActionUndo({
+		        kind: 'receive',
+		        residentId: residentId,
+		        residentName: resident.name || '',
+		        collectionName: targetCollection,
+		        expectedValues: {
+		          luggage: result.nextLuggage,
+		          mail: result.nextMail
+		        },
+		        restoreValues: {
+		          luggage: result.previousLuggage,
+		          mail: result.previousMail
+		        },
+		        noteWasCleared: !!(noteUndo && noteUndo.cleared),
+		        previousNote: noteUndo && noteUndo.previousNote ? noteUndo.previousNote : ''
+		      });
 		      if (elements.sohmuToggle && elements.sohmuToggle.checked) {
 		        showReceiveCompleteToast();
 		      }
