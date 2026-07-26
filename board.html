@@ -1,0 +1,1018 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#f4f7f9">
+  <title>荷物・郵便 掲示板</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="./icons/icon-32.png?v=20260723">
+  <style>
+    :root {
+      --page-bg: #f4f7f9;
+      --surface: #ffffff;
+      --text: #17212b;
+      --muted: #52606d;
+      --line: #cfd8df;
+      --shofu: #864a2b;
+      --meizen: #2a6686;
+      --luggage: #b85b18;
+      --mail: #176b4d;
+      --ticker-height: 74px;
+      --safe-top: max(16px, env(safe-area-inset-top));
+      --safe-right: max(20px, env(safe-area-inset-right));
+      --safe-left: max(20px, env(safe-area-inset-left));
+      --burn-x: 0px;
+      --burn-y: 0px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: var(--page-bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Yu Gothic UI",
+        "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+      letter-spacing: 0;
+    }
+
+    button {
+      font: inherit;
+      touch-action: manipulation;
+    }
+
+    .board-shell {
+      width: calc(100% - 2px);
+      height: calc(100% - 2px);
+      margin: 1px;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) var(--ticker-height);
+      transform: translate3d(var(--burn-x), var(--burn-y), 0);
+    }
+
+    .board-header {
+      min-height: 78px;
+      padding: var(--safe-top) var(--safe-right) 12px var(--safe-left);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      align-items: center;
+      gap: 22px;
+      border-bottom: 2px solid #aebbc5;
+      background: var(--surface);
+    }
+
+    .board-title {
+      min-width: 0;
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+    }
+
+    .board-title h1 {
+      margin: 0;
+      font-size: clamp(26px, 2.45vw, 44px);
+      line-height: 1.05;
+      font-weight: 800;
+    }
+
+    .board-summary {
+      color: var(--muted);
+      font-size: clamp(14px, 1.2vw, 20px);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .clock {
+      min-width: 194px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .clock-time {
+      display: block;
+      font-size: clamp(28px, 3vw, 50px);
+      line-height: 1;
+      font-weight: 800;
+    }
+
+    .clock-date {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: clamp(12px, 1.05vw, 17px);
+      font-weight: 700;
+    }
+
+    .fullscreen-button {
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      border: 1px solid #9eabb5;
+      border-radius: 6px;
+      background: #fff;
+      color: #23313d;
+      font-size: 25px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .fullscreen-button:hover,
+    .fullscreen-button:focus-visible {
+      background: #e8eef2;
+      outline: 3px solid rgba(42, 102, 134, 0.25);
+    }
+
+    :fullscreen .fullscreen-button {
+      display: none;
+    }
+
+    .board-main {
+      min-height: 0;
+      padding: 16px var(--safe-right) 16px var(--safe-left);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 18px;
+      overflow: hidden;
+    }
+
+    .dorm-panel {
+      min-width: 0;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .dorm-header {
+      min-height: 54px;
+      padding: 9px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      color: #fff;
+    }
+
+    .dorm-panel.shofu .dorm-header {
+      background: var(--shofu);
+    }
+
+    .dorm-panel.meizen .dorm-header {
+      background: var(--meizen);
+    }
+
+    .dorm-name {
+      margin: 0;
+      font-size: clamp(22px, 2vw, 34px);
+      line-height: 1;
+      font-weight: 800;
+    }
+
+    .dorm-count {
+      font-size: clamp(15px, 1.25vw, 20px);
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .resident-list {
+      min-height: 0;
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(var(--columns, 1), minmax(0, 1fr));
+      grid-auto-rows: minmax(0, 1fr);
+      gap: 8px;
+      overflow: hidden;
+      background: #edf2f5;
+    }
+
+    .resident-item {
+      min-width: 0;
+      min-height: 0;
+      padding: 8px 11px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid #c7d1d8;
+      border-left: 6px solid var(--panel-accent);
+      border-radius: 5px;
+      background: #fff;
+    }
+
+    .resident-identity {
+      min-width: 0;
+      display: flex;
+      align-items: baseline;
+      gap: 9px;
+    }
+
+    .resident-room {
+      flex: 0 0 auto;
+      color: var(--muted);
+      font-size: clamp(13px, 1.08vw, 18px);
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .resident-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: clamp(18px, 1.65vw, 29px);
+      line-height: 1.05;
+      font-weight: 800;
+    }
+
+    .resident-counts {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 7px;
+    }
+
+    .item-count {
+      min-width: 66px;
+      min-height: 40px;
+      padding: 5px 9px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border: 2px solid currentColor;
+      border-radius: 5px;
+      background: #fff;
+      font-size: clamp(16px, 1.38vw, 23px);
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .item-count.luggage {
+      color: var(--luggage);
+    }
+
+    .item-count.mail {
+      color: var(--mail);
+    }
+
+    .item-label {
+      font-size: 0.72em;
+    }
+
+    .resident-list.compact {
+      gap: 6px;
+      padding: 8px;
+    }
+
+    .resident-list.compact .resident-item {
+      padding: 5px 8px;
+      gap: 7px;
+      border-left-width: 5px;
+    }
+
+    .resident-list.compact .resident-name {
+      font-size: clamp(15px, 1.35vw, 22px);
+    }
+
+    .resident-list.compact .resident-room {
+      font-size: clamp(11px, 0.92vw, 15px);
+    }
+
+    .resident-list.compact .item-count {
+      min-width: 54px;
+      min-height: 31px;
+      padding: 3px 6px;
+      font-size: clamp(13px, 1.1vw, 18px);
+    }
+
+    .resident-list.dense {
+      gap: 4px;
+      padding: 6px;
+    }
+
+    .resident-list.dense .resident-item {
+      padding: 3px 7px;
+      gap: 5px;
+      border-left-width: 4px;
+    }
+
+    .resident-list.dense .resident-identity {
+      gap: 6px;
+    }
+
+    .resident-list.dense .resident-name {
+      font-size: clamp(14px, 1.18vw, 20px);
+    }
+
+    .resident-list.dense .resident-room {
+      font-size: clamp(10px, 0.82vw, 14px);
+    }
+
+    .resident-list.dense .resident-counts {
+      gap: 4px;
+    }
+
+    .resident-list.dense .item-count {
+      min-width: 48px;
+      min-height: 27px;
+      padding: 2px 5px;
+      border-width: 1px;
+      font-size: clamp(12px, 0.98vw, 16px);
+    }
+
+    .empty-state {
+      grid-column: 1 / -1;
+      display: grid;
+      place-items: center;
+      min-height: 0;
+      padding: 24px;
+      color: #40505d;
+      background: #fff;
+      border: 1px solid #c7d1d8;
+      border-radius: 5px;
+      font-size: clamp(18px, 1.7vw, 30px);
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .ticker {
+      min-width: 0;
+      min-height: var(--ticker-height);
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: stretch;
+      border-top: 3px solid #243642;
+      background: #101a21;
+      color: #fff;
+      overflow: hidden;
+    }
+
+    .ticker-label {
+      position: relative;
+      z-index: 2;
+      min-width: 154px;
+      padding: 0 22px;
+      display: grid;
+      place-items: center;
+      background: #f3c623;
+      color: #15191c;
+      font-size: clamp(18px, 1.55vw, 27px);
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .ticker-window {
+      position: relative;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .ticker-track {
+      position: absolute;
+      left: 100%;
+      top: 0;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      white-space: nowrap;
+      will-change: transform;
+      animation: ticker-scroll var(--ticker-duration, 28s) linear infinite;
+      font-size: clamp(20px, 1.85vw, 32px);
+      font-weight: 800;
+    }
+
+    .ticker-separator {
+      margin: 0 30px;
+      color: #f3c623;
+    }
+
+    @keyframes ticker-scroll {
+      from {
+        transform: translate3d(0, 0, 0);
+      }
+      to {
+        transform: translate3d(calc(-100% - 100vw), 0, 0);
+      }
+    }
+
+    .connection-status {
+      position: fixed;
+      right: 20px;
+      bottom: calc(var(--ticker-height) + 12px);
+      z-index: 8;
+      max-width: min(430px, calc(100vw - 40px));
+      padding: 8px 12px;
+      display: none;
+      border: 2px solid #9d6600;
+      border-radius: 5px;
+      background: #fff4cf;
+      color: #533600;
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .connection-status.visible {
+      display: block;
+    }
+
+    .loading-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: grid;
+      place-items: center;
+      background: #f4f7f9;
+    }
+
+    .loading-layer.hidden {
+      display: none;
+    }
+
+    .loading-content {
+      width: min(520px, calc(100vw - 40px));
+      padding: 28px;
+      border: 1px solid #aebbc5;
+      border-radius: 6px;
+      background: #fff;
+      text-align: center;
+    }
+
+    .loading-title {
+      margin: 0;
+      font-size: 27px;
+      font-weight: 800;
+    }
+
+    .loading-note {
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    .reload-button {
+      margin-top: 18px;
+      padding: 11px 18px;
+      display: none;
+      border: 0;
+      border-radius: 5px;
+      background: #2a6686;
+      color: #fff;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .loading-layer.slow .reload-button {
+      display: inline-block;
+    }
+
+    @media (max-aspect-ratio: 4 / 3) {
+      :root {
+        --ticker-height: 66px;
+      }
+
+      .board-main {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .dorm-panel {
+        min-height: 0;
+      }
+
+      .resident-list {
+        --columns: 2 !important;
+      }
+    }
+
+    @media (max-height: 800px) and (min-aspect-ratio: 4 / 3) {
+      :root {
+        --ticker-height: 58px;
+        --safe-top: max(8px, env(safe-area-inset-top));
+      }
+
+      .board-header {
+        min-height: 58px;
+        padding-bottom: 7px;
+        gap: 14px;
+      }
+
+      .board-title {
+        gap: 10px;
+      }
+
+      .board-title h1 {
+        font-size: clamp(23px, 2.35vw, 34px);
+      }
+
+      .clock {
+        min-width: 150px;
+      }
+
+      .clock-time {
+        font-size: clamp(26px, 2.8vw, 38px);
+      }
+
+      .clock-date {
+        margin-top: 2px;
+        font-size: 12px;
+      }
+
+      .fullscreen-button {
+        width: 38px;
+        height: 38px;
+        font-size: 22px;
+      }
+
+      .board-main {
+        padding-top: 8px;
+        padding-bottom: 8px;
+        gap: 10px;
+      }
+
+      .dorm-header {
+        min-height: 42px;
+        padding: 6px 12px;
+      }
+
+      .dorm-name {
+        font-size: clamp(20px, 1.9vw, 28px);
+      }
+
+      .dorm-count {
+        font-size: 15px;
+      }
+
+      .resident-list.dense {
+        gap: 2px;
+        padding: 4px;
+      }
+
+      .resident-list.dense .resident-item {
+        padding: 1px 5px;
+        gap: 4px;
+      }
+
+      .resident-list.dense .resident-name {
+        font-size: clamp(13px, 1.12vw, 17px);
+        line-height: 1;
+      }
+
+      .resident-list.dense .resident-room {
+        font-size: 10px;
+        line-height: 1;
+      }
+
+      .resident-list.dense .item-count {
+        min-width: 40px;
+        min-height: 20px;
+        padding: 1px 4px;
+        font-size: 11px;
+        line-height: 1;
+      }
+
+      .ticker-label {
+        min-width: 120px;
+        padding: 0 15px;
+        font-size: 18px;
+      }
+
+      .ticker-track {
+        font-size: clamp(18px, 1.75vw, 24px);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .ticker-track {
+        animation-duration: calc(var(--ticker-duration, 28s) * 1.8);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="board-shell">
+    <header class="board-header">
+      <div class="board-title">
+        <h1>荷物・郵便 掲示板</h1>
+        <span id="board-summary" class="board-summary">読み込み中</span>
+      </div>
+      <div class="clock" aria-label="現在時刻">
+        <span id="clock-time" class="clock-time">--:--</span>
+        <span id="clock-date" class="clock-date">----</span>
+      </div>
+      <button id="fullscreen-button" class="fullscreen-button" type="button" aria-label="全画面表示" title="全画面表示">⛶</button>
+    </header>
+
+    <main class="board-main">
+      <section class="dorm-panel shofu" aria-labelledby="shofu-title">
+        <header class="dorm-header">
+          <h2 id="shofu-title" class="dorm-name">松風寮</h2>
+          <span id="shofu-count" class="dorm-count">0人</span>
+        </header>
+        <div id="shofu-list" class="resident-list" style="--panel-accent:var(--shofu)"></div>
+      </section>
+
+      <section class="dorm-panel meizen" aria-labelledby="meizen-title">
+        <header class="dorm-header">
+          <h2 id="meizen-title" class="dorm-name">明善寮</h2>
+          <span id="meizen-count" class="dorm-count">0人</span>
+        </header>
+        <div id="meizen-list" class="resident-list" style="--panel-accent:var(--meizen)"></div>
+      </section>
+    </main>
+
+    <aside class="ticker" aria-label="お知らせ">
+      <div class="ticker-label">お知らせ</div>
+      <div class="ticker-window">
+        <div id="ticker-track" class="ticker-track">お知らせを読み込んでいます</div>
+      </div>
+    </aside>
+  </div>
+
+  <div id="connection-status" class="connection-status" role="status" aria-live="polite"></div>
+
+  <div id="loading-layer" class="loading-layer" role="status" aria-live="polite">
+    <div class="loading-content">
+      <p class="loading-title">掲示板を読み込んでいます</p>
+      <p id="loading-note" class="loading-note">寮生情報へ接続しています。</p>
+      <button id="reload-button" class="reload-button" type="button">再読み込み</button>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore-compat.js"></script>
+  <script>
+    (function(){
+      'use strict';
+
+      var firebaseConfig = {
+        apiKey: 'AIzaSyDUevNVtZEycMZ7jl9xSimUqg0PB5SbheY',
+        authDomain: 'dorm-manager-30ce8.firebaseapp.com',
+        projectId: 'dorm-manager-30ce8',
+        storageBucket: 'dorm-manager-30ce8.appspot.com',
+        messagingSenderId: '775850695904',
+        appId: '1:775850695904:web:0c1ee061060482c1368485',
+        measurementId: 'G-Y9XBHQKJW2'
+      };
+
+      firebase.initializeApp(firebaseConfig);
+      var db = firebase.firestore();
+      var residents = { shofu: [], meizen: [] };
+      var announcements = [];
+      var loaded = { shofu: false, meizen: false, announcements: false };
+      var fromCache = { shofu: false, meizen: false, announcements: false };
+      var lastUpdatedAt = 0;
+      var renderTimer = 0;
+      var tickerSignature = '';
+      var loadingTimer = 0;
+      var reconnectTimer = 0;
+
+      var elements = {
+        summary: document.getElementById('board-summary'),
+        shofuList: document.getElementById('shofu-list'),
+        meizenList: document.getElementById('meizen-list'),
+        shofuCount: document.getElementById('shofu-count'),
+        meizenCount: document.getElementById('meizen-count'),
+        tickerTrack: document.getElementById('ticker-track'),
+        loadingLayer: document.getElementById('loading-layer'),
+        loadingNote: document.getElementById('loading-note'),
+        reloadButton: document.getElementById('reload-button'),
+        connectionStatus: document.getElementById('connection-status'),
+        fullscreenButton: document.getElementById('fullscreen-button'),
+        clockTime: document.getElementById('clock-time'),
+        clockDate: document.getElementById('clock-date')
+      };
+
+      function toCount(value){
+        var count = parseInt(value, 10);
+        return isFinite(count) && count > 0 ? count : 0;
+      }
+
+      function roomSortValue(value){
+        var parsed = parseInt(String(value == null ? '' : value).replace(/[^0-9]/g, ''), 10);
+        return isFinite(parsed) ? parsed : 99999;
+      }
+
+      function sortResidents(list){
+        return list.slice().sort(function(a, b){
+          var roomDifference = roomSortValue(a.roomNumber) - roomSortValue(b.roomNumber);
+          if (roomDifference) return roomDifference;
+          return String(a.name || '').localeCompare(String(b.name || ''), 'ja');
+        });
+      }
+
+      function residentFromDoc(doc, dorm){
+        var data = doc.data() || {};
+        return {
+          id: doc.id,
+          dorm: dorm,
+          name: String(data.name || ''),
+          roomNumber: String(data.roomNumber == null ? '' : data.roomNumber),
+          luggage: toCount(data.luggage),
+          mail: toCount(data.mail)
+        };
+      }
+
+      function createCountElement(type, count){
+        var item = document.createElement('span');
+        item.className = 'item-count ' + type;
+        var label = document.createElement('span');
+        label.className = 'item-label';
+        label.textContent = type === 'mail' ? '郵便' : '荷物';
+        var value = document.createElement('span');
+        value.textContent = String(count);
+        item.appendChild(label);
+        item.appendChild(value);
+        return item;
+      }
+
+      function renderDorm(dorm){
+        var listElement = dorm === 'shofu' ? elements.shofuList : elements.meizenList;
+        var countElement = dorm === 'shofu' ? elements.shofuCount : elements.meizenCount;
+        var activeResidents = sortResidents(residents[dorm].filter(function(resident){
+          return (resident.luggage + resident.mail) > 0;
+        }));
+        var count = activeResidents.length;
+        var columns = count > 40 ? 3 : count > 11 ? 2 : 1;
+        listElement.style.setProperty('--columns', String(columns));
+        listElement.classList.toggle('compact', count > 11);
+        listElement.classList.toggle('dense', count > 28);
+        countElement.textContent = count + '人';
+
+        var fragment = document.createDocumentFragment();
+        if (!count) {
+          var empty = document.createElement('div');
+          empty.className = 'empty-state';
+          empty.textContent = '現在、届いている荷物・郵便はありません';
+          fragment.appendChild(empty);
+        } else {
+          activeResidents.forEach(function(resident){
+            var item = document.createElement('article');
+            item.className = 'resident-item';
+
+            var identity = document.createElement('div');
+            identity.className = 'resident-identity';
+            var room = document.createElement('span');
+            room.className = 'resident-room';
+            room.textContent = resident.roomNumber ? resident.roomNumber + '号室' : '部屋未設定';
+            var name = document.createElement('span');
+            name.className = 'resident-name';
+            name.textContent = resident.name || '名前未設定';
+            identity.appendChild(room);
+            identity.appendChild(name);
+
+            var counts = document.createElement('div');
+            counts.className = 'resident-counts';
+            if (resident.luggage > 0) counts.appendChild(createCountElement('luggage', resident.luggage));
+            if (resident.mail > 0) counts.appendChild(createCountElement('mail', resident.mail));
+
+            item.appendChild(identity);
+            item.appendChild(counts);
+            fragment.appendChild(item);
+          });
+        }
+
+        listElement.textContent = '';
+        listElement.appendChild(fragment);
+      }
+
+      function formatUpdatedTime(timestamp){
+        if (!timestamp) return '';
+        var date = new Date(timestamp);
+        return pad(date.getHours()) + ':' + pad(date.getMinutes()) + '更新';
+      }
+
+      function renderBoard(){
+        renderTimer = 0;
+        renderDorm('shofu');
+        renderDorm('meizen');
+        var shofuActive = residents.shofu.filter(function(r){ return r.luggage + r.mail > 0; }).length;
+        var meizenActive = residents.meizen.filter(function(r){ return r.luggage + r.mail > 0; }).length;
+        var total = shofuActive + meizenActive;
+        elements.summary.textContent = total
+          ? '届いている人 ' + total + '人 ・ ' + formatUpdatedTime(lastUpdatedAt)
+          : '現在すべて受け取り済み ・ ' + formatUpdatedTime(lastUpdatedAt);
+        updateLoadingState();
+      }
+
+      function scheduleRender(){
+        if (renderTimer) return;
+        renderTimer = window.setTimeout(renderBoard, 80);
+      }
+
+      function stripMarkup(value){
+        var container = document.createElement('div');
+        container.innerHTML = String(value == null ? '' : value)
+          .replace(/\[color\s*=\s*[^\]]+\]/gi, '')
+          .replace(/\[\/color\]/gi, '');
+        return String(container.textContent || container.innerText || '')
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+
+      function timestampMillis(value){
+        try {
+          if (value && typeof value.toMillis === 'function') return value.toMillis();
+          if (value && typeof value.toDate === 'function') return value.toDate().getTime();
+        } catch (_) {}
+        return 0;
+      }
+
+      function announcementTime(data){
+        return timestampMillis(data.updatedAt)
+          || timestampMillis(data.createdAt)
+          || timestampMillis(data.timestamp);
+      }
+
+      function renderTicker(){
+        var sorted = announcements.slice().sort(function(a, b){
+          var pinDifference = Number(!!b.pinned) - Number(!!a.pinned);
+          return pinDifference || announcementTime(b) - announcementTime(a);
+        }).slice(0, 6);
+        var messages = sorted.map(function(item){
+          var title = stripMarkup(item.title);
+          var body = stripMarkup(item.body || item.text);
+          if (title && body) return title + '　' + body;
+          return title || body;
+        }).filter(Boolean);
+        if (!messages.length) messages = ['現在、新しいお知らせはありません'];
+        var signature = messages.join('\u001f');
+        if (signature === tickerSignature) return;
+        tickerSignature = signature;
+
+        var fragment = document.createDocumentFragment();
+        messages.forEach(function(message, index){
+          if (index) {
+            var separator = document.createElement('span');
+            separator.className = 'ticker-separator';
+            separator.textContent = '◆';
+            fragment.appendChild(separator);
+          }
+          var text = document.createElement('span');
+          text.textContent = message;
+          fragment.appendChild(text);
+        });
+        elements.tickerTrack.textContent = '';
+        elements.tickerTrack.appendChild(fragment);
+        var estimatedWidth = Math.max(600, signature.length * 32);
+        var duration = Math.max(20, Math.round((window.innerWidth + estimatedWidth) / 82));
+        elements.tickerTrack.style.setProperty('--ticker-duration', duration + 's');
+        elements.tickerTrack.style.animation = 'none';
+        void elements.tickerTrack.offsetWidth;
+        elements.tickerTrack.style.animation = '';
+      }
+
+      function updateLoadingState(){
+        if (loaded.shofu && loaded.meizen) {
+          elements.loadingLayer.classList.add('hidden');
+          if (loadingTimer) {
+            window.clearTimeout(loadingTimer);
+            loadingTimer = 0;
+          }
+          updateConnectionStatus();
+        }
+      }
+
+      function updateConnectionStatus(message){
+        var text = message || '';
+        if (!text && !navigator.onLine) text = 'オフラインです。最後に取得した情報を表示しています。';
+        if (!text && (fromCache.shofu || fromCache.meizen)) {
+          text = '保存済みの情報を表示中です。接続すると自動更新されます。';
+        }
+        elements.connectionStatus.textContent = text;
+        elements.connectionStatus.classList.toggle('visible', !!text);
+      }
+
+      function handleSnapshot(dorm, snapshot){
+        var next = [];
+        snapshot.forEach(function(doc){
+          next.push(residentFromDoc(doc, dorm));
+        });
+        residents[dorm] = next;
+        loaded[dorm] = true;
+        fromCache[dorm] = !!(snapshot.metadata && snapshot.metadata.fromCache);
+        lastUpdatedAt = Date.now();
+        scheduleRender();
+      }
+
+      function handleResidentError(dorm, error){
+        console.error(dorm + ' board listener failed', error);
+        updateConnectionStatus('寮生情報との接続が切れました。自動で再接続しています。');
+        if (!loaded[dorm]) {
+          elements.loadingLayer.classList.add('slow');
+          elements.loadingNote.textContent = '接続に時間がかかっています。通信状態を確認してください。';
+        }
+      }
+
+      function subscribe(){
+        db.collection('residents_shofu').onSnapshot(
+          { includeMetadataChanges: true },
+          function(snapshot){ handleSnapshot('shofu', snapshot); },
+          function(error){ handleResidentError('shofu', error); }
+        );
+        db.collection('residents_meizen').onSnapshot(
+          { includeMetadataChanges: true },
+          function(snapshot){ handleSnapshot('meizen', snapshot); },
+          function(error){ handleResidentError('meizen', error); }
+        );
+        db.collection('announcements').onSnapshot(
+          { includeMetadataChanges: true },
+          function(snapshot){
+            announcements = [];
+            snapshot.forEach(function(doc){
+              announcements.push(Object.assign({ id: doc.id }, doc.data() || {}));
+            });
+            loaded.announcements = true;
+            fromCache.announcements = !!(snapshot.metadata && snapshot.metadata.fromCache);
+            renderTicker();
+            updateConnectionStatus();
+          },
+          function(error){
+            console.error('announcement board listener failed', error);
+            updateConnectionStatus('お知らせとの接続が切れました。自動で再接続しています。');
+          }
+        );
+      }
+
+      function pad(value){
+        return ('0' + value).slice(-2);
+      }
+
+      function updateClock(){
+        var now = new Date();
+        elements.clockTime.textContent = pad(now.getHours()) + ':' + pad(now.getMinutes());
+        var weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+        elements.clockDate.textContent =
+          now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日（'
+          + weekdays[now.getDay()] + '）';
+      }
+
+      function shiftForBurnIn(){
+        var step = Math.floor(Date.now() / 900000) % 4;
+        var positions = [[0, 0], [1, 0], [1, 1], [0, 1]];
+        document.documentElement.style.setProperty('--burn-x', positions[step][0] + 'px');
+        document.documentElement.style.setProperty('--burn-y', positions[step][1] + 'px');
+      }
+
+      try {
+        db.enablePersistence({ synchronizeTabs: true }).catch(function(error){
+          console.warn('board persistence unavailable', error && (error.code || error.message));
+        });
+      } catch (_) {}
+
+      elements.reloadButton.addEventListener('click', function(){
+        window.location.reload();
+      });
+
+      elements.fullscreenButton.addEventListener('click', function(){
+        var root = document.documentElement;
+        var request = root.requestFullscreen || root.webkitRequestFullscreen;
+        if (request) {
+          try {
+            var result = request.call(root);
+            if (result && typeof result.catch === 'function') result.catch(function(){});
+          } catch (_) {}
+        }
+      });
+
+      window.addEventListener('online', function(){
+        updateConnectionStatus();
+      });
+      window.addEventListener('offline', function(){
+        updateConnectionStatus();
+      });
+      window.addEventListener('resize', function(){
+        renderTicker();
+      });
+
+      loadingTimer = window.setTimeout(function(){
+        if (!(loaded.shofu && loaded.meizen)) {
+          elements.loadingLayer.classList.add('slow');
+          elements.loadingNote.textContent =
+            '読み込みに時間がかかっています。通信状態を確認して、必要なら再読み込みしてください。';
+        }
+      }, 12000);
+
+      reconnectTimer = window.setInterval(function(){
+        updateConnectionStatus();
+      }, 30000);
+
+      updateClock();
+      shiftForBurnIn();
+      window.setInterval(updateClock, 1000);
+      window.setInterval(shiftForBurnIn, 900000);
+      subscribe();
+    })();
+  </script>
+</body>
+</html>
