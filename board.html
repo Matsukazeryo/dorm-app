@@ -58,12 +58,12 @@
     }
 
     .board-header {
-      min-height: 78px;
-      padding: var(--safe-top) var(--safe-right) 12px var(--safe-left);
+      min-height: 58px;
+      padding: var(--safe-top) var(--safe-right) 8px var(--safe-left);
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto auto;
+      grid-template-columns: minmax(0, 1fr) auto;
       align-items: center;
-      gap: 22px;
+      gap: 14px;
       border-bottom: 2px solid #aebbc5;
       background: var(--surface);
     }
@@ -77,7 +77,7 @@
 
     .board-title h1 {
       margin: 0;
-      font-size: clamp(26px, 2.45vw, 44px);
+      font-size: clamp(24px, 2vw, 36px);
       line-height: 1.05;
       font-weight: 800;
     }
@@ -89,46 +89,35 @@
       white-space: nowrap;
     }
 
-    .clock {
-      min-width: 194px;
-      text-align: right;
-      font-variant-numeric: tabular-nums;
+    .board-actions {
+      display: flex;
+      align-items: center;
+      gap: 7px;
     }
 
-    .clock-time {
-      display: block;
-      font-size: clamp(28px, 3vw, 50px);
-      line-height: 1;
-      font-weight: 800;
-    }
-
-    .clock-date {
-      display: block;
-      margin-top: 5px;
-      color: var(--muted);
-      font-size: clamp(12px, 1.05vw, 17px);
-      font-weight: 700;
-    }
-
+    .settings-button,
     .fullscreen-button {
-      width: 44px;
-      height: 44px;
+      width: 38px;
+      height: 38px;
       padding: 0;
       border: 1px solid #9eabb5;
       border-radius: 6px;
       background: #fff;
       color: #23313d;
-      font-size: 25px;
+      font-size: 22px;
       line-height: 1;
       cursor: pointer;
     }
 
+    .settings-button:hover,
+    .settings-button:focus-visible,
     .fullscreen-button:hover,
     .fullscreen-button:focus-visible {
       background: #e8eef2;
       outline: 3px solid rgba(42, 102, 134, 0.25);
     }
 
+    :fullscreen .settings-button,
     :fullscreen .fullscreen-button {
       display: none;
     }
@@ -235,9 +224,9 @@
     }
 
     .resident-counts {
-      display: flex;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       align-items: center;
-      justify-content: flex-end;
       gap: 7px;
     }
 
@@ -264,6 +253,10 @@
 
     .item-count.mail {
       color: var(--mail);
+    }
+
+    .item-count.empty {
+      visibility: hidden;
     }
 
     .item-label {
@@ -477,6 +470,111 @@
       display: inline-block;
     }
 
+    .settings-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      display: none;
+      place-items: center;
+      padding: 20px;
+      background: rgba(18, 28, 35, 0.72);
+    }
+
+    .settings-modal.visible {
+      display: grid;
+    }
+
+    .settings-dialog {
+      width: min(620px, 100%);
+      padding: 24px;
+      border: 1px solid #9eabb5;
+      border-radius: 6px;
+      background: #fff;
+      color: var(--text);
+    }
+
+    .settings-dialog h2 {
+      margin: 0 0 18px;
+      font-size: 25px;
+    }
+
+    .settings-field {
+      display: grid;
+      gap: 7px;
+      margin-top: 14px;
+      color: #344451;
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .settings-field textarea,
+    .settings-field input {
+      width: 100%;
+      border: 2px solid #aebbc5;
+      border-radius: 5px;
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+      font-weight: 500;
+    }
+
+    .settings-field textarea {
+      min-height: 130px;
+      padding: 11px;
+      resize: vertical;
+      line-height: 1.55;
+    }
+
+    .settings-field input {
+      height: 44px;
+      padding: 0 11px;
+    }
+
+    .settings-field textarea:focus,
+    .settings-field input:focus {
+      border-color: var(--meizen);
+      outline: 3px solid rgba(42, 102, 134, 0.2);
+    }
+
+    .settings-error {
+      min-height: 20px;
+      margin: 9px 0 0;
+      color: #a53126;
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .settings-actions {
+      margin-top: 15px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 9px;
+    }
+
+    .settings-actions button {
+      min-width: 110px;
+      min-height: 44px;
+      border: 0;
+      border-radius: 5px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .settings-cancel {
+      background: #dce3e8;
+      color: #25333e;
+    }
+
+    .settings-save {
+      background: var(--meizen);
+      color: #fff;
+    }
+
+    .settings-save:disabled {
+      opacity: 0.58;
+      cursor: wait;
+    }
+
     @media (max-aspect-ratio: 4 / 3) {
       :root {
         --ticker-height: 66px;
@@ -515,19 +613,7 @@
         font-size: clamp(23px, 2.35vw, 34px);
       }
 
-      .clock {
-        min-width: 150px;
-      }
-
-      .clock-time {
-        font-size: clamp(26px, 2.8vw, 38px);
-      }
-
-      .clock-date {
-        margin-top: 2px;
-        font-size: 12px;
-      }
-
+      .settings-button,
       .fullscreen-button {
         width: 38px;
         height: 38px;
@@ -606,11 +692,10 @@
         <h1>荷物・郵便 掲示板</h1>
         <span id="board-summary" class="board-summary">読み込み中</span>
       </div>
-      <div class="clock" aria-label="現在時刻">
-        <span id="clock-time" class="clock-time">--:--</span>
-        <span id="clock-date" class="clock-date">----</span>
+      <div class="board-actions">
+        <button id="settings-button" class="settings-button" type="button" aria-label="掲示板のお知らせを編集" title="掲示板のお知らせを編集">⚙</button>
+        <button id="fullscreen-button" class="fullscreen-button" type="button" aria-label="全画面表示" title="全画面表示">⛶</button>
       </div>
-      <button id="fullscreen-button" class="fullscreen-button" type="button" aria-label="全画面表示" title="全画面表示">⛶</button>
     </header>
 
     <main class="board-main">
@@ -649,6 +734,25 @@
     </div>
   </div>
 
+  <div id="settings-modal" class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <form id="settings-form" class="settings-dialog">
+      <h2 id="settings-title">掲示板のお知らせ</h2>
+      <label class="settings-field">
+        表示する文章
+        <textarea id="settings-message" maxlength="500" placeholder="掲示板の下部に流す文章を入力"></textarea>
+      </label>
+      <label class="settings-field">
+        管理者パスワード
+        <input id="settings-password" type="password" autocomplete="current-password">
+      </label>
+      <p id="settings-error" class="settings-error" role="alert"></p>
+      <div class="settings-actions">
+        <button id="settings-cancel" class="settings-cancel" type="button">キャンセル</button>
+        <button id="settings-save" class="settings-save" type="submit">保存</button>
+      </div>
+    </form>
+  </div>
+
   <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore-compat.js"></script>
   <script>
@@ -668,10 +772,9 @@
       firebase.initializeApp(firebaseConfig);
       var db = firebase.firestore();
       var residents = { shofu: [], meizen: [] };
-      var announcements = [];
-      var loaded = { shofu: false, meizen: false, announcements: false };
-      var fromCache = { shofu: false, meizen: false, announcements: false };
-      var lastUpdatedAt = 0;
+      var boardMessage = '';
+      var loaded = { shofu: false, meizen: false, message: false };
+      var fromCache = { shofu: false, meizen: false, message: false };
       var renderTimer = 0;
       var tickerSignature = '';
       var loadingTimer = 0;
@@ -688,9 +791,15 @@
         loadingNote: document.getElementById('loading-note'),
         reloadButton: document.getElementById('reload-button'),
         connectionStatus: document.getElementById('connection-status'),
-        fullscreenButton: document.getElementById('fullscreen-button'),
-        clockTime: document.getElementById('clock-time'),
-        clockDate: document.getElementById('clock-date')
+        settingsButton: document.getElementById('settings-button'),
+        settingsModal: document.getElementById('settings-modal'),
+        settingsForm: document.getElementById('settings-form'),
+        settingsMessage: document.getElementById('settings-message'),
+        settingsPassword: document.getElementById('settings-password'),
+        settingsError: document.getElementById('settings-error'),
+        settingsCancel: document.getElementById('settings-cancel'),
+        settingsSave: document.getElementById('settings-save'),
+        fullscreenButton: document.getElementById('fullscreen-button')
       };
 
       function toCount(value){
@@ -726,6 +835,10 @@
       function createCountElement(type, count){
         var item = document.createElement('span');
         item.className = 'item-count ' + type;
+        if (!count) {
+          item.className += ' empty';
+          item.setAttribute('aria-hidden', 'true');
+        }
         var label = document.createElement('span');
         label.className = 'item-label';
         label.textContent = type === 'mail' ? '郵便' : '荷物';
@@ -764,7 +877,7 @@
             identity.className = 'resident-identity';
             var room = document.createElement('span');
             room.className = 'resident-room';
-            room.textContent = resident.roomNumber ? resident.roomNumber + '号室' : '部屋未設定';
+            room.textContent = resident.roomNumber || '未設定';
             var name = document.createElement('span');
             name.className = 'resident-name';
             name.textContent = resident.name || '名前未設定';
@@ -773,8 +886,8 @@
 
             var counts = document.createElement('div');
             counts.className = 'resident-counts';
-            if (resident.luggage > 0) counts.appendChild(createCountElement('luggage', resident.luggage));
-            if (resident.mail > 0) counts.appendChild(createCountElement('mail', resident.mail));
+            counts.appendChild(createCountElement('luggage', resident.luggage));
+            counts.appendChild(createCountElement('mail', resident.mail));
 
             item.appendChild(identity);
             item.appendChild(counts);
@@ -786,12 +899,6 @@
         listElement.appendChild(fragment);
       }
 
-      function formatUpdatedTime(timestamp){
-        if (!timestamp) return '';
-        var date = new Date(timestamp);
-        return pad(date.getHours()) + ':' + pad(date.getMinutes()) + '更新';
-      }
-
       function renderBoard(){
         renderTimer = 0;
         renderDorm('shofu');
@@ -800,8 +907,8 @@
         var meizenActive = residents.meizen.filter(function(r){ return r.luggage + r.mail > 0; }).length;
         var total = shofuActive + meizenActive;
         elements.summary.textContent = total
-          ? '届いている人 ' + total + '人 ・ ' + formatUpdatedTime(lastUpdatedAt)
-          : '現在すべて受け取り済み ・ ' + formatUpdatedTime(lastUpdatedAt);
+          ? '届いている人 ' + total + '人'
+          : '現在すべて受け取り済み';
         updateLoadingState();
       }
 
@@ -810,60 +917,14 @@
         renderTimer = window.setTimeout(renderBoard, 80);
       }
 
-      function stripMarkup(value){
-        var container = document.createElement('div');
-        container.innerHTML = String(value == null ? '' : value)
-          .replace(/\[color\s*=\s*[^\]]+\]/gi, '')
-          .replace(/\[\/color\]/gi, '');
-        return String(container.textContent || container.innerText || '')
-          .replace(/\s+/g, ' ')
-          .trim();
-      }
-
-      function timestampMillis(value){
-        try {
-          if (value && typeof value.toMillis === 'function') return value.toMillis();
-          if (value && typeof value.toDate === 'function') return value.toDate().getTime();
-        } catch (_) {}
-        return 0;
-      }
-
-      function announcementTime(data){
-        return timestampMillis(data.updatedAt)
-          || timestampMillis(data.createdAt)
-          || timestampMillis(data.timestamp);
-      }
-
       function renderTicker(){
-        var sorted = announcements.slice().sort(function(a, b){
-          var pinDifference = Number(!!b.pinned) - Number(!!a.pinned);
-          return pinDifference || announcementTime(b) - announcementTime(a);
-        }).slice(0, 6);
-        var messages = sorted.map(function(item){
-          var title = stripMarkup(item.title);
-          var body = stripMarkup(item.body || item.text);
-          if (title && body) return title + '　' + body;
-          return title || body;
-        }).filter(Boolean);
-        if (!messages.length) messages = ['現在、新しいお知らせはありません'];
-        var signature = messages.join('\u001f');
+        var message = String(boardMessage || '').replace(/\s+/g, ' ').trim();
+        if (!message) message = '掲示板からのお知らせはありません';
+        var signature = message;
         if (signature === tickerSignature) return;
         tickerSignature = signature;
 
-        var fragment = document.createDocumentFragment();
-        messages.forEach(function(message, index){
-          if (index) {
-            var separator = document.createElement('span');
-            separator.className = 'ticker-separator';
-            separator.textContent = '◆';
-            fragment.appendChild(separator);
-          }
-          var text = document.createElement('span');
-          text.textContent = message;
-          fragment.appendChild(text);
-        });
-        elements.tickerTrack.textContent = '';
-        elements.tickerTrack.appendChild(fragment);
+        elements.tickerTrack.textContent = message;
         var estimatedWidth = Math.max(600, signature.length * 32);
         var duration = Math.max(20, Math.round((window.innerWidth + estimatedWidth) / 82));
         elements.tickerTrack.style.setProperty('--ticker-duration', duration + 's');
@@ -901,7 +962,6 @@
         residents[dorm] = next;
         loaded[dorm] = true;
         fromCache[dorm] = !!(snapshot.metadata && snapshot.metadata.fromCache);
-        lastUpdatedAt = Date.now();
         scheduleRender();
       }
 
@@ -925,36 +985,75 @@
           function(snapshot){ handleSnapshot('meizen', snapshot); },
           function(error){ handleResidentError('meizen', error); }
         );
-        db.collection('announcements').onSnapshot(
+        db.collection('settings').doc('board_display').onSnapshot(
           { includeMetadataChanges: true },
           function(snapshot){
-            announcements = [];
-            snapshot.forEach(function(doc){
-              announcements.push(Object.assign({ id: doc.id }, doc.data() || {}));
-            });
-            loaded.announcements = true;
-            fromCache.announcements = !!(snapshot.metadata && snapshot.metadata.fromCache);
+            var data = snapshot.exists ? (snapshot.data() || {}) : {};
+            boardMessage = String(data.tickerText || '');
+            loaded.message = true;
+            fromCache.message = !!(snapshot.metadata && snapshot.metadata.fromCache);
             renderTicker();
             updateConnectionStatus();
           },
           function(error){
-            console.error('announcement board listener failed', error);
-            updateConnectionStatus('お知らせとの接続が切れました。自動で再接続しています。');
+            console.error('board message listener failed', error);
+            updateConnectionStatus('掲示板のお知らせとの接続が切れました。自動で再接続しています。');
           }
         );
       }
 
-      function pad(value){
-        return ('0' + value).slice(-2);
+      function openSettings(){
+        elements.settingsMessage.value = boardMessage;
+        elements.settingsPassword.value = '';
+        elements.settingsError.textContent = '';
+        elements.settingsModal.classList.add('visible');
+        window.setTimeout(function(){
+          try { elements.settingsMessage.focus(); } catch (_) {}
+        }, 0);
       }
 
-      function updateClock(){
-        var now = new Date();
-        elements.clockTime.textContent = pad(now.getHours()) + ':' + pad(now.getMinutes());
-        var weekdays = ['日', '月', '火', '水', '木', '金', '土'];
-        elements.clockDate.textContent =
-          now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日（'
-          + weekdays[now.getDay()] + '）';
+      function closeSettings(){
+        if (elements.settingsSave.disabled) return;
+        elements.settingsModal.classList.remove('visible');
+        elements.settingsPassword.value = '';
+        elements.settingsError.textContent = '';
+      }
+
+      async function saveBoardMessage(event){
+        event.preventDefault();
+        if (elements.settingsSave.disabled) return;
+        var password = String(elements.settingsPassword.value || '');
+        var message = String(elements.settingsMessage.value || '').trim();
+        if (!password) {
+          elements.settingsError.textContent = '管理者パスワードを入力してください。';
+          elements.settingsPassword.focus();
+          return;
+        }
+
+        elements.settingsSave.disabled = true;
+        elements.settingsSave.textContent = '保存中';
+        elements.settingsError.textContent = '';
+        try {
+          var adminSnapshot = await db.collection('settings').doc('admin').get();
+          var adminData = adminSnapshot.exists ? (adminSnapshot.data() || {}) : {};
+          if (!adminData.adminPassword || password !== String(adminData.adminPassword)) {
+            elements.settingsError.textContent = '管理者パスワードが違います。';
+            elements.settingsPassword.focus();
+            return;
+          }
+          await db.collection('settings').doc('board_display').set({
+            tickerText: message,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+          elements.settingsModal.classList.remove('visible');
+          elements.settingsPassword.value = '';
+        } catch (error) {
+          console.error('board message save failed', error);
+          elements.settingsError.textContent = '保存に失敗しました。通信状態を確認してください。';
+        } finally {
+          elements.settingsSave.disabled = false;
+          elements.settingsSave.textContent = '保存';
+        }
       }
 
       function shiftForBurnIn(){
@@ -972,6 +1071,16 @@
 
       elements.reloadButton.addEventListener('click', function(){
         window.location.reload();
+      });
+
+      elements.settingsButton.addEventListener('click', openSettings);
+      elements.settingsCancel.addEventListener('click', closeSettings);
+      elements.settingsForm.addEventListener('submit', saveBoardMessage);
+      elements.settingsModal.addEventListener('click', function(event){
+        if (event.target === elements.settingsModal) closeSettings();
+      });
+      document.addEventListener('keydown', function(event){
+        if (event.key === 'Escape' && elements.settingsModal.classList.contains('visible')) closeSettings();
       });
 
       elements.fullscreenButton.addEventListener('click', function(){
@@ -1007,9 +1116,7 @@
         updateConnectionStatus();
       }, 30000);
 
-      updateClock();
       shiftForBurnIn();
-      window.setInterval(updateClock, 1000);
       window.setInterval(shiftForBurnIn, 900000);
       subscribe();
     })();
