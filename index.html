@@ -9129,6 +9129,12 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 	    let __annotating = false;
 	    let __annotateTimer = null;
 	    const MORNING_RESTORE_SETTINGS_DOC_ID = 'morning_restore';
+	    const MORNING_ACTIVE_DRAFT_KEY = 'morning_active_draft_v1';
+	    const MORNING_ACTIVE_DRAFT_MAX_AGE_MS = 18 * 60 * 60 * 1000;
+	    let __morningDraftSaveTimer = 0;
+	    let __morningDraftDirtySince = 0;
+	    let __morningDraftRestoreInProgress = false;
+	    let __morningIntegrityObserver = null;
 
     function setMorningOverlayVisible(visible){
       setAppLoading('morning-operation', !!visible, visible ? {
@@ -9903,6 +9909,383 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       });
     }
 
+	    function getMorningDraftResidentKey(dorm, residentId){
+	      return String(dorm || '') + '/' + String(residentId || '');
+	    }
+
+	    function getMorningOriginalCountsForResident(resident){
+	      const dorm = resident && (resident.dorm === 'shofu' || resident.dorm === 'meizen') ? resident.dorm : '';
+	      const residentId = resident && resident.id ? String(resident.id) : '';
+	      const path = getMorningResidentPath(dorm, residentId);
+	      let refObj = null;
+	      try {
+	        refObj = morningRef && morningRef.byPath && path ? morningRef.byPath.get(path) : null;
+	      } catch(_) {}
+	      return {
+	        luggage: getMorningCountNumber(refObj && refObj.luggage != null
+	          ? refObj.luggage
+	          : resident && resident.__morningOriginalLuggage),
+	        mail: getMorningCountNumber(refObj && refObj.mail != null
+	          ? refObj.mail
+	          : resident && resident.__morningOriginalMail)
+	      };
+	    }
+
+	    function buildMorningActiveDraft(){
+	      if (!isMorningMode || !Array.isArray(allResidents) || !allResidents.length) return null;
+	      const entries = [];
+	      allResidents.forEach(function(resident){
+	        if (!resident || !resident.id || !(resident.dorm === 'shofu' || resident.dorm === 'meizen')) return;
+	        const original = getMorningOriginalCountsForResident(resident);
+	        entries.push({
+	          id: String(resident.id),
+	          dorm: resident.dorm,
+	          name: String(resident.name || ''),
+	          roomNumber: String(getResidentRoomRawValue(resident) || ''),
+	          furigana: String(resident.furigana || ''),
+	          circle: String(resident.circle || ''),
+	          note: String(resident.note || resident.memo || resident.notes || ''),
+	          luggage: getMorningCountNumber(resident.luggage),
+	          mail: getMorningCountNumber(resident.mail),
+	          originalLuggage: original.luggage,
+	          originalMail: original.mail
+	        });
+	      });
+	      if (!entries.length) return null;
+	      const operator = morningRef && morningRef.operator ? morningRef.operator : {};
+	      return {
+	        version: 1,
+	        active: true,
+	        savedAt: Date.now(),
+	        startedAt: Number(morningRef && morningRef.startedAt || Date.now()),
+	        restoreRunId: String(morningRef && morningRef.restoreRunId || ''),
+	        restoreCount: Number(morningRef && morningRef.restoreCount || entries.length),
+	        commitRunId: String(window.__morningCommitRunId || ''),
+	        operator: {
+	          residentId: String(operator.residentId || ''),
+	          name: String(operator.name || ''),
+	          dorm: String(operator.dorm || '')
+	        },
+	        entries: entries
+	      };
+	    }
+
+	    function saveMorningActiveDraftNow(){
+	      if (__morningDraftSaveTimer) {
+	        window.clearTimeout(__morningDraftSaveTimer);
+	        __morningDraftSaveTimer = 0;
+	      }
+	      __morningDraftDirtySince = 0;
+	      try {
+	        applyMorningStagedValuesToLocalResidents();
+	        const draft = buildMorningActiveDraft();
+	        if (!draft) return false;
+	        localStorage.setItem(MORNING_ACTIVE_DRAFT_KEY, JSON.stringify(draft));
+	        return true;
+	      } catch(error) {
+	        console.warn('morning draft save failed', error);
+	        return false;
+	      }
+	    }
+
+	    function scheduleMorningActiveDraftSave(){
+	      if (!isMorningMode) return;
+	      const now = Date.now();
+	      if (!__morningDraftDirtySince) __morningDraftDirtySince = now;
+	      if (__morningDraftSaveTimer) {
+	        window.clearTimeout(__morningDraftSaveTimer);
+	        __morningDraftSaveTimer = 0;
+	      }
+	      const isLegacyDevice = document.body && document.body.classList.contains('legacy-performance-mode');
+	      const maxWaitReached = (now - __morningDraftDirtySince) >= (isLegacyDevice ? 1800 : 900);
+	      const delay = maxWaitReached ? 0 : (isLegacyDevice ? 650 : 180);
+	      __morningDraftSaveTimer = window.setTimeout(function(){
+	        __morningDraftSaveTimer = 0;
+	        saveMorningActiveDraftNow();
+	      }, delay);
+	    }
+
+	    function clearMorningActiveDraft(){
+	      if (__morningDraftSaveTimer) {
+	        window.clearTimeout(__morningDraftSaveTimer);
+	        __morningDraftSaveTimer = 0;
+	      }
+	      __morningDraftDirtySince = 0;
+	      try { localStorage.removeItem(MORNING_ACTIVE_DRAFT_KEY); } catch(_) {}
+	    }
+
+	    function readMorningActiveDraft(){
+	      let draft = null;
+	      try {
+	        const raw = localStorage.getItem(MORNING_ACTIVE_DRAFT_KEY);
+	        if (!raw) return null;
+	        draft = JSON.parse(raw);
+	      } catch(_) {
+	        clearMorningActiveDraft();
+	        return null;
+	      }
+	      const startedAt = Number(draft && draft.startedAt || 0);
+	      const age = Date.now() - startedAt;
+	      if (!draft || draft.version !== 1 || draft.active !== true || !Array.isArray(draft.entries)
+	          || !draft.entries.length || !startedAt || age < -60000 || age > MORNING_ACTIVE_DRAFT_MAX_AGE_MS) {
+	        clearMorningActiveDraft();
+	        return null;
+	      }
+	      return draft;
+	    }
+
+	    function applyMorningStagedValuesToLocalResidents(){
+	      if (!isMorningMode || !window.__morningStagedWrites || !Array.isArray(allResidents)) return;
+	      const refByPath = morningRef && morningRef.byPath;
+	      if (!refByPath || typeof refByPath.forEach !== 'function' || !refByPath.size) return;
+
+	      const currentByPath = new Map();
+	      allResidents.forEach(function(resident){
+	        if (!resident || !resident.id || !(resident.dorm === 'shofu' || resident.dorm === 'meizen')) return;
+	        const path = getMorningResidentPath(resident.dorm, resident.id);
+	        if (path) currentByPath.set(path, resident);
+	      });
+
+	      const nextResidents = [];
+	      refByPath.forEach(function(refObj, path){
+	        if (!refObj || !refObj.id) return;
+	        const current = currentByPath.get(path) || {};
+	        const staged = window.__morningStagedWrites.get(path) || {};
+	        nextResidents.push(Object.assign({}, refObj, current, {
+	          id: refObj.id,
+	          dorm: refObj.dorm,
+	          name: current.name || refObj.name || '',
+	          roomNumber: getResidentRoomRawValue(current) || refObj.roomNumber || '',
+	          luggage: staged.luggage != null
+	            ? getMorningCountNumber(staged.luggage)
+	            : getMorningCountNumber(current.luggage),
+	          mail: staged.mail != null
+	            ? getMorningCountNumber(staged.mail)
+	            : getMorningCountNumber(current.mail),
+	          __morningOriginalLuggage: getMorningCountNumber(refObj.luggage),
+	          __morningOriginalMail: getMorningCountNumber(refObj.mail)
+	        }));
+	      });
+
+	      let changed = nextResidents.length !== allResidents.length;
+	      if (!changed) {
+	        for (let i = 0; i < nextResidents.length; i += 1) {
+	          const before = allResidents[i] || {};
+	          const after = nextResidents[i] || {};
+	          if (before.id !== after.id || before.dorm !== after.dorm
+	              || getMorningCountNumber(before.luggage) !== getMorningCountNumber(after.luggage)
+	              || getMorningCountNumber(before.mail) !== getMorningCountNumber(after.mail)) {
+	            changed = true;
+	            break;
+	          }
+	        }
+	      }
+	      allResidents = nextResidents;
+	      if (changed) window.__residentTableLastSignature = '';
+	    }
+
+	    function enforceMorningSessionIntegrity(reason){
+	      if (!isMorningMode || window.__morningFinishing) return;
+	      window.__morningModeSuppressPush = true;
+	      if (!document.body.classList.contains('morning-mode')) {
+	        document.body.classList.add('morning-mode');
+	      }
+	      applyMorningStagedValuesToLocalResidents();
+	      showMorningBanner();
+	      refreshMorningTable();
+	      scheduleAnnotate();
+	      scheduleMorningActiveDraftSave();
+	      try { console.log('[morning] session integrity restored:', reason || 'check'); } catch(_) {}
+	    }
+
+	    function ensureMorningIntegrityObserver(){
+	      if (__morningIntegrityObserver || !document.body || typeof MutationObserver === 'undefined') return;
+	      __morningIntegrityObserver = new MutationObserver(function(){
+	        if (isMorningMode && !document.body.classList.contains('morning-mode')) {
+	          window.setTimeout(function(){ enforceMorningSessionIntegrity('body-class'); }, 0);
+	        }
+	      });
+	      try {
+	        __morningIntegrityObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+	      } catch(_) {
+	        __morningIntegrityObserver = null;
+	      }
+	    }
+
+	    async function loadMorningResidentsForDraftRecovery(dormKey){
+	      try {
+	        return await loadMorningResidentsForDorm(dormKey);
+	      } catch(serverError) {
+	        try {
+	          const snapshot = await db.collection('residents_' + dormKey).get();
+	          return snapshot.docs.map(function(doc){ return mergeResidentDocData(doc, dormKey); });
+	        } catch(_) {
+	          throw serverError;
+	        }
+	      }
+	    }
+
+	    async function restoreMorningActiveDraftIfNeeded(){
+	      if (__morningDraftRestoreInProgress || isMorningMode || __morningStarting) return false;
+	      const draft = readMorningActiveDraft();
+	      if (!draft) return false;
+	      __morningDraftRestoreInProgress = true;
+	      setAppLoading('morning-draft-recovery', true, {
+	        label: '朝の庶務を復元しています...',
+	        transient: true,
+	        timeoutMs: 15000
+	      });
+	      try {
+	        if (draft.restoreRunId) {
+	          try {
+	            const restorePoint = await db.collection('morning_refs').doc(String(draft.restoreRunId)).get();
+	            const restoreStatus = restorePoint && restorePoint.exists
+	              ? String((restorePoint.data() || {}).status || '')
+	              : '';
+	            if (restoreStatus === 'completed') {
+	              clearMorningActiveDraft();
+	              return false;
+	            }
+	          } catch(error) {
+	            console.warn('morning draft completion check skipped', error);
+	          }
+	        }
+	        let loaded = [[], []];
+	        try {
+	          loaded = await Promise.all([
+	            loadMorningResidentsForDraftRecovery('shofu'),
+	            loadMorningResidentsForDraftRecovery('meizen')
+	          ]);
+	        } catch(error) {
+	          console.warn('morning draft server merge skipped', error);
+	        }
+
+	        const sourceMap = Object.create(null);
+	        (loaded[0] || []).concat(loaded[1] || []).forEach(function(resident){
+	          if (!resident || !resident.id || !resident.dorm) return;
+	          sourceMap[getMorningDraftResidentKey(resident.dorm, resident.id)] = resident;
+	        });
+
+	        const currentShofu = [];
+	        const currentMeizen = [];
+	        const originalShofu = [];
+	        const originalMeizen = [];
+	        draft.entries.forEach(function(entry){
+	          if (!entry || !entry.id || !(entry.dorm === 'shofu' || entry.dorm === 'meizen')) return;
+	          const source = sourceMap[getMorningDraftResidentKey(entry.dorm, entry.id)] || {};
+	          const base = Object.assign({}, source, {
+	            id: String(entry.id),
+	            dorm: entry.dorm,
+	            name: source.name || entry.name || '',
+	            roomNumber: getResidentRoomRawValue(source) || entry.roomNumber || '',
+	            furigana: source.furigana || entry.furigana || '',
+	            circle: source.circle || entry.circle || '',
+	            note: source.note || source.memo || source.notes || entry.note || ''
+	          });
+	          const original = Object.assign({}, base, {
+	            luggage: getMorningCountNumber(entry.originalLuggage),
+	            mail: getMorningCountNumber(entry.originalMail)
+	          });
+	          const current = Object.assign({}, base, {
+	            luggage: getMorningCountNumber(entry.luggage),
+	            mail: getMorningCountNumber(entry.mail),
+	            __morningOriginalLuggage: getMorningCountNumber(entry.originalLuggage),
+	            __morningOriginalMail: getMorningCountNumber(entry.originalMail)
+	          });
+	          if (entry.dorm === 'shofu') {
+	            originalShofu.push(original);
+	            currentShofu.push(current);
+	          } else {
+	            originalMeizen.push(original);
+	            currentMeizen.push(current);
+	          }
+	        });
+	        if (!(currentShofu.length + currentMeizen.length)) {
+	          clearMorningActiveDraft();
+	          return false;
+	        }
+
+	        const refShofu = buildMorningRefFromResidents('shofu', originalShofu);
+	        const refMeizen = buildMorningRefFromResidents('meizen', originalMeizen);
+	        morningRef.dorm = 'both';
+	        morningRef.byId = mergeMorningRefMaps(refShofu.byId, refMeizen.byId);
+	        morningRef.byPath = mergeMorningRefMaps(refShofu.byPath, refMeizen.byPath);
+	        morningRef.byName = mergeMorningRefMaps(refShofu.byName, refMeizen.byName);
+	        morningRef.byRoom = mergeMorningRefMaps(refShofu.byRoom, refMeizen.byRoom);
+	        morningRef.byComposite = mergeMorningRefMaps(refShofu.byComposite, refMeizen.byComposite);
+	        morningRef.startedAt = Number(draft.startedAt || Date.now());
+	        morningRef.restoreRunId = String(draft.restoreRunId || '');
+	        morningRef.restoreCount = Number(draft.restoreCount || draft.entries.length);
+	        morningRef.operator = draft.operator || {};
+	        window.__morningCommitRunId = String(draft.commitRunId || draft.restoreRunId || __buildMorningNotificationRunId());
+
+	        try {
+	          if (typeof unsubscribe === 'function') unsubscribe();
+	          unsubscribe = null;
+	        } catch(_) {}
+
+	        allResidents = currentShofu.concat(currentMeizen);
+	        try { window.__morningStagedWrites.clear(); } catch(_) {}
+	        allResidents.forEach(function(resident){
+	          __stageResidentWrite('residents_' + resident.dorm, resident.id, {
+	            luggage: resident.luggage,
+	            mail: resident.mail
+	          });
+	        });
+
+	        isMorningMode = true;
+	        window.__morningModeSuppressPush = true;
+	        currentCollectionName = 'all';
+	        try { localStorage.setItem('currentDorm', 'all'); } catch(_) {}
+	        document.body.classList.add('morning-mode');
+	        syncMorningTargetDormFromRef();
+	        activateMorningViewMode();
+	        showMorningBanner();
+	        refreshMorningTable();
+	        ensureMorningObserver();
+	        ensureMorningIntegrityObserver();
+	        scheduleAnnotate();
+	        saveMorningActiveDraftNow();
+	        window.__morningRecoveredFromDraftAt = Date.now();
+	        window.setTimeout(function(){
+	          try {
+	            if (typeof showLastActionUndoResult === 'function') {
+	              showLastActionUndoResult('朝の庶務の途中状態を復元しました', false);
+	            }
+	          } catch(_) {}
+	        }, 0);
+	        return true;
+	      } catch(error) {
+	        console.error('restore morning active draft failed', error);
+	        return false;
+	      } finally {
+	        setAppLoading('morning-draft-recovery', false);
+	        __morningDraftRestoreInProgress = false;
+	      }
+	    }
+
+	    document.addEventListener('visibilitychange', function(){
+	      if (document.visibilityState === 'hidden') {
+	        if (isMorningMode) saveMorningActiveDraftNow();
+	        return;
+	      }
+	      if (isMorningMode) {
+	        window.setTimeout(function(){ enforceMorningSessionIntegrity('visible'); }, 0);
+	      } else {
+	        window.setTimeout(function(){ restoreMorningActiveDraftIfNeeded(); }, 0);
+	      }
+	    });
+	    window.addEventListener('pageshow', function(){
+	      if (isMorningMode) {
+	        window.setTimeout(function(){ enforceMorningSessionIntegrity('pageshow'); }, 0);
+	      } else {
+	        window.setTimeout(function(){ restoreMorningActiveDraftIfNeeded(); }, 0);
+	      }
+	    });
+	    window.addEventListener('pagehide', function(){
+	      if (isMorningMode) saveMorningActiveDraftNow();
+	    });
+
     function restoreMorningLocalReferenceValues(){
       const refById = morningRef && morningRef.byId;
       if (!refById || typeof refById.get !== 'function') return;
@@ -9969,6 +10352,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 		    function closeMorningModeUI(){
 		      isMorningMode = false;
 		      document.body.classList.remove('morning-mode');
+		      clearMorningActiveDraft();
 		      if (typeof syncWorkflowAvailability === 'function') {
 		        try { syncWorkflowAvailability(); } catch(_) {}
 		      }
@@ -10108,6 +10492,8 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
         refreshMorningTable();
         scheduleAnnotate();
         ensureMorningObserver();
+        ensureMorningIntegrityObserver();
+        saveMorningActiveDraftNow();
       } catch(e){
         console.error('startMorning failed', e);
         try {
@@ -10134,114 +10520,106 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       return startMorning(!!skipConfirm);
     }
 
+    function resolveMorningReferenceForRow(row){
+      if (!row || !morningRef || !morningRef.byId) return null;
+      const residentId = row.getAttribute('data-resident-id') || row.getAttribute('data-id') || '';
+      if (residentId && morningRef.byId.has(residentId)) return morningRef.byId.get(residentId);
+
+      const tds = row.querySelectorAll('td');
+      if (tds.length < 5) return null;
+      const nameCell = tds[1];
+      const raw = (nameCell && nameCell.textContent || '').trim();
+      const roomElement = nameCell ? nameCell.querySelector('.room-number') : null;
+      const room = roomElement
+        ? roomElement.textContent.trim()
+        : ((raw.match(/^\s*(\d{1,4})/) || ['', ''])[1] || '').trim();
+      let nameOnly = raw;
+      if (room) nameOnly = nameOnly.replace(new RegExp('^\\s*' + room + '\\s*'), '');
+      nameOnly = nameOnly.replace(/[☆★]/g, '')
+        .replace(/(松風寮|明善寮)/g, '')
+        .replace(/[()\[\]（）]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const nameKey = normalizeKey(nameOnly);
+      if (room && nameKey) {
+        const composite = morningRef.byComposite.get(room + '::' + nameKey);
+        if (composite) return composite;
+      }
+      if (nameKey) {
+        const byName = morningRef.byName.get(nameKey);
+        if (byName) return byName;
+      }
+      if (room) {
+        const byRoom = morningRef.byRoom.get(room) || [];
+        if (byRoom.length === 1) return byRoom[0];
+      }
+      return null;
+    }
+
+    function updateMorningReferenceCell(row, refObj, type){
+      const tds = row && row.querySelectorAll('td');
+      const safeType = type === 'mail' ? 'mail' : 'luggage';
+      const columnIndex = safeType === 'mail' ? 3 : 2;
+      if (!tds || tds.length <= columnIndex || !refObj) return false;
+      const td = tds[columnIndex];
+      const cell = td.querySelector('.cell-content') || td;
+      const countTarget = td.querySelector('[data-count-type="' + safeType + '"]')
+        || td.querySelector('.count-span');
+      const currentValue = normalizeCountDisplayValue(countTarget && countTarget.textContent);
+      const referenceValue = normalizeCountDisplayValue(refObj[safeType]);
+      const difference = currentValue - referenceValue;
+
+      let referenceLine = cell.querySelector('.ref-line');
+      if (!referenceLine) {
+        referenceLine = document.createElement('div');
+        referenceLine.className = 'ref-line';
+        cell.appendChild(referenceLine);
+      }
+      const referenceText = '参考: ' + referenceValue;
+      if (referenceLine.textContent !== referenceText) referenceLine.textContent = referenceText;
+
+      let differenceBadge = cell.querySelector('.diff-badge');
+      if (!differenceBadge) {
+        differenceBadge = document.createElement('span');
+        cell.appendChild(differenceBadge);
+      }
+      const differenceClass = 'diff-badge ' + (
+        difference > 0 ? 'diff-plus' : difference < 0 ? 'diff-minus' : 'diff-zero'
+      );
+      const differenceText = (difference > 0 ? '+' : '') + difference;
+      if (differenceBadge.className !== differenceClass) differenceBadge.className = differenceClass;
+      if (differenceBadge.textContent !== differenceText) differenceBadge.textContent = differenceText;
+      return true;
+    }
+
+    function syncMorningReferenceForResident(residentId, type){
+      if (!isMorningMode || !morningRef || !morningRef.byId) return false;
+      const refObj = morningRef.byId.get(String(residentId || ''));
+      if (!refObj) return false;
+      const rows = findResidentMainRows(residentId);
+      let updated = false;
+      for (let i = 0; i < rows.length; i += 1) {
+        if (updateMorningReferenceCell(rows[i], refObj, type)) updated = true;
+      }
+      return updated;
+    }
+
     function annotateReferenceOnTable(){
-      if (!isMorningMode) return;
+      if (!isMorningMode || __annotating) return;
       const tbody = document.querySelector('#resident-table tbody');
       if (!tbody) return;
-      if (__annotating) return;
       __annotating = true;
-      const rows = Array.from(tbody.querySelectorAll('tr'));
-      rows.forEach(row => {
-        const tds = row.querySelectorAll('td');
-        if (tds.length < 5) return;
-
-        // --- できる限りIDで特定し、ダメなら（部屋番号＋名前正規化）で照合 ---
-        const nameCell = tds[1];
-        let refObj = null;
-
-        // 1) 編集ボタンの onclick から residentId を拾う（存在すれば最強）
-        try {
-          const editBtn = row.querySelector('button.edit-btn');
-          if (editBtn) {
-            const oc = editBtn.getAttribute('onclick') || '';
-            const m = oc && oc.match(/openEditResidentModal\(['"]([^'"]+)['"]\)/);
-            if (m && m[1] && morningRef.byId.has(m[1])) {
-              refObj = morningRef.byId.get(m[1]);
-            }
-          }
-        } catch(_){}
-
-        // 2) data属性でのID
-        if (!refObj) {
-          const rid = row.getAttribute('data-resident-id') || row.getAttribute('data-id');
-          if (rid && morningRef.byId.has(rid)) {
-            refObj = morningRef.byId.get(rid);
-          }
+      try {
+        const rows = tbody.querySelectorAll('tr.resident-main-row');
+        for (let i = 0; i < rows.length; i += 1) {
+          const refObj = resolveMorningReferenceForRow(rows[i]);
+          if (!refObj) continue;
+          updateMorningReferenceCell(rows[i], refObj, 'luggage');
+          updateMorningReferenceCell(rows[i], refObj, 'mail');
         }
-
-        // 3) 表示テキストから（部屋番号＋名前正規化）で照合
-        if (!refObj) {
-          let raw = (nameCell && nameCell.textContent || '').trim();
-          // 部屋番号は .room-number があればそこから、無ければ先頭の数字群
-          const rnEl = nameCell ? nameCell.querySelector('.room-number') : null;
-          const room = rnEl ? rnEl.textContent.trim() : ((raw.match(/^\s*(\d{1,4})/) || [,''])[1] || '').trim();
-
-          // 飾りや寮名などを取り除いて名前を正規化
-          let nameOnly = raw;
-          if (room) nameOnly = nameOnly.replace(new RegExp('^\\s*' + room + '\\s*'), '');
-          nameOnly = nameOnly.replace(/[☆★]/g, '')
-                             .replace(/(松風寮|明善寮)/g, '')
-                             .replace(/[()\[\]（）]/g, ' ')
-                             .replace(/\s+/g, ' ')
-                             .trim();
-          const key = normalizeKey(nameOnly);
-
-          // room+name -> byComposite
-          if (room && key) {
-            const comp = morningRef.byComposite.get(room + '::' + key);
-            if (comp) refObj = comp;
-          }
-          // nameのみ
-          if (!refObj && key) {
-            const byN = morningRef.byName.get(key);
-            if (byN) refObj = byN;
-          }
-          // roomのみ（一意のときだけ）
-          if (!refObj && room) {
-            const arr = morningRef.byRoom.get(room) || [];
-            if (arr.length === 1) refObj = arr[0];
-          }
-        }
-
-        if (!refObj) return; // 照合できない行はスキップ
-
-        // 荷物列（第3列）, 郵便列（第4列）
-        const lugCell = tds[2].querySelector('.cell-content') || tds[2];
-        const mailCell = tds[3].querySelector('.cell-content') || tds[3];
-
-        const currentLug = parseInt((tds[2].innerText || '').match(/\d+/)) || 0;
-        const currentMail = parseInt((tds[3].innerText || '').match(/\d+/)) || 0;
-
-        // 既存の ref/diff を一度消去
-        lugCell.querySelectorAll('.ref-line, .diff-badge').forEach(n => n.remove());
-        mailCell.querySelectorAll('.ref-line, .diff-badge').forEach(n => n.remove());
-
-        // 参考行を追加
-        const refL = document.createElement('div');
-        refL.className = 'ref-line';
-        refL.textContent = '参考: ' + refObj.luggage;
-        lugCell.appendChild(refL);
-
-        const refM = document.createElement('div');
-        refM.className = 'ref-line';
-        refM.textContent = '参考: ' + refObj.mail;
-        mailCell.appendChild(refM);
-
-        // 差分バッジ
-        const diffL = currentLug - refObj.luggage;
-        const diffM = currentMail - refObj.mail;
-
-        const bL = document.createElement('span');
-        bL.className = 'diff-badge ' + (diffL > 0 ? 'diff-plus' : diffL < 0 ? 'diff-minus' : 'diff-zero');
-        bL.textContent = (diffL > 0 ? '+' : '') + diffL;
-        lugCell.appendChild(bL);
-
-        const bM = document.createElement('span');
-        bM.className = 'diff-badge ' + (diffM > 0 ? 'diff-plus' : diffM < 0 ? 'diff-minus' : 'diff-zero');
-        bM.textContent = (diffM > 0 ? '+' : '') + diffM;
-        mailCell.appendChild(bM);
-      });
-      __annotating = false;
+      } finally {
+        __annotating = false;
+      }
     }
 
     // renderTable 実行後に参照を再適用（他所でrenderTableが呼ばれてもOK）
@@ -11496,6 +11874,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 	        resident[safeType] = nextValue;
 	        syncDisplayedResidentCount(residentId, safeType, nextValue);
 	        __stageResidentWrite(targetCollection, residentId, { [safeType]: nextValue });
+	        scheduleMorningActiveDraftSave();
 	        return Promise.resolve({ changed: true, previousValue, nextValue, delta: nextValue - previousValue, staged: true });
 	      }
 
@@ -13154,7 +13533,7 @@ function syncDisplayedResidentCount(residentId, type, nextValue) {
   }
   syncMobileCountEditValuesForResident(residentId);
   if (isMorningMode || document.body.classList.contains('morning-mode')) {
-    scheduleAnnotate();
+    if (!syncMorningReferenceForResident(residentId, safeType)) scheduleAnnotate();
   }
 }
 
@@ -17361,6 +17740,9 @@ if(elements.changePasswordForm){
 		initializeLegacyPerformanceMode();
 		initializePageScrollLockObserver();
         initializeWorkflowMode();
+        window.setTimeout(function(){
+          try { restoreMorningActiveDraftIfNeeded(); } catch(_) {}
+        }, 0);
         // 30分ごとに lastSeen を更新
         setInterval(updateLastSeen, 30 * 60 * 1000);
         elements.addModalCloseBtn.addEventListener('click', hideAddResidentModal);
