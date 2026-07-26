@@ -245,11 +245,15 @@
     }
 
     .item-count.luggage {
-      color: #27343e;
+      border-color: #c6a58e;
+      background: #f8f3ef;
+      color: #7a4628;
     }
 
     .item-count.mail {
-      color: #27343e;
+      border-color: #9db9ae;
+      background: #f0f6f3;
+      color: #2f6352;
     }
 
     .item-count.empty {
@@ -259,6 +263,11 @@
     .item-label {
       color: #5e6a73;
       font-size: 0.72em;
+    }
+
+    .item-count.luggage .item-label,
+    .item-count.mail .item-label {
+      color: inherit;
     }
 
     .resident-list.compact {
