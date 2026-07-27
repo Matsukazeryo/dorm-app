@@ -535,6 +535,41 @@
       padding: 0 11px;
     }
 
+    .settings-field input[type="range"] {
+      height: 30px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      accent-color: var(--meizen);
+      cursor: pointer;
+    }
+
+    .speed-scale {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .speed-scale span:last-child {
+      text-align: right;
+    }
+
+    .speed-value {
+      min-width: 92px;
+      padding: 3px 8px;
+      border: 1px solid #b8c2c9;
+      border-radius: 4px;
+      background: #f4f7f9;
+      color: #2d3a44;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
     .settings-field textarea:focus,
     .settings-field input:focus {
       border-color: var(--meizen);
@@ -740,6 +775,15 @@
         <textarea id="settings-message" maxlength="500" placeholder="掲示板の下部に流す文章を入力"></textarea>
       </label>
       <label class="settings-field">
+        スクロール速度
+        <input id="settings-speed" type="range" min="40" max="140" step="10" value="80">
+        <span class="speed-scale">
+          <span>ゆっくり</span>
+          <output id="settings-speed-value" class="speed-value" for="settings-speed">標準</output>
+          <span>速い</span>
+        </span>
+      </label>
+      <label class="settings-field">
         管理者パスワード
         <input id="settings-password" type="password" autocomplete="current-password">
       </label>
@@ -771,6 +815,7 @@
       var db = firebase.firestore();
       var residents = { shofu: [], meizen: [] };
       var boardMessage = '';
+      var tickerSpeed = 80;
       var loaded = { shofu: false, meizen: false, message: false };
       var fromCache = { shofu: false, meizen: false, message: false };
       var renderTimer = 0;
@@ -790,6 +835,8 @@
         settingsModal: document.getElementById('settings-modal'),
         settingsForm: document.getElementById('settings-form'),
         settingsMessage: document.getElementById('settings-message'),
+        settingsSpeed: document.getElementById('settings-speed'),
+        settingsSpeedValue: document.getElementById('settings-speed-value'),
         settingsPassword: document.getElementById('settings-password'),
         settingsError: document.getElementById('settings-error'),
         settingsCancel: document.getElementById('settings-cancel'),
@@ -800,6 +847,26 @@
       function toCount(value){
         var count = parseInt(value, 10);
         return isFinite(count) && count > 0 ? count : 0;
+      }
+
+      function normalizeTickerSpeed(value){
+        var speed = parseInt(value, 10);
+        if (!isFinite(speed)) speed = 80;
+        speed = Math.max(40, Math.min(140, speed));
+        return Math.round(speed / 10) * 10;
+      }
+
+      function tickerSpeedLabel(value){
+        var speed = normalizeTickerSpeed(value);
+        if (speed <= 50) return 'ゆっくり';
+        if (speed <= 70) return 'ややゆっくり';
+        if (speed <= 90) return '標準';
+        if (speed <= 120) return 'やや速い';
+        return '速い';
+      }
+
+      function updateSpeedSettingLabel(){
+        elements.settingsSpeedValue.textContent = tickerSpeedLabel(elements.settingsSpeed.value);
       }
 
       function roomSortValue(value){
@@ -907,13 +974,13 @@
       function renderTicker(){
         var message = String(boardMessage || '').replace(/\s+/g, ' ').trim();
         if (!message) message = '掲示板からのお知らせはありません';
-        var signature = message;
+        var signature = message + '\u001f' + tickerSpeed + '\u001f' + window.innerWidth;
         if (signature === tickerSignature) return;
         tickerSignature = signature;
 
         elements.tickerTrack.textContent = message;
         var estimatedWidth = Math.max(600, signature.length * 32);
-        var duration = Math.max(20, Math.round((window.innerWidth + estimatedWidth) / 82));
+        var duration = Math.max(10, Math.round((window.innerWidth + estimatedWidth) / tickerSpeed));
         elements.tickerTrack.style.setProperty('--ticker-duration', duration + 's');
         elements.tickerTrack.style.animation = 'none';
         void elements.tickerTrack.offsetWidth;
@@ -977,6 +1044,7 @@
           function(snapshot){
             var data = snapshot.exists ? (snapshot.data() || {}) : {};
             boardMessage = String(data.tickerText || '');
+            tickerSpeed = normalizeTickerSpeed(data.tickerSpeed);
             loaded.message = true;
             fromCache.message = !!(snapshot.metadata && snapshot.metadata.fromCache);
             renderTicker();
@@ -991,6 +1059,8 @@
 
       function openSettings(){
         elements.settingsMessage.value = boardMessage;
+        elements.settingsSpeed.value = String(tickerSpeed);
+        updateSpeedSettingLabel();
         elements.settingsPassword.value = '';
         elements.settingsError.textContent = '';
         elements.settingsModal.classList.add('visible');
@@ -1030,6 +1100,7 @@
           }
           await db.collection('settings').doc('board_display').set({
             tickerText: message,
+            tickerSpeed: normalizeTickerSpeed(elements.settingsSpeed.value),
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
           }, { merge: true });
           elements.settingsModal.classList.remove('visible');
@@ -1061,6 +1132,7 @@
       });
 
       elements.settingsButton.addEventListener('click', openSettings);
+      elements.settingsSpeed.addEventListener('input', updateSpeedSettingLabel);
       elements.settingsCancel.addEventListener('click', closeSettings);
       elements.settingsForm.addEventListener('submit', saveBoardMessage);
       elements.settingsModal.addEventListener('click', function(event){
