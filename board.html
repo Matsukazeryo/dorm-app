@@ -113,6 +113,30 @@
       display: none;
     }
 
+    :fullscreen .board-shell {
+      grid-template-rows: minmax(0, 1fr) var(--ticker-height);
+    }
+
+    :fullscreen .board-header {
+      display: none;
+    }
+
+    :fullscreen .board-main {
+      padding-top: 3px;
+    }
+
+    :-webkit-full-screen .board-shell {
+      grid-template-rows: minmax(0, 1fr) var(--ticker-height);
+    }
+
+    :-webkit-full-screen .board-header {
+      display: none;
+    }
+
+    :-webkit-full-screen .board-main {
+      padding-top: 3px;
+    }
+
     .board-main {
       min-height: 0;
       padding: 16px var(--safe-right) 16px var(--safe-left);
@@ -637,46 +661,46 @@
        available vertical space instead of collapsing the panels. */
     @media (min-aspect-ratio: 4 / 3) and (max-width: 1100px) and (max-height: 820px) {
       :root {
-        --ticker-height: 54px;
-        --safe-top: max(7px, env(safe-area-inset-top));
+        --ticker-height: 44px;
+        --safe-top: max(4px, env(safe-area-inset-top));
         --safe-right: max(10px, env(safe-area-inset-right));
         --safe-left: max(10px, env(safe-area-inset-left));
       }
 
       .board-header {
-        min-height: 50px;
-        padding-bottom: 6px;
+        min-height: 42px;
+        padding-bottom: 4px;
         gap: 8px;
       }
 
       .board-title h1 {
-        font-size: 23px;
+        font-size: 21px;
       }
 
       .settings-button,
       .fullscreen-button {
-        width: 34px;
-        height: 34px;
-        font-size: 20px;
+        width: 32px;
+        height: 32px;
+        font-size: 19px;
       }
 
       .board-main {
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-        padding: 7px var(--safe-right);
-        gap: 8px;
+        padding: 4px var(--safe-right);
+        gap: 6px;
       }
 
       .dorm-panel {
-        border-top-width: 4px;
+        border-top-width: 3px;
       }
 
       .dorm-header {
-        min-height: 38px;
-        padding: 5px 9px;
+        min-height: 29px;
+        padding: 3px 8px;
       }
 
       .dorm-name {
-        font-size: 21px;
+        font-size: 17px;
       }
 
       .resident-list,
@@ -756,13 +780,13 @@
       }
 
       .ticker-label {
-        min-width: 108px;
-        padding: 0 12px;
-        font-size: 17px;
+        min-width: 94px;
+        padding: 0 10px;
+        font-size: 15px;
       }
 
       .ticker-track {
-        font-size: 19px;
+        font-size: 17px;
       }
 
       .connection-status {
