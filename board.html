@@ -615,7 +615,7 @@
       cursor: wait;
     }
 
-    @media (max-aspect-ratio: 4 / 3) {
+    @media (max-aspect-ratio: 1 / 1) {
       :root {
         --ticker-height: 66px;
       }
@@ -633,7 +633,145 @@
       }
     }
 
-    @media (max-height: 800px) and (min-aspect-ratio: 4 / 3) {
+    /* 1024x768-class displays: preserve the two-dorm overview and use the
+       available vertical space instead of collapsing the panels. */
+    @media (min-aspect-ratio: 4 / 3) and (max-width: 1100px) and (max-height: 820px) {
+      :root {
+        --ticker-height: 54px;
+        --safe-top: max(7px, env(safe-area-inset-top));
+        --safe-right: max(10px, env(safe-area-inset-right));
+        --safe-left: max(10px, env(safe-area-inset-left));
+      }
+
+      .board-header {
+        min-height: 50px;
+        padding-bottom: 6px;
+        gap: 8px;
+      }
+
+      .board-title h1 {
+        font-size: 23px;
+      }
+
+      .settings-button,
+      .fullscreen-button {
+        width: 34px;
+        height: 34px;
+        font-size: 20px;
+      }
+
+      .board-main {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        padding: 7px var(--safe-right);
+        gap: 8px;
+      }
+
+      .dorm-panel {
+        border-top-width: 4px;
+      }
+
+      .dorm-header {
+        min-height: 38px;
+        padding: 5px 9px;
+      }
+
+      .dorm-name {
+        font-size: 21px;
+      }
+
+      .resident-list,
+      .resident-list.compact,
+      .resident-list.dense {
+        gap: 2px;
+        padding: 3px;
+      }
+
+      .resident-item,
+      .resident-list.compact .resident-item,
+      .resident-list.dense .resident-item {
+        padding: 2px 5px;
+        gap: 4px;
+      }
+
+      .resident-identity,
+      .resident-list.dense .resident-identity {
+        gap: 5px;
+      }
+
+      .resident-name {
+        font-size: 17px;
+        line-height: 1;
+      }
+
+      .resident-list.compact .resident-name {
+        font-size: 15px;
+      }
+
+      .resident-list.dense .resident-name {
+        font-size: 13px;
+      }
+
+      .resident-room,
+      .resident-list.compact .resident-room,
+      .resident-list.dense .resident-room {
+        font-size: 10px;
+        line-height: 1;
+      }
+
+      .resident-counts,
+      .resident-list.dense .resident-counts {
+        gap: 3px;
+      }
+
+      .item-count {
+        min-width: 48px;
+        min-height: 29px;
+        padding: 2px 5px;
+        gap: 3px;
+        font-size: 14px;
+        line-height: 1;
+      }
+
+      .resident-list.compact .item-count {
+        min-width: 43px;
+        min-height: 25px;
+        padding: 1px 4px;
+        font-size: 12px;
+      }
+
+      .resident-list.dense .item-count {
+        min-width: 39px;
+        min-height: 20px;
+        padding: 1px 3px;
+        font-size: 11px;
+      }
+
+      .item-label {
+        font-size: 0.68em;
+      }
+
+      .empty-state {
+        padding: 14px;
+        font-size: 18px;
+      }
+
+      .ticker-label {
+        min-width: 108px;
+        padding: 0 12px;
+        font-size: 17px;
+      }
+
+      .ticker-track {
+        font-size: 19px;
+      }
+
+      .connection-status {
+        right: 10px;
+        bottom: calc(var(--ticker-height) + 8px);
+      }
+    }
+
+    @media (min-width: 1101px) and (max-height: 800px) and (min-aspect-ratio: 4 / 3) {
       :root {
         --ticker-height: 58px;
         --safe-top: max(8px, env(safe-area-inset-top));
@@ -917,7 +1055,8 @@
           return (resident.luggage + resident.mail) > 0;
         }));
         var count = activeResidents.length;
-        var columns = count > 40 ? 3 : count > 11 ? 2 : 1;
+        var compactDisplay = window.innerWidth <= 1100 && window.innerHeight <= 820;
+        var columns = compactDisplay ? (count > 11 ? 2 : 1) : (count > 40 ? 3 : count > 11 ? 2 : 1);
         listElement.style.setProperty('--columns', String(columns));
         listElement.classList.toggle('compact', count > 11);
         listElement.classList.toggle('dense', count > 28);
@@ -1160,6 +1299,7 @@
         updateConnectionStatus();
       });
       window.addEventListener('resize', function(){
+        scheduleRender();
         renderTicker();
       });
 
