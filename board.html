@@ -251,7 +251,7 @@
     }
 
     .item-count {
-      min-width: 66px;
+      min-width: 58px;
       min-height: 40px;
       padding: 5px 9px;
       display: inline-flex;
@@ -313,7 +313,7 @@
     }
 
     .resident-list.compact .item-count {
-      min-width: 54px;
+      min-width: 46px;
       min-height: 31px;
       padding: 3px 6px;
       font-size: clamp(13px, 1.1vw, 18px);
@@ -346,7 +346,7 @@
     }
 
     .resident-list.dense .item-count {
-      min-width: 48px;
+      min-width: 38px;
       min-height: 27px;
       padding: 2px 5px;
       border-width: 1px;
@@ -663,8 +663,8 @@
       :root {
         --ticker-height: 38px;
         --safe-top: max(4px, env(safe-area-inset-top));
-        --safe-right: max(10px, env(safe-area-inset-right));
-        --safe-left: max(10px, env(safe-area-inset-left));
+        --safe-right: max(6px, env(safe-area-inset-right));
+        --safe-left: max(6px, env(safe-area-inset-left));
       }
 
       .board-header {
@@ -687,7 +687,7 @@
       .board-main {
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
         padding: 4px var(--safe-right);
-        gap: 6px;
+        gap: 4px;
       }
 
       .dorm-panel {
@@ -728,11 +728,11 @@
       }
 
       .resident-list.compact .resident-name {
-        font-size: 15px;
+        font-size: 16px;
       }
 
       .resident-list.dense .resident-name {
-        font-size: 13px;
+        font-size: 14px;
       }
 
       .resident-room,
@@ -748,7 +748,7 @@
       }
 
       .item-count {
-        min-width: 48px;
+        min-width: 42px;
         min-height: 29px;
         padding: 2px 5px;
         gap: 3px;
@@ -757,14 +757,14 @@
       }
 
       .resident-list.compact .item-count {
-        min-width: 43px;
+        min-width: 36px;
         min-height: 25px;
         padding: 1px 4px;
         font-size: 12px;
       }
 
       .resident-list.dense .item-count {
-        min-width: 39px;
+        min-width: 32px;
         min-height: 20px;
         padding: 1px 3px;
         font-size: 11px;
@@ -799,6 +799,8 @@
       :root {
         --ticker-height: 40px;
         --safe-top: max(8px, env(safe-area-inset-top));
+        --safe-right: max(8px, env(safe-area-inset-right));
+        --safe-left: max(8px, env(safe-area-inset-left));
       }
 
       .board-header {
@@ -825,7 +827,7 @@
       .board-main {
         padding-top: 4px;
         padding-bottom: 4px;
-        gap: 8px;
+        gap: 5px;
       }
 
       .dorm-header {
@@ -848,7 +850,7 @@
       }
 
       .resident-list.dense .resident-name {
-        font-size: clamp(13px, 1.12vw, 17px);
+        font-size: clamp(14px, 1.25vw, 18px);
         line-height: 1;
       }
 
@@ -858,7 +860,7 @@
       }
 
       .resident-list.dense .item-count {
-        min-width: 40px;
+        min-width: 34px;
         min-height: 20px;
         padding: 1px 4px;
         font-size: 11px;
@@ -882,7 +884,10 @@
 
     :fullscreen .board-main {
       padding-top: 2px;
+      padding-right: 4px;
       padding-bottom: 2px;
+      padding-left: 4px;
+      gap: 4px;
     }
 
     :fullscreen .dorm-panel {
@@ -918,7 +923,10 @@
 
     :-webkit-full-screen .board-main {
       padding-top: 2px;
+      padding-right: 4px;
       padding-bottom: 2px;
+      padding-left: 4px;
+      gap: 4px;
     }
 
     :-webkit-full-screen .dorm-panel {
@@ -1131,13 +1139,14 @@
       function createCountElement(type, count){
         var item = document.createElement('span');
         item.className = 'item-count ' + type;
+        item.setAttribute('aria-label', (type === 'mail' ? '郵便 ' : '荷物 ') + String(count));
         if (!count) {
           item.className += ' empty';
           item.setAttribute('aria-hidden', 'true');
         }
         var label = document.createElement('span');
         label.className = 'item-label';
-        label.textContent = type === 'mail' ? '郵便' : '荷物';
+        label.textContent = type === 'mail' ? 'ゆ' : 'に';
         var value = document.createElement('span');
         value.textContent = String(count);
         item.appendChild(label);
