@@ -661,7 +661,7 @@
        available vertical space instead of collapsing the panels. */
     @media (min-aspect-ratio: 4 / 3) and (max-width: 1100px) and (max-height: 820px) {
       :root {
-        --ticker-height: 44px;
+        --ticker-height: 38px;
         --safe-top: max(4px, env(safe-area-inset-top));
         --safe-right: max(10px, env(safe-area-inset-right));
         --safe-left: max(10px, env(safe-area-inset-left));
@@ -695,12 +695,12 @@
       }
 
       .dorm-header {
-        min-height: 29px;
-        padding: 3px 8px;
+        min-height: 25px;
+        padding: 2px 8px;
       }
 
       .dorm-name {
-        font-size: 17px;
+        font-size: 16px;
       }
 
       .resident-list,
@@ -780,13 +780,13 @@
       }
 
       .ticker-label {
-        min-width: 94px;
-        padding: 0 10px;
-        font-size: 15px;
+        min-width: 86px;
+        padding: 0 8px;
+        font-size: 14px;
       }
 
       .ticker-track {
-        font-size: 17px;
+        font-size: 16px;
       }
 
       .connection-status {
@@ -797,7 +797,7 @@
 
     @media (min-width: 1101px) and (max-height: 800px) and (min-aspect-ratio: 4 / 3) {
       :root {
-        --ticker-height: 58px;
+        --ticker-height: 40px;
         --safe-top: max(8px, env(safe-area-inset-top));
       }
 
@@ -823,18 +823,18 @@
       }
 
       .board-main {
-        padding-top: 8px;
-        padding-bottom: 8px;
-        gap: 10px;
+        padding-top: 4px;
+        padding-bottom: 4px;
+        gap: 8px;
       }
 
       .dorm-header {
-        min-height: 42px;
-        padding: 6px 12px;
+        min-height: 28px;
+        padding: 2px 10px;
       }
 
       .dorm-name {
-        font-size: clamp(20px, 1.9vw, 28px);
+        font-size: clamp(16px, 1.45vw, 21px);
       }
 
       .resident-list.dense {
@@ -866,14 +866,86 @@
       }
 
       .ticker-label {
-        min-width: 120px;
-        padding: 0 15px;
-        font-size: 18px;
+        min-width: 92px;
+        padding: 0 9px;
+        font-size: 15px;
       }
 
       .ticker-track {
-        font-size: clamp(18px, 1.75vw, 24px);
+        font-size: clamp(16px, 1.45vw, 20px);
       }
+    }
+
+    :fullscreen .board-shell {
+      --ticker-height: 34px;
+    }
+
+    :fullscreen .board-main {
+      padding-top: 2px;
+      padding-bottom: 2px;
+    }
+
+    :fullscreen .dorm-panel {
+      border-top-width: 2px;
+    }
+
+    :fullscreen .dorm-header {
+      min-height: 23px;
+      padding: 1px 7px;
+    }
+
+    :fullscreen .dorm-name {
+      font-size: 15px;
+    }
+
+    :fullscreen .ticker {
+      border-top-width: 2px;
+    }
+
+    :fullscreen .ticker-label {
+      min-width: 82px;
+      padding: 0 7px;
+      font-size: 13px;
+    }
+
+    :fullscreen .ticker-track {
+      font-size: 15px;
+    }
+
+    :-webkit-full-screen .board-shell {
+      --ticker-height: 34px;
+    }
+
+    :-webkit-full-screen .board-main {
+      padding-top: 2px;
+      padding-bottom: 2px;
+    }
+
+    :-webkit-full-screen .dorm-panel {
+      border-top-width: 2px;
+    }
+
+    :-webkit-full-screen .dorm-header {
+      min-height: 23px;
+      padding: 1px 7px;
+    }
+
+    :-webkit-full-screen .dorm-name {
+      font-size: 15px;
+    }
+
+    :-webkit-full-screen .ticker {
+      border-top-width: 2px;
+    }
+
+    :-webkit-full-screen .ticker-label {
+      min-width: 82px;
+      padding: 0 7px;
+      font-size: 13px;
+    }
+
+    :-webkit-full-screen .ticker-track {
+      font-size: 15px;
     }
 
     @media (prefers-reduced-motion: reduce) {
