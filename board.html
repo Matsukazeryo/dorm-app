@@ -1067,9 +1067,375 @@
       }
     }
 
+    .delivery-effect-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 18;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .delivery-effect {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .delivery-actor,
+    .delivery-destination {
+      position: absolute;
+      left: 0;
+      top: 0;
+      display: inline-flex;
+      align-items: center;
+      will-change: transform, opacity;
+      filter: drop-shadow(0 2px 2px rgba(20, 30, 38, 0.2));
+    }
+
+    .delivery-actor {
+      gap: 0;
+      opacity: 0;
+      transform: translate3d(var(--delivery-start-x), var(--delivery-y), 0);
+      animation: delivery-arrive 1.7s cubic-bezier(0.2, 0.72, 0.28, 1) var(--delivery-delay, 0ms) both;
+    }
+
+    .delivery-person {
+      position: relative;
+      width: 27px;
+      height: 42px;
+      flex: 0 0 27px;
+      animation: delivery-step 0.2s ease-in-out infinite alternate;
+    }
+
+    .delivery-head,
+    .delivery-body,
+    .delivery-arm,
+    .delivery-legs {
+      position: absolute;
+      display: block;
+    }
+
+    .delivery-head {
+      left: 7px;
+      top: 0;
+      width: 13px;
+      height: 13px;
+      border: 1px solid #765949;
+      border-radius: 50%;
+      background: #e2b990;
+    }
+
+    .delivery-body {
+      left: 6px;
+      top: 13px;
+      width: 16px;
+      height: 16px;
+      border-radius: 3px 3px 2px 2px;
+      background: #3f7088;
+    }
+
+    .delivery-arm {
+      left: 17px;
+      top: 17px;
+      width: 12px;
+      height: 4px;
+      border-radius: 2px;
+      background: #365c70;
+      transform: rotate(25deg);
+      transform-origin: left center;
+    }
+
+    .delivery-legs {
+      left: 7px;
+      top: 28px;
+      width: 14px;
+      height: 14px;
+    }
+
+    .delivery-legs::before,
+    .delivery-legs::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      width: 4px;
+      height: 14px;
+      border-radius: 0 0 2px 2px;
+      background: #344955;
+      transform-origin: top center;
+    }
+
+    .delivery-legs::before {
+      left: 1px;
+      transform: rotate(13deg);
+    }
+
+    .delivery-legs::after {
+      right: 1px;
+      transform: rotate(-13deg);
+    }
+
+    .delivery-cargo {
+      position: relative;
+      display: block;
+      flex: 0 0 auto;
+      margin-left: -1px;
+      transform: translateY(8px);
+    }
+
+    .delivery-cargo.package-box {
+      width: 22px;
+      height: 20px;
+      border: 1px solid #8c673e;
+      border-radius: 2px;
+      background: #c99a61;
+    }
+
+    .delivery-cargo.package-box::before {
+      content: '';
+      position: absolute;
+      left: 9px;
+      top: -1px;
+      width: 4px;
+      height: 20px;
+      background: #ead5ad;
+    }
+
+    .delivery-cargo.letter {
+      width: 23px;
+      height: 15px;
+      border: 1px solid #607c8a;
+      border-radius: 1px;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    .delivery-cargo.letter::before,
+    .delivery-cargo.letter::after {
+      content: '';
+      position: absolute;
+      top: 1px;
+      width: 16px;
+      height: 1px;
+      background: #9eb2bc;
+    }
+
+    .delivery-cargo.letter::before {
+      left: -1px;
+      transform: rotate(31deg);
+      transform-origin: left center;
+    }
+
+    .delivery-cargo.letter::after {
+      right: -1px;
+      transform: rotate(-31deg);
+      transform-origin: right center;
+    }
+
+    .delivery-cargo-group {
+      display: inline-flex;
+      align-items: center;
+      margin-left: -1px;
+      transform: translateY(8px);
+    }
+
+    .delivery-cargo-group .delivery-cargo {
+      margin-left: -6px;
+      transform: none;
+    }
+
+    .delivery-cargo-group .delivery-cargo:first-child {
+      margin-left: 0;
+    }
+
+    .delivery-destination {
+      width: 24px;
+      height: 32px;
+      opacity: 0;
+      transform: translate3d(var(--delivery-dest-x), var(--delivery-y), 0) scale(0.7);
+      animation: delivery-destination 1.7s ease-out var(--delivery-delay, 0ms) both;
+    }
+
+    .delivery-destination.mailbox {
+      width: 22px;
+      height: 30px;
+      border: 1px solid #7c3f3a;
+      border-radius: 11px 11px 2px 2px;
+      background: #b85b53;
+    }
+
+    .delivery-destination.mailbox::before {
+      content: '';
+      position: absolute;
+      left: 4px;
+      top: 9px;
+      width: 12px;
+      height: 3px;
+      border-radius: 2px;
+      background: #f3dfd7;
+    }
+
+    .delivery-destination.mailbox::after {
+      content: '';
+      position: absolute;
+      left: 3px;
+      bottom: -4px;
+      width: 16px;
+      height: 4px;
+      border-radius: 0 0 2px 2px;
+      background: #6f4b48;
+    }
+
+    .delivery-destination.arrival-mark::before,
+    .delivery-destination.arrival-mark::after {
+      content: '';
+      position: absolute;
+      left: 11px;
+      top: 4px;
+      width: 3px;
+      height: 22px;
+      border-radius: 2px;
+      background: #c99a61;
+    }
+
+    .delivery-destination.arrival-mark::after {
+      transform: rotate(90deg);
+    }
+
+    .item-count.delivery-pending {
+      visibility: hidden;
+    }
+
+    .item-count.delivery-revealed {
+      animation: delivery-count-reveal 0.38s cubic-bezier(0.2, 0.85, 0.3, 1.25) both;
+    }
+
+    @keyframes delivery-count-reveal {
+      0% { opacity: 0; transform: scale(0.55); }
+      70% { opacity: 1; transform: scale(1.12); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    @keyframes delivery-arrive {
+      0% {
+        opacity: 0;
+        transform: translate3d(var(--delivery-start-x), var(--delivery-y), 0) scale(0.82);
+      }
+      10% {
+        opacity: 1;
+      }
+      72% {
+        opacity: 1;
+        transform: translate3d(var(--delivery-end-x), var(--delivery-y), 0) scale(1);
+      }
+      86% {
+        opacity: 1;
+        transform: translate3d(var(--delivery-end-x), var(--delivery-y), 0) scale(1);
+      }
+      100% {
+        opacity: 0;
+        transform: translate3d(var(--delivery-end-x), var(--delivery-y), 0) scale(0.9);
+      }
+    }
+
+    @keyframes delivery-step {
+      from { transform: translateY(-1px) rotate(-2deg); }
+      to { transform: translateY(2px) rotate(2deg); }
+    }
+
+    @keyframes delivery-destination {
+      0%, 58% {
+        opacity: 0;
+        transform: translate3d(var(--delivery-dest-x), var(--delivery-y), 0) scale(0.65);
+      }
+      72%, 88% {
+        opacity: 1;
+        transform: translate3d(var(--delivery-dest-x), var(--delivery-y), 0) scale(1);
+      }
+      100% {
+        opacity: 0;
+        transform: translate3d(var(--delivery-dest-x), var(--delivery-y), 0) scale(0.8);
+      }
+    }
+
+    .pickup-effect .delivery-actor {
+      animation-name: pickup-leave;
+      animation-timing-function: cubic-bezier(0.35, 0, 0.72, 0.28);
+    }
+
+    .pickup-effect .delivery-destination {
+      animation-name: pickup-confirm;
+      animation-timing-function: ease-out;
+    }
+
+    .delivery-destination.pickup-check::before,
+    .delivery-destination.pickup-check::after {
+      content: '';
+      position: absolute;
+      height: 3px;
+      border-radius: 3px;
+      background: #4f806f;
+      transform-origin: left center;
+    }
+
+    .delivery-destination.pickup-check::before {
+      left: 3px;
+      top: 15px;
+      width: 9px;
+      transform: rotate(43deg);
+    }
+
+    .delivery-destination.pickup-check::after {
+      left: 10px;
+      top: 19px;
+      width: 17px;
+      transform: rotate(-48deg);
+    }
+
+    @keyframes pickup-leave {
+      0% {
+        opacity: 0;
+        transform: translate3d(var(--delivery-start-x), var(--delivery-y), 0) scale(0.86);
+      }
+      10%, 24% {
+        opacity: 1;
+        transform: translate3d(var(--delivery-start-x), var(--delivery-y), 0) scale(1);
+      }
+      88% {
+        opacity: 1;
+        transform: translate3d(var(--delivery-end-x), var(--delivery-y), 0) scale(1);
+      }
+      100% {
+        opacity: 0;
+        transform: translate3d(var(--delivery-end-x), var(--delivery-y), 0) scale(0.88);
+      }
+    }
+
+    @keyframes pickup-confirm {
+      0%, 8% {
+        opacity: 0;
+        transform: translate3d(var(--delivery-dest-x), var(--delivery-y), 0) scale(0.6);
+      }
+      20%, 68% {
+        opacity: 1;
+        transform: translate3d(var(--delivery-dest-x), var(--delivery-y), 0) scale(1);
+      }
+      100% {
+        opacity: 0;
+        transform: translate3d(var(--delivery-dest-x), var(--delivery-y), 0) scale(0.82);
+      }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       .ticker-track {
         animation-duration: calc(var(--ticker-duration, 28s) * 1.8);
+      }
+
+      .delivery-actor {
+        display: none;
+      }
+
+      .delivery-destination {
+        animation-duration: 0.8s;
       }
     }
   </style>
@@ -1109,6 +1475,8 @@
       </div>
     </aside>
   </div>
+
+  <div id="delivery-effect-layer" class="delivery-effect-layer" aria-hidden="true"></div>
 
   <div id="connection-status" class="connection-status" role="status" aria-live="polite"></div>
 
@@ -1170,11 +1538,14 @@
       var boardMessage = '';
       var tickerSpeed = 80;
       var loaded = { shofu: false, meizen: false, message: false };
+      var liveReady = { shofu: false, meizen: false };
       var fromCache = { shofu: false, meizen: false, message: false };
+      var departingResidents = { shofu: {}, meizen: {} };
       var renderTimer = 0;
       var tickerSignature = '';
       var loadingTimer = 0;
       var reconnectTimer = 0;
+      var pendingDeliveryEffects = [];
 
       var elements = {
         shofuList: document.getElementById('shofu-list'),
@@ -1184,6 +1555,7 @@
         loadingNote: document.getElementById('loading-note'),
         reloadButton: document.getElementById('reload-button'),
         connectionStatus: document.getElementById('connection-status'),
+        deliveryEffectLayer: document.getElementById('delivery-effect-layer'),
         settingsButton: document.getElementById('settings-button'),
         settingsModal: document.getElementById('settings-modal'),
         settingsForm: document.getElementById('settings-form'),
@@ -1268,9 +1640,15 @@
 
       function renderDorm(dorm){
         var listElement = dorm === 'shofu' ? elements.shofuList : elements.meizenList;
-        var activeResidents = sortResidents(residents[dorm].filter(function(resident){
+        var visibleResidents = residents[dorm].filter(function(resident){
           return (resident.luggage + resident.mail) > 0;
-        }));
+        });
+        var visibleIds = {};
+        visibleResidents.forEach(function(resident){ visibleIds[resident.id] = true; });
+        Object.keys(departingResidents[dorm]).forEach(function(residentId){
+          if (!visibleIds[residentId]) visibleResidents.push(departingResidents[dorm][residentId]);
+        });
+        var activeResidents = sortResidents(visibleResidents);
         var count = activeResidents.length;
         var compactDisplay = window.innerWidth <= 1100 && window.innerHeight <= 820;
         var columns = compactDisplay ? (count > 11 ? 2 : 1) : (count > 40 ? 3 : count > 11 ? 2 : 1);
@@ -1288,6 +1666,9 @@
           activeResidents.forEach(function(resident){
             var item = document.createElement('article');
             item.className = 'resident-item';
+            if (resident.departing) item.className += ' departing';
+            item.setAttribute('data-resident-id', resident.id);
+            item.setAttribute('data-dorm', dorm);
 
             var identity = document.createElement('div');
             identity.className = 'resident-identity';
@@ -1325,7 +1706,210 @@
         renderTimer = 0;
         renderDorm('shofu');
         renderDorm('meizen');
+        playPendingDeliveryEffects();
         updateLoadingState();
+      }
+
+      function queueDeliveryEffects(dorm, previous, next){
+        if (!loaded[dorm] || !liveReady[dorm]) return;
+        var previousById = {};
+        previous.forEach(function(resident){
+          previousById[resident.id] = resident;
+        });
+        next.forEach(function(resident){
+          var before = previousById[resident.id];
+          if (!before) return;
+          if (resident.luggage > before.luggage) {
+            pendingDeliveryEffects.push({ dorm: dorm, id: resident.id, type: 'luggage', action: 'arrive' });
+          }
+          if (resident.mail > before.mail) {
+            pendingDeliveryEffects.push({ dorm: dorm, id: resident.id, type: 'mail', action: 'arrive' });
+          }
+          var clearedTypes = [];
+          if (before.luggage > 0 && resident.luggage === 0) clearedTypes.push('luggage');
+          if (before.mail > 0 && resident.mail === 0) clearedTypes.push('mail');
+          if (clearedTypes.length) {
+            var pickupType = clearedTypes.length > 1 ? 'both' : clearedTypes[0];
+            if ((resident.luggage + resident.mail) === 0) {
+              departingResidents[dorm][resident.id] = {
+                id: before.id,
+                dorm: before.dorm,
+                name: before.name,
+                roomNumber: before.roomNumber,
+                luggage: 0,
+                mail: 0,
+                departing: true
+              };
+            }
+            pendingDeliveryEffects.push({
+              dorm: dorm,
+              id: resident.id,
+              type: pickupType,
+              action: 'pickup',
+              geometry: captureEffectGeometry(dorm, resident.id, clearedTypes[0])
+            });
+          }
+        });
+        if (pendingDeliveryEffects.length > 4) {
+          var skippedEffects = pendingDeliveryEffects.slice(0, pendingDeliveryEffects.length - 4);
+          pendingDeliveryEffects = pendingDeliveryEffects.slice(pendingDeliveryEffects.length - 4);
+          skippedEffects.forEach(function(job){
+            if (job.action === 'pickup' && departingResidents[job.dorm][job.id]) {
+              delete departingResidents[job.dorm][job.id];
+            }
+          });
+        }
+      }
+
+      function findResidentItem(dorm, residentId){
+        var list = dorm === 'shofu' ? elements.shofuList : elements.meizenList;
+        var items = list.querySelectorAll('[data-resident-id]');
+        for (var index = 0; index < items.length; index += 1) {
+          if (items[index].getAttribute('data-resident-id') === residentId) return items[index];
+        }
+        return null;
+      }
+
+      function captureEffectGeometry(dorm, residentId, type){
+        var row = findResidentItem(dorm, residentId);
+        if (!row) return null;
+        var target = row.querySelector('.item-count.' + type);
+        var panel = row.closest ? row.closest('.dorm-panel') : row.parentNode.parentNode;
+        if (!target || !panel) return null;
+        var targetRect = target.getBoundingClientRect();
+        var panelRect = panel.getBoundingClientRect();
+        return {
+          targetLeft: targetRect.left,
+          targetTop: targetRect.top,
+          targetHeight: targetRect.height,
+          panelLeft: panelRect.left,
+          panelRight: panelRect.right
+        };
+      }
+
+      function createPersonAndCargo(type){
+        var actor = document.createElement('span');
+        actor.className = 'delivery-actor';
+        var person = document.createElement('span');
+        person.className = 'delivery-person';
+        ['head', 'body', 'arm', 'legs'].forEach(function(part){
+          var personPart = document.createElement('span');
+          personPart.className = 'delivery-' + part;
+          person.appendChild(personPart);
+        });
+        actor.appendChild(person);
+        if (type === 'both') {
+          var cargoGroup = document.createElement('span');
+          cargoGroup.className = 'delivery-cargo-group';
+          ['luggage', 'mail'].forEach(function(cargoType){
+            var groupedCargo = document.createElement('span');
+            groupedCargo.className = 'delivery-cargo ' +
+              (cargoType === 'mail' ? 'letter' : 'package-box');
+            cargoGroup.appendChild(groupedCargo);
+          });
+          actor.appendChild(cargoGroup);
+        } else {
+          var cargo = document.createElement('span');
+          cargo.className = 'delivery-cargo ' + (type === 'mail' ? 'letter' : 'package-box');
+          actor.appendChild(cargo);
+        }
+        return actor;
+      }
+
+      function finishDepartingResident(job){
+        if (!departingResidents[job.dorm][job.id]) return;
+        delete departingResidents[job.dorm][job.id];
+        scheduleRender();
+      }
+
+      function createPickupEffect(job, delay){
+        var geometry = job.geometry;
+        if (!geometry) {
+          finishDepartingResident(job);
+          return;
+        }
+        var startX = Math.max(geometry.panelLeft + 8, geometry.targetLeft - 30);
+        var endX = Math.max(startX + 105, geometry.panelRight - 20);
+        var y = Math.max(0, geometry.targetTop + (geometry.targetHeight - 42) / 2);
+
+        var effect = document.createElement('div');
+        effect.className = 'delivery-effect pickup-effect ' +
+          (job.type === 'mail' ? 'mail' : 'package');
+        effect.style.setProperty('--delivery-start-x', Math.round(startX) + 'px');
+        effect.style.setProperty('--delivery-end-x', Math.round(endX) + 'px');
+        effect.style.setProperty('--delivery-dest-x', Math.round(startX - 12) + 'px');
+        effect.style.setProperty('--delivery-y', Math.round(y) + 'px');
+        effect.style.setProperty('--delivery-delay', delay + 'ms');
+
+        var destination = document.createElement('span');
+        destination.className = 'delivery-destination pickup-check';
+        effect.appendChild(createPersonAndCargo(job.type));
+        effect.appendChild(destination);
+        elements.deliveryEffectLayer.appendChild(effect);
+        window.setTimeout(function(){
+          if (effect.parentNode) effect.parentNode.removeChild(effect);
+          finishDepartingResident(job);
+        }, 1850 + delay);
+      }
+
+      function createDeliveryEffect(job, delay){
+        if (job.action === 'pickup') {
+          createPickupEffect(job, delay);
+          return;
+        }
+        var row = findResidentItem(job.dorm, job.id);
+        if (!row) return;
+        var typeClass = job.type === 'mail' ? 'mail' : 'luggage';
+        var target = row.querySelector('.item-count.' + typeClass);
+        var panel = row.closest ? row.closest('.dorm-panel') : row.parentNode.parentNode;
+        if (!target || !panel) return;
+
+        var targetRect = target.getBoundingClientRect();
+        var panelRect = panel.getBoundingClientRect();
+        var destinationX = Math.max(panelRect.left + 8, targetRect.left - 25);
+        var endX = Math.max(panelRect.left + 8, destinationX - 54);
+        var startX = Math.max(endX + 115, panelRect.right - 66);
+        var y = Math.max(0, targetRect.top + (targetRect.height - 42) / 2);
+
+        target.classList.add('delivery-pending');
+
+        var effect = document.createElement('div');
+        effect.className = 'delivery-effect ' + (job.type === 'mail' ? 'mail' : 'package');
+        effect.style.setProperty('--delivery-start-x', Math.round(startX) + 'px');
+        effect.style.setProperty('--delivery-end-x', Math.round(endX) + 'px');
+        effect.style.setProperty('--delivery-dest-x', Math.round(destinationX) + 'px');
+        effect.style.setProperty('--delivery-y', Math.round(y) + 'px');
+        effect.style.setProperty('--delivery-delay', delay + 'ms');
+
+        var actor = createPersonAndCargo(job.type);
+
+        var destination = document.createElement('span');
+        destination.className = 'delivery-destination ' +
+          (job.type === 'mail' ? 'mailbox' : 'arrival-mark');
+        effect.appendChild(actor);
+        effect.appendChild(destination);
+        elements.deliveryEffectLayer.appendChild(effect);
+        var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        var revealDelay = delay + (reducedMotion ? 460 : 1220);
+        window.setTimeout(function(){
+          target.classList.remove('delivery-pending');
+          target.classList.add('delivery-revealed');
+          window.setTimeout(function(){
+            target.classList.remove('delivery-revealed');
+          }, 420);
+        }, revealDelay);
+        window.setTimeout(function(){
+          if (effect.parentNode) effect.parentNode.removeChild(effect);
+        }, 1850 + delay);
+      }
+
+      function playPendingDeliveryEffects(){
+        if (!pendingDeliveryEffects.length) return;
+        var jobs = pendingDeliveryEffects.slice(0, 4);
+        pendingDeliveryEffects = [];
+        jobs.forEach(function(job, index){
+          createDeliveryEffect(job, index * 180);
+        });
       }
 
       function scheduleRender(){
@@ -1375,6 +1959,11 @@
         snapshot.forEach(function(doc){
           next.push(residentFromDoc(doc, dorm));
         });
+        var isServerSnapshot = !(snapshot.metadata && snapshot.metadata.fromCache);
+        if (isServerSnapshot && !(snapshot.metadata && snapshot.metadata.hasPendingWrites)) {
+          queueDeliveryEffects(dorm, residents[dorm], next);
+        }
+        if (isServerSnapshot) liveReady[dorm] = true;
         residents[dorm] = next;
         loaded[dorm] = true;
         fromCache[dorm] = !!(snapshot.metadata && snapshot.metadata.fromCache);
