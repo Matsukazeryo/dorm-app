@@ -4459,6 +4459,16 @@
 	          <span class="notification-switch-slider"></span>
 	        </span>
 	      </label>
+	      <label id="notification-settings-note-content-row" class="notification-settings-item">
+	        <span class="notification-settings-text">
+	          <strong>備考の内容も表示する</strong>
+	          <span>ロック画面の通知にも備考内容を表示します。</span>
+	        </span>
+	        <span class="notification-switch">
+	          <input id="notif-note-content-toggle" type="checkbox">
+	          <span class="notification-switch-slider"></span>
+	        </span>
+	      </label>
 	    </div>
     <div id="notification-settings-status" class="notification-settings-status"></div>
     <div class="form-actions" style="margin-top:12px;">
@@ -5862,6 +5872,7 @@ const DEFAULT_NOTIFICATION_PREFS = Object.freeze({
   notifyMail: true,
   notifyAnnouncement: true,
   notifyNote: true,
+  showNoteContent: true,
   notifyMorning: false
 });
 let notificationPrefsState = null;
@@ -5882,16 +5893,19 @@ function normalizeNotificationPrefs(raw){
   const hasMail = Object.prototype.hasOwnProperty.call(src, 'notifyMail');
   const hasAnnouncement = Object.prototype.hasOwnProperty.call(src, 'notifyAnnouncement');
   const hasNote = Object.prototype.hasOwnProperty.call(src, 'notifyNote');
+	const hasNoteContent = Object.prototype.hasOwnProperty.call(src, 'showNoteContent');
   const notifyLuggage = hasLuggage ? src.notifyLuggage !== false : legacyEnabled;
   const notifyMail = hasMail ? src.notifyMail !== false : legacyEnabled;
   const notifyAnnouncement = hasAnnouncement ? src.notifyAnnouncement !== false : legacyEnabled;
   const notifyNote = hasNote ? src.notifyNote !== false : legacyEnabled;
+	const showNoteContent = hasNoteContent ? src.showNoteContent !== false : true;
   return {
     notificationsEnabled: !!(notifyLuggage || notifyMail || notifyAnnouncement || notifyNote),
     notifyLuggage,
     notifyMail,
     notifyAnnouncement,
     notifyNote,
+	showNoteContent,
     notifyMorning: false
   };
 }
@@ -5929,6 +5943,7 @@ function buildNotificationPrefsPayload(){
     notifyMail: prefs.notifyMail,
     notifyAnnouncement: prefs.notifyAnnouncement,
     notifyNote: prefs.notifyNote,
+	showNoteContent: prefs.showNoteContent,
     notifyMorning: prefs.notifyMorning,
     notificationPrefsUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
   };
@@ -7059,12 +7074,14 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       const mailToggle = document.getElementById('notif-mail-toggle');
       const announcementToggle = document.getElementById('notif-announcement-toggle');
       const noteToggle = document.getElementById('notif-note-toggle');
+	  const noteContentToggle = document.getElementById('notif-note-content-toggle');
       const sohmuToggle = document.getElementById('sohmu-toggle');
       const rows = [
         { el: document.getElementById('notification-settings-luggage-row'), disabled: false },
         { el: document.getElementById('notification-settings-mail-row'), disabled: false },
         { el: document.getElementById('notification-settings-announcement-row'), disabled: false },
-        { el: document.getElementById('notification-settings-note-row'), disabled: false }
+	    { el: document.getElementById('notification-settings-note-row'), disabled: false },
+	    { el: document.getElementById('notification-settings-note-content-row'), disabled: false }
       ];
       const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
       const myResidentId = getStoredResidentId();
@@ -7091,17 +7108,20 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       if (mailToggle) mailToggle.checked = !!prefs.notifyMail;
       if (announcementToggle) announcementToggle.checked = !!prefs.notifyAnnouncement;
       if (noteToggle) noteToggle.checked = !!prefs.notifyNote;
+	  if (noteContentToggle) noteContentToggle.checked = !!prefs.showNoteContent;
 
       const detailDisabled = !supported;
       if (luggageToggle) luggageToggle.disabled = detailDisabled;
       if (mailToggle) mailToggle.disabled = detailDisabled;
       if (announcementToggle) announcementToggle.disabled = detailDisabled;
       if (noteToggle) noteToggle.disabled = detailDisabled;
+	  if (noteContentToggle) noteContentToggle.disabled = detailDisabled || !prefs.notifyNote;
 
       rows[0].disabled = !!(luggageToggle && luggageToggle.disabled);
       rows[1].disabled = !!(mailToggle && mailToggle.disabled);
       rows[2].disabled = !!(announcementToggle && announcementToggle.disabled);
       rows[3].disabled = !!(noteToggle && noteToggle.disabled);
+	  rows[4].disabled = !!(noteContentToggle && noteContentToggle.disabled);
       rows.forEach(row => {
         if (row.el) row.el.classList.toggle('is-disabled', row.disabled);
       });
@@ -12660,6 +12680,7 @@ function applySohmuUI(){
           notifMailToggle: document.getElementById('notif-mail-toggle'),
           notifAnnouncementToggle: document.getElementById('notif-announcement-toggle'),
           notifNoteToggle: document.getElementById('notif-note-toggle'),
+	      notifNoteContentToggle: document.getElementById('notif-note-content-toggle'),
           receiveModal: document.getElementById('receive-modal'),
           receiveResidentName: document.getElementById('receive-resident-name'),
           receiveSummary: document.getElementById('receive-summary'),
@@ -12759,12 +12780,14 @@ function applySohmuUI(){
           const notifyMail = !!(elements.notifMailToggle && elements.notifMailToggle.checked);
           const notifyAnnouncement = !!(elements.notifAnnouncementToggle && elements.notifAnnouncementToggle.checked);
           const notifyNote = !!(elements.notifNoteToggle && elements.notifNoteToggle.checked);
+	      const showNoteContent = !!(elements.notifNoteContentToggle && elements.notifNoteContentToggle.checked);
           const nextPrefs = {
             notificationsEnabled: !!(notifyLuggage || notifyMail || notifyAnnouncement || notifyNote),
             notifyLuggage,
             notifyMail,
             notifyAnnouncement,
             notifyNote,
+	        showNoteContent,
             notifyMorning: false
           };
           storeNotificationPrefs(nextPrefs);
@@ -12777,7 +12800,8 @@ function applySohmuUI(){
           elements.notifLuggageToggle,
           elements.notifMailToggle,
           elements.notifAnnouncementToggle,
-          elements.notifNoteToggle
+	      elements.notifNoteToggle,
+	      elements.notifNoteContentToggle
         ].forEach(input => {
           if (input && !input.dataset.bound) {
             input.dataset.bound = '1';
