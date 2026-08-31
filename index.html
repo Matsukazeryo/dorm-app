@@ -3462,6 +3462,29 @@
 	    background:var(--mode-label-bg);
 	    margin-top:auto;
 	  }
+	  .tablet-search-quick-actions{
+	    display:flex;
+	    justify-content:flex-end;
+	    margin-top:-6px;
+	  }
+	  .tablet-search-quick-clear{
+	    min-width:86px;
+	    min-height:36px;
+	    padding:5px 12px;
+	    border:1px solid rgba(45,72,100,0.28);
+	    border-radius:6px;
+	    background:#e8eef3;
+	    color:#294253;
+	    font-size:14px;
+	    font-weight:800;
+	    cursor:pointer;
+	    touch-action:manipulation;
+	  }
+	  body.dark-theme .tablet-search-quick-clear{
+	    background:#334054;
+	    border-color:rgba(221,236,255,0.24);
+	    color:#eef6ff;
+	  }
 	  .tablet-search-mode-btn{
 	    min-height:44px;
 	    border:0;
@@ -3540,6 +3563,16 @@
 	    touch-action:manipulation;
 	    -webkit-user-select:none;
 	    user-select:none;
+	  }
+	  .tablet-search-panel{
+	    overscroll-behavior:none;
+	    touch-action:none;
+	  }
+	  #tablet-search-input,
+	  .tablet-search-key,
+	  .tablet-search-mode-btn,
+	  .tablet-search-quick-clear{
+	    touch-action:manipulation;
 	  }
 	  .tablet-search-key:active,
 	  .tablet-search-key.is-cycling,
@@ -3784,10 +3817,13 @@
     <button type="button" id="tablet-search-clear-btn" class="tablet-search-clear" aria-label="検索文字を消す">×</button>
   </div>
   <div class="tablet-search-mode" role="group" aria-label="アプリ内キーボード切り替え">
-    <button type="button" class="tablet-search-mode-btn is-active" data-tablet-search-mode="name" aria-pressed="true">名前</button>
-    <button type="button" class="tablet-search-mode-btn" data-tablet-search-mode="room" aria-pressed="false">部屋番号</button>
+    <button type="button" class="tablet-search-mode-btn" data-tablet-search-mode="name" aria-pressed="false">名前</button>
+    <button type="button" class="tablet-search-mode-btn is-active" data-tablet-search-mode="room" aria-pressed="true">部屋番号</button>
   </div>
-  <div id="tablet-kana-keyboard" class="tablet-search-keyboard is-active" aria-label="かなキーボード">
+  <div class="tablet-search-quick-actions">
+    <button id="tablet-search-quick-clear-btn" type="button" class="tablet-search-quick-clear" data-tablet-key-action="clear">全消去</button>
+  </div>
+  <div id="tablet-kana-keyboard" class="tablet-search-keyboard" aria-label="かなキーボード">
     <button type="button" class="tablet-search-key" data-kana-group="あいうえお">あ</button>
     <button type="button" class="tablet-search-key" data-kana-group="かきくけこ">か</button>
     <button type="button" class="tablet-search-key" data-kana-group="さしすせそ">さ</button>
@@ -3801,7 +3837,7 @@
     <button type="button" class="tablet-search-key" data-kana-group="わをん">わ</button>
     <button type="button" class="tablet-search-key is-function" data-tablet-key-action="backspace" aria-label="1文字削除">⌫</button>
   </div>
-  <div id="tablet-number-keyboard" class="tablet-search-keyboard" aria-label="数字キーボード">
+  <div id="tablet-number-keyboard" class="tablet-search-keyboard is-active" aria-label="数字キーボード">
     <button type="button" class="tablet-search-key" data-number-key="1">1</button>
     <button type="button" class="tablet-search-key" data-number-key="2">2</button>
     <button type="button" class="tablet-search-key" data-number-key="3">3</button>
@@ -4358,6 +4394,16 @@
 	        </span>
 	        <span class="notification-switch">
 	          <input id="notif-announcement-toggle" type="checkbox">
+	          <span class="notification-switch-slider"></span>
+	        </span>
+	      </label>
+	      <label id="notification-settings-note-row" class="notification-settings-item">
+	        <span class="notification-settings-text">
+	          <strong>備考の通知を受け取る</strong>
+	          <span>自分の備考が追加・変更されたときに通知します。</span>
+	        </span>
+	        <span class="notification-switch">
+	          <input id="notif-note-toggle" type="checkbox">
 	          <span class="notification-switch-slider"></span>
 	        </span>
 	      </label>
@@ -5763,6 +5809,7 @@ const DEFAULT_NOTIFICATION_PREFS = Object.freeze({
   notifyLuggage: true,
   notifyMail: true,
   notifyAnnouncement: true,
+  notifyNote: true,
   notifyMorning: false
 });
 let notificationPrefsState = null;
@@ -5782,14 +5829,17 @@ function normalizeNotificationPrefs(raw){
   const hasLuggage = Object.prototype.hasOwnProperty.call(src, 'notifyLuggage');
   const hasMail = Object.prototype.hasOwnProperty.call(src, 'notifyMail');
   const hasAnnouncement = Object.prototype.hasOwnProperty.call(src, 'notifyAnnouncement');
+  const hasNote = Object.prototype.hasOwnProperty.call(src, 'notifyNote');
   const notifyLuggage = hasLuggage ? src.notifyLuggage !== false : legacyEnabled;
   const notifyMail = hasMail ? src.notifyMail !== false : legacyEnabled;
   const notifyAnnouncement = hasAnnouncement ? src.notifyAnnouncement !== false : legacyEnabled;
+  const notifyNote = hasNote ? src.notifyNote !== false : legacyEnabled;
   return {
-    notificationsEnabled: !!(notifyLuggage || notifyMail || notifyAnnouncement),
+    notificationsEnabled: !!(notifyLuggage || notifyMail || notifyAnnouncement || notifyNote),
     notifyLuggage,
     notifyMail,
     notifyAnnouncement,
+    notifyNote,
     notifyMorning: false
   };
 }
@@ -5826,6 +5876,7 @@ function buildNotificationPrefsPayload(){
     notifyLuggage: prefs.notifyLuggage,
     notifyMail: prefs.notifyMail,
     notifyAnnouncement: prefs.notifyAnnouncement,
+    notifyNote: prefs.notifyNote,
     notifyMorning: prefs.notifyMorning,
     notificationPrefsUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
   };
@@ -6955,11 +7006,13 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       const luggageToggle = document.getElementById('notif-luggage-toggle');
       const mailToggle = document.getElementById('notif-mail-toggle');
       const announcementToggle = document.getElementById('notif-announcement-toggle');
+      const noteToggle = document.getElementById('notif-note-toggle');
       const sohmuToggle = document.getElementById('sohmu-toggle');
       const rows = [
         { el: document.getElementById('notification-settings-luggage-row'), disabled: false },
         { el: document.getElementById('notification-settings-mail-row'), disabled: false },
-        { el: document.getElementById('notification-settings-announcement-row'), disabled: false }
+        { el: document.getElementById('notification-settings-announcement-row'), disabled: false },
+        { el: document.getElementById('notification-settings-note-row'), disabled: false }
       ];
       const isAdmin = sessionStorage.getItem('isAdminLoggedIn') === 'true';
       const myResidentId = getStoredResidentId();
@@ -6985,15 +7038,18 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       if (luggageToggle) luggageToggle.checked = !!prefs.notifyLuggage;
       if (mailToggle) mailToggle.checked = !!prefs.notifyMail;
       if (announcementToggle) announcementToggle.checked = !!prefs.notifyAnnouncement;
+      if (noteToggle) noteToggle.checked = !!prefs.notifyNote;
 
       const detailDisabled = !supported;
       if (luggageToggle) luggageToggle.disabled = detailDisabled;
       if (mailToggle) mailToggle.disabled = detailDisabled;
       if (announcementToggle) announcementToggle.disabled = detailDisabled;
+      if (noteToggle) noteToggle.disabled = detailDisabled;
 
       rows[0].disabled = !!(luggageToggle && luggageToggle.disabled);
       rows[1].disabled = !!(mailToggle && mailToggle.disabled);
       rows[2].disabled = !!(announcementToggle && announcementToggle.disabled);
+      rows[3].disabled = !!(noteToggle && noteToggle.disabled);
       rows.forEach(row => {
         if (row.el) row.el.classList.toggle('is-disabled', row.disabled);
       });
@@ -7023,7 +7079,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
           } else if (permission !== 'granted') {
             message = '通知を許可すると、この端末で受け取る内容を細かく切り替えられます。';
           } else if (!prefs.notificationsEnabled) {
-            message = 'この端末では、荷物・郵便・お知らせの通知をすべて停止中です。';
+            message = 'この端末では、荷物・郵便・お知らせ・備考の通知をすべて停止中です。';
           } else if (!tokenReady) {
             message = '通知設定を端末へ反映しています。少し待ってからもう一度確認してください。';
           } else {
@@ -11092,10 +11148,21 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       }).join('');
     }
 
+	    async function getFreshHistorySnapshot(query){
+	      try {
+	        return await query.get({ source: 'server' });
+	      } catch (serverError) {
+	        console.warn('fresh history query failed; using available cache', serverError);
+	        return query.get();
+	      }
+	    }
+
 	    async function fetchStructuredItemHistory(resident, itemType){
 	      const residentId = resident && resident.id ? resident.id : '';
 	      if (!residentId) return [];
-	      const snap = await db.collection('logs').where('residentId', '==', residentId).get();
+	      const snap = await getFreshHistorySnapshot(
+	        db.collection('logs').where('residentId', '==', residentId)
+	      );
 	      const entries = [];
 	      snap.forEach(function(doc){
 	        const data = doc.data() || {};
@@ -11112,16 +11179,17 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 	      if (dorm) {
 	        const prefix = `[${dorm}] ${resident.name} `;
 	        try {
-	          snap = await db.collection('logs')
+	          snap = await getFreshHistorySnapshot(db.collection('logs')
 	            .where('details', '>=', prefix)
-	            .where('details', '<', prefix + '\uf8ff')
-	            .get();
+	            .where('details', '<', prefix + '\uf8ff'));
 	        } catch (error) {
 	          console.warn('legacy resident history prefix query failed; using recent-log fallback', error);
 	        }
 	      }
 	      if (!snap) {
-	        snap = await db.collection('logs').orderBy('timestamp', 'desc').limit(500).get();
+	        snap = await getFreshHistorySnapshot(
+	          db.collection('logs').orderBy('timestamp', 'desc').limit(500)
+	        );
 	      }
       const entries = [];
       snap.forEach(function(doc){
@@ -11146,6 +11214,13 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 	  if (arrivalSummary) arrivalSummary.classList.remove('is-visible');
       list.innerHTML = '<li class="item-history-empty">読み込み中...</li>';
       modal.classList.add('active');
+	  let slowLoadingTimer = window.setTimeout(function(){
+	    setAppLoading('item-history', true, {
+	      label: '最新の履歴を取得中...',
+	      timeoutMs: 12000,
+	      transient: true
+	    });
+	  }, 450);
 
       try {
 	        const historyGroups = await Promise.all([
@@ -11159,6 +11234,10 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       } catch (e) {
         console.error('openItemHistoryModal failed', e);
         list.innerHTML = '<li class="item-history-error">履歴を読み込めませんでした。通信状態や権限をご確認ください。</li>';
+	  } finally {
+	    if (slowLoadingTimer) window.clearTimeout(slowLoadingTimer);
+	    slowLoadingTimer = 0;
+	    setAppLoading('item-history', false);
       }
     }
 
@@ -11989,6 +12068,13 @@ async function __resolveResidentAndDorm(residentId){
 let __editingResidentDorm = null;  // 'shofu' or 'meizen'
 
 async function openEditResidentModal(residentId){
+    let editLoadingTimer = window.setTimeout(function(){
+      setAppLoading('resident-edit-open', true, {
+        label: '寮生情報を確認中...',
+        timeoutMs: 12000,
+        transient: true
+      });
+    }, 400);
     try{
         const resolved = await __resolveResidentAndDorm(residentId);
         const r = resolved && resolved.data;
@@ -12041,6 +12127,10 @@ async function openEditResidentModal(residentId){
     }catch(e){
         console.error('openEditResidentModal error', e);
         alert('編集モーダルの表示でエラーが発生しました。');
+    }finally{
+        if (editLoadingTimer) window.clearTimeout(editLoadingTimer);
+        editLoadingTimer = 0;
+        setAppLoading('resident-edit-open', false);
     }
 }
 
@@ -12517,6 +12607,7 @@ function applySohmuUI(){
           notifLuggageToggle: document.getElementById('notif-luggage-toggle'),
           notifMailToggle: document.getElementById('notif-mail-toggle'),
           notifAnnouncementToggle: document.getElementById('notif-announcement-toggle'),
+          notifNoteToggle: document.getElementById('notif-note-toggle'),
           receiveModal: document.getElementById('receive-modal'),
           receiveResidentName: document.getElementById('receive-resident-name'),
           receiveSummary: document.getElementById('receive-summary'),
@@ -12615,11 +12706,13 @@ function applySohmuUI(){
           const notifyLuggage = !!(elements.notifLuggageToggle && elements.notifLuggageToggle.checked);
           const notifyMail = !!(elements.notifMailToggle && elements.notifMailToggle.checked);
           const notifyAnnouncement = !!(elements.notifAnnouncementToggle && elements.notifAnnouncementToggle.checked);
+          const notifyNote = !!(elements.notifNoteToggle && elements.notifNoteToggle.checked);
           const nextPrefs = {
-            notificationsEnabled: !!(notifyLuggage || notifyMail || notifyAnnouncement),
+            notificationsEnabled: !!(notifyLuggage || notifyMail || notifyAnnouncement || notifyNote),
             notifyLuggage,
             notifyMail,
             notifyAnnouncement,
+            notifyNote,
             notifyMorning: false
           };
           storeNotificationPrefs(nextPrefs);
@@ -12631,7 +12724,8 @@ function applySohmuUI(){
         [
           elements.notifLuggageToggle,
           elements.notifMailToggle,
-          elements.notifAnnouncementToggle
+          elements.notifAnnouncementToggle,
+          elements.notifNoteToggle
         ].forEach(input => {
           if (input && !input.dataset.bound) {
             input.dataset.bound = '1';
@@ -16656,10 +16750,13 @@ if(elements.changePasswordForm){
 	            elements.logModal.classList.add('active');
 	            document.getElementById('log-list').innerHTML = '<li>読み込み中...</li>';
             if(logUnsubscribe) logUnsubscribe();
-            logUnsubscribe = db.collection('logs')
+            const historyQuery = db.collection('logs')
                   .orderBy('timestamp','desc')
-                  .limit(500)
-                  .onSnapshot(renderLogs, err=>{
+                  .limit(500);
+            historyQuery.get({ source: 'server' }).then(renderLogs).catch(function(error){
+              console.warn('fresh global history query failed; live listener will continue', error);
+            });
+            logUnsubscribe = historyQuery.onSnapshot(renderLogs, err=>{
                      console.error('logs listener',err);
                      document.getElementById('log-list').innerHTML='<li>履歴の読み込みに失敗しました。</li>';
                   });
@@ -17160,6 +17257,48 @@ if(elements.changePasswordForm){
 	            window.__legacyPerformanceMode = enabled;
 	        }
 
+	        function runLegacyTransientCleanup() {
+	            try { clearExpiredTransientAppLoading(); } catch (_) {}
+	            try {
+	                const drafts = window.__residentNoteDrafts;
+	                if (drafts && typeof drafts === 'object') {
+	                    Object.keys(drafts).forEach(function(key){
+	                        if (String(drafts[key] == null ? '' : drafts[key]).trim() === '') delete drafts[key];
+	                    });
+	                }
+	            } catch (_) {}
+	            try {
+	                const reloadedAt = Number(sessionStorage.getItem('residentLoadRecoveryReloadAt') || 0);
+	                if (reloadedAt && Date.now() - reloadedAt > 24 * 60 * 60 * 1000) {
+	                    sessionStorage.removeItem('residentLoadRecoveryReloadAt');
+	                }
+	            } catch (_) {}
+	            try {
+	                if (window.caches && typeof window.caches.keys === 'function') {
+	                    window.caches.keys().then(function(names){
+	                        return Promise.all((names || []).map(function(name){
+	                            return /(?:^|[-_])(ocr|temporary|temp)(?:[-_]|$)/i.test(String(name || ''))
+	                              ? window.caches.delete(name)
+	                              : Promise.resolve(false);
+	                        }));
+	                    }).catch(function(){});
+	                }
+	            } catch (_) {}
+	        }
+
+	        function initializeLegacyTransientCleanup() {
+	            if (!window.__legacyPerformanceMode) return;
+	            const schedule = function(){
+	                if (typeof window.requestIdleCallback === 'function') {
+	                    window.requestIdleCallback(runLegacyTransientCleanup, { timeout: 4000 });
+	                } else {
+	                    window.setTimeout(runLegacyTransientCleanup, 2500);
+	                }
+	            };
+	            schedule();
+	            window.setInterval(schedule, 20 * 60 * 1000);
+	        }
+
 	        function clearSearchInputAfterWorkflowAction(options) {
 	            if (!elements.searchInput) return false;
 	            if (!elements.searchInput.value) {
@@ -17176,7 +17315,7 @@ if(elements.changePasswordForm){
 
 	        const TABLET_SEARCH_STORAGE_KEY = 'tabletLandscapeSearchEnabled';
 	        const tabletSearchState = {
-	            mode: 'name',
+	            mode: 'room',
 	            syncing: false,
 	            lastKanaButton: null,
 	            lastKanaGroup: '',
@@ -17189,7 +17328,9 @@ if(elements.changePasswordForm){
 	            flickStartY: 0,
 	            flickButton: null,
 	            flickGroup: '',
-	            ignoreKanaClickUntil: 0
+	            ignoreKanaClickUntil: 0,
+	            backspaceHoldTimer: 0,
+	            ignoreBackspaceClickUntil: 0
 	        };
 
 	        function isTouchTabletDevice() {
@@ -17315,6 +17456,7 @@ if(elements.changePasswordForm){
 	            const absY = Math.abs(Number(deltaY || 0));
 	            if (!source || Math.max(absX, absY) < 18) return '';
 	            const horizontal = absX > absY;
+	            if (source === 'わをん' && !horizontal && deltaY < 0) return 'ん';
 	            if (source.length >= 5) {
 	                if (horizontal) return deltaX < 0 ? source.charAt(1) : source.charAt(3);
 	                return deltaY < 0 ? source.charAt(2) : source.charAt(4);
@@ -17400,7 +17542,10 @@ if(elements.changePasswordForm){
 	            elements.tabletSearchInput.blur();
 	            resetTabletKanaCycle();
 	            const value = String(elements.tabletSearchInput.value || '');
-	            if (action === 'backspace') applyTabletSearchValue(value.slice(0, -1));
+	            if (action === 'backspace') {
+	                if (Date.now() < tabletSearchState.ignoreBackspaceClickUntil) return;
+	                applyTabletSearchValue(value.slice(0, -1));
+	            }
 	            else if (action === 'clear') applyTabletSearchValue('');
 	            else if (action === 'mark') transformLastTabletKana();
 	        }
@@ -17432,6 +17577,46 @@ if(elements.changePasswordForm){
 	                    resetTabletKanaCycle();
 	                    applyTabletSearchValue('');
 	                });
+	            }
+	            const backspaceButtons = elements.tabletSearchPanel.querySelectorAll('[data-tablet-key-action="backspace"]');
+	            const cancelBackspaceHold = function(){
+	                if (!tabletSearchState.backspaceHoldTimer) return;
+	                window.clearTimeout(tabletSearchState.backspaceHoldTimer);
+	                tabletSearchState.backspaceHoldTimer = 0;
+	            };
+	            for (let i = 0; i < backspaceButtons.length; i += 1) {
+	                const backspaceButton = backspaceButtons[i];
+	                try {
+	                    backspaceButton.addEventListener('touchstart', function(){
+	                        cancelBackspaceHold();
+	                        tabletSearchState.backspaceHoldTimer = window.setTimeout(function(){
+	                            tabletSearchState.backspaceHoldTimer = 0;
+	                            tabletSearchState.ignoreBackspaceClickUntil = Date.now() + 800;
+	                            handleTabletSearchKeyAction('clear');
+	                        }, 560);
+	                    }, { passive: true });
+	                } catch (_) {
+	                    backspaceButton.addEventListener('touchstart', function(){
+	                        cancelBackspaceHold();
+	                        tabletSearchState.backspaceHoldTimer = window.setTimeout(function(){
+	                            tabletSearchState.backspaceHoldTimer = 0;
+	                            tabletSearchState.ignoreBackspaceClickUntil = Date.now() + 800;
+	                            handleTabletSearchKeyAction('clear');
+	                        }, 560);
+	                    }, false);
+	                }
+	                backspaceButton.addEventListener('touchend', cancelBackspaceHold, false);
+	                backspaceButton.addEventListener('touchcancel', cancelBackspaceHold, false);
+	            }
+	            const stopTabletPanelScroll = function(event){
+	                if (event && event.cancelable && event.preventDefault) event.preventDefault();
+	            };
+	            try {
+	                elements.tabletSearchPanel.addEventListener('touchmove', stopTabletPanelScroll, { passive: false });
+	                elements.tabletSearchPanel.addEventListener('wheel', stopTabletPanelScroll, { passive: false });
+	            } catch (_) {
+	                elements.tabletSearchPanel.addEventListener('touchmove', stopTabletPanelScroll, false);
+	                elements.tabletSearchPanel.addEventListener('wheel', stopTabletPanelScroll, false);
 	            }
 	            elements.tabletSearchPanel.addEventListener('click', function(event) {
 	                const button = closestElementCompat(event.target, 'button');
@@ -17466,7 +17651,7 @@ if(elements.changePasswordForm){
 	            window.addEventListener('resize', scheduleAvailabilitySync);
 	            window.addEventListener('orientationchange', scheduleAvailabilitySync);
 	            bindTabletKanaFlickInput();
-	            setTabletSearchMode('name');
+	            setTabletSearchMode('room');
 	            syncTabletSearchAvailability();
 	        }
         
@@ -17738,6 +17923,7 @@ if(elements.changePasswordForm){
         initializeTheme();
         initializeResidentSortSelector();
 		initializeLegacyPerformanceMode();
+		initializeLegacyTransientCleanup();
 		initializePageScrollLockObserver();
         initializeWorkflowMode();
         window.setTimeout(function(){
