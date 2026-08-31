@@ -3340,6 +3340,15 @@
 	    pointer-events:auto;
 	    transform:translate3d(-50%, 0, 0);
 	  }
+	  body.workflow-detail-open .last-action-undo-toast{
+	    top:16px;
+	    top:calc(12px + env(safe-area-inset-top));
+	    bottom:auto;
+	    transform:translate3d(-50%, -8px, 0);
+	  }
+	  body.workflow-detail-open .last-action-undo-toast.is-visible{
+	    transform:translate3d(-50%, 0, 0);
+	  }
 	  .last-action-undo-message{
 	    min-width:0;
 	    overflow-wrap:anywhere;
@@ -3474,7 +3483,7 @@
 	  }
 	  .tablet-search-mode{
 	    display:grid;
-	    grid-template-columns:1fr 1fr;
+	    grid-template-columns:repeat(3, minmax(0, 1fr));
 	    gap:4px;
 	    padding:4px;
 	    border:1px solid var(--mode-selector-border);
@@ -3482,21 +3491,17 @@
 	    background:var(--mode-label-bg);
 	    margin-top:auto;
 	  }
-	  .tablet-search-quick-actions{
-	    display:flex;
-	    justify-content:flex-end;
-	    margin-top:-6px;
-	  }
 	  .tablet-search-quick-clear{
-	    min-width:86px;
-	    min-height:36px;
-	    padding:5px 12px;
+	    min-width:0;
+	    min-height:44px;
+	    padding:5px 6px;
 	    border:1px solid rgba(45,72,100,0.28);
 	    border-radius:6px;
 	    background:#e8eef3;
 	    color:#294253;
 	    font-size:14px;
 	    font-weight:800;
+	    white-space:nowrap;
 	    cursor:pointer;
 	    touch-action:manipulation;
 	  }
@@ -3506,13 +3511,16 @@
 	    color:#eef6ff;
 	  }
 	  .tablet-search-mode-btn{
+	    min-width:0;
 	    min-height:44px;
+	    padding:4px;
 	    border:0;
 	    border-radius:6px;
 	    background:transparent;
 	    color:var(--mode-label-text);
-	    font-size:16px;
+	    font-size:15px;
 	    font-weight:800;
+	    white-space:nowrap;
 	    cursor:pointer;
 	  }
 	  .tablet-search-mode-btn.is-active{
@@ -3617,6 +3625,29 @@
 	  }
 	  body.dark-theme .tablet-search-key.is-function{
 	    background:#334054;
+	  }
+	  @media (max-height:740px){
+	    .tablet-search-panel{
+	      top:8px;
+	      right:8px;
+	      bottom:8px;
+	      gap:8px;
+	      padding:12px;
+	    }
+	    #tablet-search-input{
+	      min-height:46px;
+	      font-size:18px;
+	    }
+	    .tablet-search-keyboard{
+	      gap:7px;
+	    }
+	    .tablet-search-key{
+	      min-height:52px;
+	    }
+	    .tablet-search-mode-btn,
+	    .tablet-search-quick-clear{
+	      min-height:40px;
+	    }
 	  }
 
 	  /* 低性能端末では描画結果を変えず、合成コストだけを抑える。 */
@@ -3839,14 +3870,12 @@
     <input type="search" id="tablet-search-input" inputmode="text" enterkeyhint="search" autocomplete="off" placeholder="名前・部屋番号などで検索">
     <button type="button" id="tablet-search-clear-btn" class="tablet-search-clear" aria-label="検索文字を消す">×</button>
   </div>
-  <div class="tablet-search-mode" role="group" aria-label="アプリ内キーボード切り替え">
-    <button type="button" class="tablet-search-mode-btn" data-tablet-search-mode="name" aria-pressed="false">名前</button>
-    <button type="button" class="tablet-search-mode-btn is-active" data-tablet-search-mode="room" aria-pressed="true">部屋番号</button>
-  </div>
-  <div class="tablet-search-quick-actions">
+  <div class="tablet-search-mode" role="group" aria-label="アプリ内キーボード操作">
+    <button type="button" class="tablet-search-mode-btn is-active" data-tablet-search-mode="name" aria-pressed="true">名前</button>
+    <button type="button" class="tablet-search-mode-btn" data-tablet-search-mode="room" aria-pressed="false">部屋番号</button>
     <button id="tablet-search-quick-clear-btn" type="button" class="tablet-search-quick-clear" data-tablet-key-action="clear">全消去</button>
   </div>
-  <div id="tablet-kana-keyboard" class="tablet-search-keyboard" aria-label="かなキーボード">
+  <div id="tablet-kana-keyboard" class="tablet-search-keyboard is-active" aria-label="かなキーボード">
     <button type="button" class="tablet-search-key" data-kana-group="あいうえお">あ</button>
     <button type="button" class="tablet-search-key" data-kana-group="かきくけこ">か</button>
     <button type="button" class="tablet-search-key" data-kana-group="さしすせそ">さ</button>
@@ -3860,7 +3889,7 @@
     <button type="button" class="tablet-search-key" data-kana-group="わをん">わ</button>
     <button type="button" class="tablet-search-key is-function" data-tablet-key-action="backspace" aria-label="1文字削除">⌫</button>
   </div>
-  <div id="tablet-number-keyboard" class="tablet-search-keyboard is-active" aria-label="数字キーボード">
+  <div id="tablet-number-keyboard" class="tablet-search-keyboard" aria-label="数字キーボード">
     <button type="button" class="tablet-search-key" data-number-key="1">1</button>
     <button type="button" class="tablet-search-key" data-number-key="2">2</button>
     <button type="button" class="tablet-search-key" data-number-key="3">3</button>
@@ -13480,6 +13509,11 @@ function applyWorkflowMode(mode, options) {
 	  }
 
 	  try { setMode('view-mode', { skipRender: true }); } catch(_) {}
+	  try {
+	    if (typeof setTabletSearchMode === 'function') {
+	      setTabletSearchMode(nextMode === 'receive' ? 'room' : 'name');
+	    }
+	  } catch(_) {}
 	  try { setItemFilterEnabled(nextMode === 'receive', { skipRender: true }); } catch(_) {}
 	  try { updateItemFilterControls(); } catch(_) {}
 			    try { requestResidentTableRender(); } catch(_) {}
@@ -16646,6 +16680,8 @@ if(elements.changePasswordForm){
         
 
 	        let logDocsCache = [];
+	        let logHistoryRefreshSequence = 0;
+	        let logHistoryRefreshTimerId = 0;
 
 	        function canViewGlobalHistory(){
 	          return document.body.classList.contains('admin-logged-in') ||
@@ -16783,14 +16819,38 @@ if(elements.changePasswordForm){
 	            elements.logModal.classList.add('active');
 	            document.getElementById('log-list').innerHTML = '<li>読み込み中...</li>';
             if(logUnsubscribe) logUnsubscribe();
+	        if (logHistoryRefreshTimerId) window.clearTimeout(logHistoryRefreshTimerId);
+	        const refreshSequence = ++logHistoryRefreshSequence;
+	        let serverHistoryReady = false;
+	        logDocsCache = [];
             const historyQuery = db.collection('logs')
                   .orderBy('timestamp','desc')
                   .limit(500);
-            historyQuery.get({ source: 'server' }).then(renderLogs).catch(function(error){
+	        const renderFreshHistory = function(snapshot){
+	          if (refreshSequence !== logHistoryRefreshSequence) return;
+	          const fromCache = !!(snapshot && snapshot.metadata && snapshot.metadata.fromCache);
+	          if (fromCache) return;
+	          serverHistoryReady = true;
+	          if (logHistoryRefreshTimerId) window.clearTimeout(logHistoryRefreshTimerId);
+	          logHistoryRefreshTimerId = 0;
+	          renderLogs(snapshot);
+	        };
+	        logHistoryRefreshTimerId = window.setTimeout(function(){
+	          if (refreshSequence !== logHistoryRefreshSequence || serverHistoryReady) return;
+	          const list = document.getElementById('log-list');
+	          if (list) list.innerHTML = '<li class="log-empty">最新の履歴を確認しています。通信状態をご確認ください。</li>';
+	        }, 12000);
+            historyQuery.get({ source: 'server' }).then(function(snapshot){
+	          serverHistoryReady = true;
+	          renderFreshHistory(snapshot);
+	        }).catch(function(error){
               console.warn('fresh global history query failed; live listener will continue', error);
             });
-            logUnsubscribe = historyQuery.onSnapshot(renderLogs, err=>{
+	        logUnsubscribe = historyQuery.onSnapshot({ includeMetadataChanges: true }, renderFreshHistory, err=>{
                      console.error('logs listener',err);
+	             if (refreshSequence !== logHistoryRefreshSequence) return;
+	             if (logHistoryRefreshTimerId) window.clearTimeout(logHistoryRefreshTimerId);
+	             logHistoryRefreshTimerId = 0;
                      document.getElementById('log-list').innerHTML='<li>履歴の読み込みに失敗しました。</li>';
                   });
         }
@@ -16798,6 +16858,10 @@ if(elements.changePasswordForm){
         function hideLogModal(){
             elements.logModal.classList.remove('active');
             if(logUnsubscribe){ logUnsubscribe(); logUnsubscribe=null; }
+	        logHistoryRefreshSequence += 1;
+	        if (logHistoryRefreshTimerId) window.clearTimeout(logHistoryRefreshTimerId);
+	        logHistoryRefreshTimerId = 0;
+	        logDocsCache = [];
         }
 
         window.showHistoryModal = showLogModal;
@@ -17348,7 +17412,7 @@ if(elements.changePasswordForm){
 
 	        const TABLET_SEARCH_STORAGE_KEY = 'tabletLandscapeSearchEnabled';
 	        const tabletSearchState = {
-	            mode: 'room',
+	            mode: 'name',
 	            syncing: false,
 	            lastKanaButton: null,
 	            lastKanaGroup: '',
@@ -17684,7 +17748,7 @@ if(elements.changePasswordForm){
 	            window.addEventListener('resize', scheduleAvailabilitySync);
 	            window.addEventListener('orientationchange', scheduleAvailabilitySync);
 	            bindTabletKanaFlickInput();
-	            setTabletSearchMode('room');
+	            setTabletSearchMode(isWorkflowReceiveMode() ? 'room' : 'name');
 	            syncTabletSearchAvailability();
 	        }
         
