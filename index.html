@@ -11641,8 +11641,48 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 
 	    const NOTE_AUTOSAVE_DELAY_MS = 700;
 	    const residentInlineNoteAutosaveTimers = {};
+	    const residentInlineNoteSessionInitial = {};
+	    const residentNoteWriteQueues = {};
 	    let selfResidentNoteAutosaveTimer = null;
 	    let mobileCountNoteAutosaveTimer = null;
+
+	    function enqueueResidentNoteWrite(residentId, operation){
+	      const id = String(residentId || '').trim();
+	      if (!id || typeof operation !== 'function') return Promise.resolve(null);
+	      const previous = residentNoteWriteQueues[id] || Promise.resolve();
+	      const next = previous.catch(function(){}).then(operation);
+	      residentNoteWriteQueues[id] = next;
+	      next.then(function(){
+	        if (residentNoteWriteQueues[id] === next) delete residentNoteWriteQueues[id];
+	      }, function(){
+	        if (residentNoteWriteQueues[id] === next) delete residentNoteWriteQueues[id];
+	      });
+	      return next;
+	    }
+
+	    function finalizeResidentNoteNotification(residentId, targetCollection, finalNote, initialNote){
+	      const id = String(residentId || '').trim();
+	      const collectionName = String(targetCollection || '').trim();
+	      const nextNote = normalizeResidentNote(finalNote);
+	      const previousNote = normalizeResidentNote(initialNote);
+	      if (!id || !collectionName || nextNote === previousNote) return Promise.resolve(false);
+	      const payload = { note: nextNote };
+	      if (nextNote) {
+	        payload.noteNotificationVersion = firebase.firestore.FieldValue.increment(1);
+	        payload.noteNotificationRequestedAt = firebase.firestore.FieldValue.serverTimestamp();
+	      }
+	      return enqueueResidentNoteWrite(id, function(){
+	        return db.collection(collectionName).doc(id).update(payload);
+	      }).then(function(){
+	        const resident = getResidentById(id);
+	        if (resident) resident.note = nextNote;
+	        try { requestResidentTableRender(); } catch(_) {}
+	        return true;
+	      }).catch(function(error){
+	        console.error('finalize resident note notification failed', error);
+	        return false;
+	      });
+	    }
 
 	    function getCurrentResidentNoteValue(residentId){
 	      const resident = getResidentById(residentId);
@@ -11675,6 +11715,10 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
 	    }
 
 	    function handleResidentInlineNoteInput(residentId, value){
+	      const id = String(residentId || '').trim();
+	      if (id && !Object.prototype.hasOwnProperty.call(residentInlineNoteSessionInitial, id)) {
+	        residentInlineNoteSessionInitial[id] = getCurrentResidentNoteValue(id) || '';
+	      }
 	      updateResidentInlineNoteDraft(residentId, value);
 	      scheduleResidentInlineNoteAutosave(residentId);
 	    }
@@ -12255,7 +12299,13 @@ async function openEditResidentModal(residentId){
             const snap = await t.get(docRef);
             if (!snap.exists) throw new Error('対象のドキュメントが存在しません。');
             const prev = snap.data() || {};
-            t.update(docRef, updated);
+	        const updatePayload = Object.assign({}, updated);
+	        const previousNote = normalizeResidentNote(prev.note || prev.memo || prev.notes || '');
+	        if (updated.note && updated.note !== previousNote) {
+	          updatePayload.noteNotificationVersion = firebase.firestore.FieldValue.increment(1);
+	          updatePayload.noteNotificationRequestedAt = firebase.firestore.FieldValue.serverTimestamp();
+	        }
+	        t.update(docRef, updatePayload);
             try {
                 const diffParts = [];
                 const fields = ['name','roomNumber','furigana','circle','luggage','mail','note'];
@@ -13170,7 +13220,8 @@ const receiveModalState = {
 const mobileCountEditState = {
   residentId: null,
   noteDirty: false,
-  noteSaving: false
+  noteSaving: false,
+  initialNote: ''
 };
 
 	const WORKFLOW_HOME_TIMEOUT_MS = 30000;
@@ -14834,11 +14885,23 @@ function getSelfNoteModalElements() {
 	  const refs = getSelfNoteModalElements();
 	  if (!refs.modal) return;
 	  const pendingId = refs.input && refs.input.dataset ? refs.input.dataset.residentId : '';
-	  if (pendingId) flushSelfResidentNoteAutosave(pendingId);
+	  if (pendingId && refs.input) {
+	    clearSelfResidentNoteAutosaveTimer();
+	    const targetCollection = resolveResidentCollectionName(pendingId);
+	    finalizeResidentNoteNotification(
+	      pendingId,
+	      targetCollection,
+	      refs.input.value,
+	      refs.input.dataset.initialNote || ''
+	    );
+	  }
 	  refs.modal.classList.remove('active');
 	  refs.modal.style.display = 'none';
   [refs.input, refs.status, refs.saveBtn].forEach(function(el){
-    if (el && el.dataset) delete el.dataset.residentId;
+	if (el && el.dataset) {
+	  delete el.dataset.residentId;
+	  delete el.dataset.initialNote;
+	}
   });
   if (refs.status) {
     refs.status.textContent = '';
@@ -14861,6 +14924,7 @@ function getSelfNoteModalElements() {
   const room = resident.roomNumber ? `${resident.roomNumber} ` : '';
   if (refs.name) refs.name.textContent = `${room}${resident.name || ''}`.trim();
   refs.input.value = normalizeResidentNote(resident.note || resident.memo || resident.notes || '');
+	refs.input.dataset.initialNote = refs.input.value;
   [refs.input, refs.status, refs.saveBtn].forEach(function(el){
     if (el && el.dataset) el.dataset.residentId = id;
   });
@@ -14918,7 +14982,9 @@ function setSelfResidentNoteStatus(residentId, message, tone) {
 	  setSelfResidentNoteStatus(id, '保存中...', '');
 
 	  try {
-	    await db.collection(targetCollection).doc(id).update({ note: nextNote });
+	    await enqueueResidentNoteWrite(id, function(){
+	      return db.collection(targetCollection).doc(id).update({ note: nextNote });
+	    });
 		    const resident = getResidentById(id);
 		    if (resident) resident.note = nextNote;
 		    if (!autoMode || normalizeResidentNote(textarea.value) === nextNote) {
@@ -14955,10 +15021,19 @@ function setSelfResidentNoteStatus(residentId, message, tone) {
 	    setResidentInlineNoteStatus(id, '保存先を特定できません。', 'error');
 	    return;
 	  }
+	  const finalizeInlineSession = async function(){
+	    if (autoMode) return;
+	    const initialNote = Object.prototype.hasOwnProperty.call(residentInlineNoteSessionInitial, id)
+	      ? residentInlineNoteSessionInitial[id]
+	      : getCurrentResidentNoteValue(id);
+	    await finalizeResidentNoteNotification(id, targetCollection, nextNote, initialNote || '');
+	    delete residentInlineNoteSessionInitial[id];
+	  };
 	  const currentNote = getCurrentResidentNoteValue(id);
 	  if (currentNote !== null && nextNote === currentNote) {
 	    clearResidentInlineNoteDraft(id);
 	    setResidentInlineNoteStatus(id, '保存済みです。', 'success');
+	    await finalizeInlineSession();
 	    return;
 	  }
 
@@ -14967,7 +15042,9 @@ function setSelfResidentNoteStatus(residentId, message, tone) {
 	  setResidentInlineNoteStatus(id, '保存中...', '');
 
 	  try {
-	    await db.collection(targetCollection).doc(id).update({ note: nextNote });
+	    await enqueueResidentNoteWrite(id, function(){
+	      return db.collection(targetCollection).doc(id).update({ note: nextNote });
+	    });
 	    const resident = getResidentById(id);
 	    if (resident) resident.note = nextNote;
 	    if (normalizeResidentNote(textarea.value) === nextNote) {
@@ -14977,6 +15054,7 @@ function setSelfResidentNoteStatus(residentId, message, tone) {
 	      updateResidentInlineNoteDraft(id, textarea.value);
 	      scheduleResidentInlineNoteAutosave(id);
 	    }
+	    await finalizeInlineSession();
 	  } catch (e) {
 	    console.error('saveResidentInlineNote failed', e);
 	    setResidentInlineNoteStatus(id, '保存に失敗しました。', 'error');
@@ -15023,12 +15101,20 @@ function syncMobileCountEditModalUI() {
 
 	function closeMobileCountEditModal() {
 	  if (!elements.mobileCountEditModal) return;
-	  flushMobileCountEditNoteAutosave();
+	  const residentId = String(mobileCountEditState.residentId || '').trim();
+	  const targetCollection = residentId ? resolveResidentCollectionName(residentId) : '';
+	  const finalNote = elements.mobileCountNoteInput ? elements.mobileCountNoteInput.value : '';
+	  const initialNote = mobileCountEditState.initialNote || '';
+	  clearMobileCountNoteAutosaveTimer();
+	  if (residentId && targetCollection) {
+	    finalizeResidentNoteNotification(residentId, targetCollection, finalNote, initialNote);
+	  }
 	  elements.mobileCountEditModal.classList.remove('active');
 	  elements.mobileCountEditModal.style.display = 'none';
   mobileCountEditState.residentId = null;
   mobileCountEditState.noteDirty = false;
   mobileCountEditState.noteSaving = false;
+	  mobileCountEditState.initialNote = '';
   setMobileCountNoteStatus('', '');
   syncWorkflowDetailState();
 }
@@ -15043,6 +15129,7 @@ function openMobileCountEditModal(residentId) {
   mobileCountEditState.residentId = resident.id;
   mobileCountEditState.noteDirty = false;
   mobileCountEditState.noteSaving = false;
+	  mobileCountEditState.initialNote = normalizeResidentNote(resident.note || resident.memo || resident.notes || '');
   setMobileCountNoteStatus('', '');
   syncMobileCountEditModalUI();
   elements.mobileCountEditModal.style.display = 'flex';
@@ -15127,7 +15214,9 @@ function setMobileCountNoteStatus(message, tone) {
 	  if (!autoMode) elements.mobileCountNoteInput.disabled = true;
 	  setMobileCountNoteStatus('保存中...', '');
 	  try {
-	    await db.collection(targetCollection).doc(residentId).update({ note: nextNote });
+	    await enqueueResidentNoteWrite(residentId, function(){
+	      return db.collection(targetCollection).doc(residentId).update({ note: nextNote });
+	    });
 	    const resident = getResidentById(residentId);
 	    if (resident) resident.note = nextNote;
 	    if (isSameModalResident() && normalizeResidentNote(elements.mobileCountNoteInput.value) === nextNote) {
