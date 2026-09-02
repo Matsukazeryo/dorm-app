@@ -446,8 +446,8 @@
 
         .bulk-ops-container { display: none; width: 100%; gap: 10px; }
         body.resident-edit-mode .bulk-ops-container { display: flex; }
-        #add-resident-btn { background-color: #27ae60; flex-grow: 1; }
-        #add-bulk-btn { background-color: #2ecc71; flex-grow: 1; }
+        #add-resident-btn { display:none !important; }
+        #add-bulk-btn { background-color: #178a5a; flex-grow: 1; }
         #delete-selected-btn { background-color: #e74c3c; flex-grow: 1; }
         #ocr-scan-btn { background:#34495e; }
         body.sohmu-off #ocr-scan-btn { display:none !important; }
@@ -1000,9 +1000,251 @@
         .form-actions button { padding: 10px 20px; }
         /* #log-list: ログモーダル関連CSSは削除 */
         
-        .bulk-add-entry { border-bottom: 1px solid var(--border-color); padding-bottom: 15px; margin-bottom: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .bulk-add-entry:last-child { border-bottom: none; }
-        .bulk-add-controls { display: flex; justify-content: space-between; margin-top: 20px; }
+		.new-resident-modal-content{
+		  width:calc(100% - 24px);
+		  max-width:860px;
+		  max-height:calc(100vh - 28px);
+		  padding:18px;
+		  overflow:hidden;
+		  display:flex;
+		  flex-direction:column;
+		}
+		.new-resident-modal-header{
+		  flex:0 0 auto;
+		  margin-bottom:12px;
+		}
+		.new-resident-modal-header h2{
+		  margin:0;
+		  font-size:1.25rem;
+		}
+		.new-resident-form{
+		  min-height:0;
+		  display:flex;
+		  flex:1 1 auto;
+		  flex-direction:column;
+		}
+		.new-resident-dorm-section{
+		  flex:0 0 auto;
+		  padding:12px;
+		  border:1px solid var(--border-color);
+		  border-radius:8px;
+		  background:var(--controls-bg);
+		}
+		.new-resident-dorm-heading{
+		  display:flex;
+		  align-items:baseline;
+		  justify-content:space-between;
+		  gap:10px;
+		  margin-bottom:8px;
+		}
+		.new-resident-dorm-heading strong{ font-size:.96rem; }
+		.new-resident-dorm-heading span{ color:#647687; font-size:.78rem; }
+		.new-resident-dorm-options{
+		  display:grid;
+		  grid-template-columns:1fr 1fr;
+		  gap:8px;
+		}
+		.new-resident-dorm-btn{
+		  min-height:46px;
+		  padding:8px 10px;
+		  border:2px solid transparent;
+		  border-radius:7px;
+		  background:#eef2f5;
+		  color:#294253;
+		  font-size:.96rem;
+		  font-weight:850;
+		  cursor:pointer;
+		  touch-action:manipulation;
+		}
+		.new-resident-dorm-btn[data-dorm="shofu"].is-active{
+		  border-color:#864A2B;
+		  background:#f7eee9;
+		  color:#713b22;
+		}
+		.new-resident-dorm-btn[data-dorm="meizen"].is-active{
+		  border-color:#2a6686;
+		  background:#e9f3f8;
+		  color:#205573;
+		}
+		.new-resident-entry-toolbar{
+		  flex:0 0 auto;
+		  display:flex;
+		  align-items:center;
+		  justify-content:space-between;
+		  gap:10px;
+		  margin:12px 0 8px;
+		}
+		.new-resident-entry-count{
+		  font-size:.9rem;
+		  font-weight:800;
+		}
+		.new-resident-add-row-btn{
+		  min-height:38px;
+		  padding:7px 13px;
+		  border:1px solid #2a6686;
+		  border-radius:7px;
+		  background:#fff;
+		  color:#205573;
+		  font-size:.86rem;
+		  font-weight:800;
+		  cursor:pointer;
+		  touch-action:manipulation;
+		}
+		#bulk-form-entries{
+		  min-height:0;
+		  flex:1 1 auto;
+		  overflow-y:auto;
+		  overscroll-behavior:contain;
+		  padding:2px 4px 8px 2px;
+		  -webkit-overflow-scrolling:touch;
+		}
+		.bulk-add-entry{
+		  display:grid;
+		  grid-template-columns:minmax(150px,1.25fr) minmax(150px,1.15fr) minmax(90px,.65fr) minmax(110px,.8fr);
+		  gap:9px;
+		  padding:11px;
+		  margin-bottom:9px;
+		  border:1px solid var(--border-color);
+		  border-left:4px solid #9aa9b5;
+		  border-radius:8px;
+		  background:var(--controls-bg);
+		}
+		.bulk-add-entry.is-invalid{
+		  border-color:#c84d48;
+		  border-left-color:#c84d48;
+		  background:#fff7f7;
+		}
+		.bulk-entry-head{
+		  grid-column:1 / -1;
+		  display:flex;
+		  align-items:center;
+		  justify-content:space-between;
+		  min-height:30px;
+		}
+		.bulk-entry-number{
+		  display:inline-flex;
+		  align-items:center;
+		  gap:7px;
+		  font-size:.86rem;
+		  font-weight:850;
+		}
+		.bulk-entry-number::before{
+		  content:attr(data-number);
+		  display:inline-flex;
+		  align-items:center;
+		  justify-content:center;
+		  width:25px;
+		  height:25px;
+		  border-radius:50%;
+		  background:#2a6686;
+		  color:#fff;
+		  font-size:.76rem;
+		}
+		.bulk-entry-remove{
+		  width:32px;
+		  height:32px;
+		  padding:0;
+		  border:1px solid rgba(176,62,62,.34);
+		  border-radius:50%;
+		  background:#fff;
+		  color:#a43838;
+		  font-size:20px;
+		  line-height:1;
+		  cursor:pointer;
+		  touch-action:manipulation;
+		}
+		.bulk-field{
+		  min-width:0;
+		}
+		.bulk-field label{
+		  display:block;
+		  margin-bottom:4px;
+		  color:#526879;
+		  font-size:.76rem;
+		  font-weight:800;
+		}
+		.bulk-field input,
+		.bulk-field select{
+		  width:100%;
+		  min-width:0;
+		  min-height:42px;
+		  box-sizing:border-box;
+		  padding:8px 9px;
+		  border:1px solid var(--border-color);
+		  border-radius:6px;
+		  background:#fff;
+		  color:#142433;
+		  font-size:16px;
+		}
+		.bulk-field-name input{
+		  border-color:rgba(42,102,134,.58);
+		  font-weight:800;
+		}
+		.new-resident-form-footer{
+		  flex:0 0 auto;
+		  padding-top:10px;
+		  border-top:1px solid var(--border-color);
+		}
+		.new-resident-status{
+		  min-height:1.35em;
+		  margin:0 0 7px;
+		  color:#5d7182;
+		  font-size:.84rem;
+		  font-weight:700;
+		}
+		.new-resident-status.is-error{ color:#b43b36; }
+		.new-resident-status.is-success{ color:#178a5a; }
+		.new-resident-submit-btn{
+		  width:100%;
+		  min-height:50px;
+		  border:0;
+		  border-radius:7px;
+		  background:#178a5a;
+		  color:#fff;
+		  font-size:1rem;
+		  font-weight:900;
+		  cursor:pointer;
+		  touch-action:manipulation;
+		}
+		.new-resident-submit-btn:disabled,
+		.new-resident-add-row-btn:disabled,
+		.new-resident-dorm-btn:disabled{
+		  opacity:.58;
+		  cursor:default;
+		}
+		body.dark-theme .new-resident-dorm-heading span,
+		body.dark-theme .bulk-field label,
+		body.dark-theme .new-resident-status{ color:#c5d5e2; }
+		body.dark-theme .new-resident-dorm-btn,
+		body.dark-theme .new-resident-add-row-btn,
+		body.dark-theme .bulk-entry-remove,
+		body.dark-theme .bulk-field input,
+		body.dark-theme .bulk-field select{
+		  background:#223149;
+		  color:#eef6ff;
+		}
+		body.dark-theme .bulk-add-entry.is-invalid{ background:#3a2424; }
+		@media (max-width:720px){
+		  .new-resident-modal-content{
+		    width:calc(100% - 12px);
+		    max-height:calc(100vh - 12px);
+		    padding:13px;
+		  }
+		  .new-resident-dorm-heading{
+		    display:block;
+		  }
+		  .new-resident-dorm-heading span{
+		    display:block;
+		    margin-top:2px;
+		  }
+		  .bulk-add-entry{
+		    grid-template-columns:1fr 1fr;
+		  }
+		  .bulk-field-name,
+		  .bulk-field-furigana{
+		    grid-column:1 / -1;
+		  }
+		}
 
         .footer-settings-panel{
           max-width:800px;
@@ -3784,8 +4026,8 @@
         </div>
         <div class="ops-container">
              <div class="bulk-ops-container">
-                <button id="add-resident-btn">新しい寮生を追加</button>
-                <button id="add-bulk-btn">寮生を一括追加</button>
+				<button id="add-resident-btn" type="button" hidden aria-hidden="true">旧追加画面</button>
+				<button id="add-bulk-btn" type="button">新入寮生を追加</button>
                 <button id="delete-selected-btn" disabled>選択した寮生を削除</button>
             </div>
         </div>
@@ -4184,7 +4426,7 @@
 </div>
 <!-- ==== 管理者メッセージ送信モーダル ここまで ==== -->
 
-<div id="add-resident-modal" class="modal-overlay">
+<div id="add-resident-modal" class="modal-overlay" hidden aria-hidden="true">
     <div class="modal-content">
         <div class="modal-header">
             <h2>新しい寮生を追加</h2>
@@ -4260,25 +4502,38 @@
     </form>
   </div>
 </div>
-<div id="add-bulk-modal" class="modal-overlay">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>寮生を一括追加</h2>
-            <button id="add-bulk-modal-close-btn" class="modal-close-btn">&times;</button>
-        </div>
-        <form id="add-bulk-form">
-            <div class="form-group">
-                <label for="bulk-form-dorm">追加先の寮</label>
-                <select id="bulk-form-dorm" required><option value="shofu">松風寮</option><option value="meizen">明善寮</option></select>
-            </div>
-            <div id="bulk-form-entries">
-            </div>
-            <div class="bulk-add-controls">
-                <button type="button" id="add-form-entry-btn">+ 寮生を追加</button>
-                <button type="submit" class="header-btn" style="background-color: #2ecc71;">全て登録する</button>
-            </div>
-        </form>
-    </div>
+<div id="add-bulk-modal" class="modal-overlay" aria-labelledby="new-resident-modal-title">
+	<div class="modal-content new-resident-modal-content">
+		<div class="modal-header new-resident-modal-header">
+			<h2 id="new-resident-modal-title">新入寮生を追加</h2>
+			<button id="add-bulk-modal-close-btn" type="button" class="modal-close-btn" aria-label="閉じる">&times;</button>
+		</div>
+		<form id="add-bulk-form" class="new-resident-form" novalidate>
+			<section class="new-resident-dorm-section" aria-labelledby="new-resident-dorm-heading">
+				<div class="new-resident-dorm-heading">
+					<strong id="new-resident-dorm-heading">追加先の寮</strong>
+					<span>ここで選んだ寮が入力した全員に適用されます</span>
+				</div>
+				<div class="new-resident-dorm-options" role="group" aria-label="追加先の寮">
+					<button type="button" class="new-resident-dorm-btn is-active" data-dorm="shofu" aria-pressed="true">松風寮</button>
+					<button type="button" class="new-resident-dorm-btn" data-dorm="meizen" aria-pressed="false">明善寮</button>
+				</div>
+				<select id="bulk-form-dorm" required hidden aria-hidden="true" tabindex="-1">
+					<option value="shofu">松風寮</option>
+					<option value="meizen">明善寮</option>
+				</select>
+			</section>
+			<div class="new-resident-entry-toolbar">
+				<span id="new-resident-entry-count" class="new-resident-entry-count">1人分を入力</span>
+				<button type="button" id="add-form-entry-btn" class="new-resident-add-row-btn">＋ 入力欄を追加</button>
+			</div>
+			<div id="bulk-form-entries" aria-live="polite"></div>
+			<div class="new-resident-form-footer">
+				<div id="new-resident-status" class="new-resident-status" role="status" aria-live="polite"></div>
+				<button id="new-resident-submit-btn" type="submit" class="new-resident-submit-btn">入力した寮生を登録</button>
+			</div>
+		</form>
+	</div>
 </div>
 
 <!-- ==== お知らせ投稿モーダル ==== -->
@@ -5725,6 +5980,7 @@
 
     // ===== Bulk add: ensure a working handler =====
     (function bindAddBulkSubmit(){
+	  return; // 新入寮生追加コントローラーへ統合済み
       const form = document.getElementById('add-bulk-form');
       if (!form) return;
       if (form.__addBulkBound) return;
@@ -7833,6 +8089,7 @@ function unifiedConfirm(action){
 
 // ==== 寮生一括追加モーダル（×ボタン/背景クリック/ESC で閉じる + 開く）====
 (function bindBulkAddModalUI(){
+	return; // 新入寮生追加コントローラーへ統合済み
   if (window.__bulkAddModalBind) return;
   window.__bulkAddModalBind = true;
 
@@ -8796,6 +9053,7 @@ window.addEventListener('load', function(){
 
 // ==== 寮生一括追加: 行の追加/個別削除（モーダル内） ====
 (function bindBulkAddButtons(){
+	return; // 新入寮生追加コントローラーへ統合済み
   if (window.__bulkBind) return; window.__bulkBind = true;
   const entriesRoot = document.getElementById('bulk-form-entries');
 
@@ -8917,6 +9175,359 @@ window.addEventListener('load', function(){
 
 // 初期行が無ければ 1 行だけ用意（個別削除ボタン付き）
   if (entriesRoot && !entriesRoot.querySelector('.bulk-add-entry')) addEntry();
+})();
+
+// ==== 新入寮生追加（単数・複数共通） ====
+(function initializeNewResidentIntake(){
+  if (window.__newResidentIntakeInitialized) return;
+  window.__newResidentIntakeInitialized = true;
+
+  const modal = document.getElementById('add-bulk-modal');
+  const form = document.getElementById('add-bulk-form');
+  const entriesRoot = document.getElementById('bulk-form-entries');
+  const dormSelect = document.getElementById('bulk-form-dorm');
+  const statusEl = document.getElementById('new-resident-status');
+  const countEl = document.getElementById('new-resident-entry-count');
+  const submitBtn = document.getElementById('new-resident-submit-btn');
+  const addRowBtn = document.getElementById('add-form-entry-btn');
+  if (!modal || !form || !entriesRoot || !dormSelect || !submitBtn) return;
+
+  form.__addBulkBound = true;
+  const state = { saving:false, loadingTimer:0 };
+
+  function setStatus(message, tone){
+    if (!statusEl) return;
+    statusEl.textContent = message || '';
+    statusEl.classList.remove('is-error', 'is-success');
+    if (tone === 'error') statusEl.classList.add('is-error');
+    if (tone === 'success') statusEl.classList.add('is-success');
+  }
+
+  function getDorm(){
+    return dormSelect.value === 'meizen' ? 'meizen' : 'shofu';
+  }
+
+  function setDorm(dorm){
+    const nextDorm = dorm === 'meizen' ? 'meizen' : 'shofu';
+    dormSelect.value = nextDorm;
+    const buttons = modal.querySelectorAll('.new-resident-dorm-btn');
+    for (let i = 0; i < buttons.length; i += 1) {
+      const active = buttons[i].getAttribute('data-dorm') === nextDorm;
+      buttons[i].classList.toggle('is-active', active);
+      buttons[i].setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
+    const circles = entriesRoot.querySelectorAll('.bulk-circle');
+    for (let i = 0; i < circles.length; i += 1) {
+      setCircleOptions(circles[i], nextDorm, true);
+      circles[i].value = '';
+    }
+  }
+
+  function createEntry(){
+    const entry = document.createElement('section');
+    entry.className = 'bulk-add-entry';
+    entry.innerHTML = `
+      <div class="bulk-entry-head">
+        <span class="bulk-entry-number" data-number="1">寮生</span>
+        <button type="button" class="bulk-entry-remove" aria-label="この入力欄を削除" title="この入力欄を削除">&times;</button>
+      </div>
+      <div class="bulk-field bulk-field-name">
+        <label>名前 <span aria-hidden="true">*</span></label>
+        <input type="text" class="bulk-name" data-field="name" maxlength="60" autocomplete="off" placeholder="氏名を入力">
+      </div>
+      <div class="bulk-field bulk-field-furigana">
+        <label>ふりがな</label>
+        <input type="text" class="bulk-furigana" data-field="furigana" maxlength="80" inputmode="kana" lang="ja-Hira" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="ひらがなで入力">
+      </div>
+      <div class="bulk-field bulk-field-room">
+        <label>部屋番号</label>
+        <input type="text" class="bulk-room" data-field="room" maxlength="8" inputmode="numeric" pattern="[0-9]*" placeholder="例 201">
+      </div>
+      <div class="bulk-field bulk-field-circle">
+        <label>サークル</label>
+        <select class="bulk-circle" data-field="circle"></select>
+      </div>
+    `;
+    setCircleOptions(entry.querySelector('.bulk-circle'), getDorm(), true);
+    return entry;
+  }
+
+  function getEntries(){
+    return entriesRoot.querySelectorAll('.bulk-add-entry');
+  }
+
+  function updateEntrySummary(){
+    const entries = getEntries();
+    let completed = 0;
+    for (let i = 0; i < entries.length; i += 1) {
+      const number = entries[i].querySelector('.bulk-entry-number');
+      if (number) number.setAttribute('data-number', String(i + 1));
+      const name = entries[i].querySelector('.bulk-name');
+      if (name && String(name.value || '').trim()) completed += 1;
+    }
+    if (countEl) countEl.textContent = entries.length + '人分の入力欄';
+    submitBtn.textContent = completed > 0 ? completed + '人を登録する' : '入力した寮生を登録';
+  }
+
+  function appendEntry(focusName){
+    if (getEntries().length >= 100) {
+      setStatus('一度に追加できるのは100人までです。', 'error');
+      return;
+    }
+    const entry = createEntry();
+    entriesRoot.appendChild(entry);
+    updateEntrySummary();
+    if (focusName) {
+      const input = entry.querySelector('.bulk-name');
+      window.setTimeout(function(){ try { input.focus(); } catch(_) {} }, 0);
+    }
+  }
+
+  function clearEntry(entry){
+    const inputs = entry.querySelectorAll('input');
+    for (let i = 0; i < inputs.length; i += 1) inputs[i].value = '';
+    const circle = entry.querySelector('.bulk-circle');
+    if (circle) circle.value = '';
+    entry.classList.remove('is-invalid');
+  }
+
+  function removeEntry(entry){
+    const entries = getEntries();
+    if (!entry) return;
+    if (entries.length <= 1) clearEntry(entry);
+    else entry.parentNode.removeChild(entry);
+    updateEntrySummary();
+  }
+
+  function formHasInput(){
+    const controls = entriesRoot.querySelectorAll('input, select');
+    for (let i = 0; i < controls.length; i += 1) {
+      if (String(controls[i].value || '').trim()) return true;
+    }
+    return false;
+  }
+
+  function setSaving(saving){
+    state.saving = !!saving;
+    const controls = form.querySelectorAll('button, input, select');
+    for (let i = 0; i < controls.length; i += 1) controls[i].disabled = state.saving;
+    submitBtn.textContent = state.saving ? '登録しています...' : '入力した寮生を登録';
+    if (!state.saving) updateEntrySummary();
+  }
+
+  function defaultDorm(){
+    try {
+      const raw = String(currentCollectionName || '').split('_')[1] || '';
+      if (raw === 'meizen') return 'meizen';
+      if (raw === 'shofu') return 'shofu';
+    } catch(_) {}
+    return 'shofu';
+  }
+
+  function openModal(){
+    if (state.saving) return;
+    entriesRoot.innerHTML = '';
+    setDorm(defaultDorm());
+    appendEntry(false);
+    setStatus('', '');
+    modal.classList.add('active');
+    const firstName = entriesRoot.querySelector('.bulk-name');
+    window.setTimeout(function(){ try { firstName.focus(); } catch(_) {} }, 30);
+  }
+
+  function closeModal(force){
+    if (state.saving) return;
+    if (!force && formHasInput() && !window.confirm('入力中の内容を破棄して閉じますか？')) return;
+    modal.classList.remove('active');
+    setStatus('', '');
+  }
+
+  function collectResidents(){
+    const entries = getEntries();
+    const residents = [];
+    const seen = Object.create(null);
+    let invalid = false;
+    for (let i = 0; i < entries.length; i += 1) {
+      const entry = entries[i];
+      entry.classList.remove('is-invalid');
+      const nameEl = entry.querySelector('.bulk-name');
+      const furiEl = entry.querySelector('.bulk-furigana');
+      const roomEl = entry.querySelector('.bulk-room');
+      const circleEl = entry.querySelector('.bulk-circle');
+      const name = String(nameEl && nameEl.value || '').trim();
+      const furigana = normalizeFuriganaInput(String(furiEl && furiEl.value || '').trim());
+      const room = normalizeRoomNumberInput(String(roomEl && roomEl.value || '').trim());
+      const circle = String(circleEl && circleEl.value || '').trim();
+      if (furiEl) furiEl.value = furigana;
+      if (roomEl) roomEl.value = room;
+      const hasAny = !!(name || furigana || room || circle);
+      if (!hasAny) continue;
+      if (!name) {
+        entry.classList.add('is-invalid');
+        invalid = true;
+        continue;
+      }
+      const key = name.replace(/\s+/g, '') + '\u0000' + room;
+      if (seen[key]) {
+        entry.classList.add('is-invalid');
+        seen[key].classList.add('is-invalid');
+        invalid = true;
+        continue;
+      }
+      seen[key] = entry;
+      residents.push({ name:name, furigana:furigana, room:room, circle:circle, entry:entry, key:key });
+    }
+    if (invalid) throw new Error('名前がない入力欄、または同じ名前・部屋番号の重複があります。赤い欄を確認してください。');
+    if (!residents.length) throw new Error('少なくとも1人の名前を入力してください。');
+    return residents;
+  }
+
+  async function findExistingDuplicates(collectionName, residents){
+    let snapshot;
+    try {
+      snapshot = await db.collection(collectionName).get({ source:'server' });
+    } catch (error) {
+      console.warn('resident duplicate server check failed; using available data', error);
+      snapshot = await db.collection(collectionName).get();
+    }
+    const existing = Object.create(null);
+    snapshot.forEach(function(doc){
+      const data = doc.data() || {};
+      const name = String(data.name || '').trim().replace(/\s+/g, '');
+      const room = normalizeRoomNumberInput(getResidentDocRoomNumber(data));
+      existing[name + '\u0000' + room] = true;
+    });
+    return residents.filter(function(resident){ return !!existing[resident.key]; });
+  }
+
+  async function submitResidents(event){
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (state.saving) return;
+    let residents;
+    try {
+      residents = collectResidents();
+    } catch (error) {
+      setStatus(error.message || '入力内容を確認してください。', 'error');
+      const invalid = entriesRoot.querySelector('.bulk-add-entry.is-invalid input');
+      if (invalid) try { invalid.focus(); } catch(_) {}
+      return;
+    }
+
+    const dorm = getDorm();
+    const collectionName = 'residents_' + dorm;
+    setSaving(true);
+    setStatus('既存の寮生と重複していないか確認しています...', '');
+    state.loadingTimer = window.setTimeout(function(){
+      setAppLoading('new-resident-intake', true, {
+        label:'新入寮生を登録中...', timeoutMs:20000, transient:true
+      });
+    }, 500);
+	let completed = false;
+
+    try {
+      const duplicates = await findExistingDuplicates(collectionName, residents);
+      if (duplicates.length) {
+        for (let i = 0; i < duplicates.length; i += 1) duplicates[i].entry.classList.add('is-invalid');
+        throw new Error('同じ名前・部屋番号の寮生が既に登録されています。赤い欄を確認してください。');
+      }
+      setStatus(residents.length + '人を登録しています...', '');
+      const batch = db.batch();
+      const now = firebase.firestore.FieldValue.serverTimestamp();
+      for (let i = 0; i < residents.length; i += 1) {
+        const resident = residents[i];
+        const ref = db.collection(collectionName).doc();
+        batch.set(ref, {
+          dorm:dorm,
+          name:resident.name,
+          furigana:resident.furigana,
+          room:resident.room,
+          roomNumber:resident.room,
+          roomNo:resident.room,
+          circle:resident.circle,
+          luggage:0,
+          mail:0,
+          createdAt:now,
+          updatedAt:now
+        });
+      }
+      await batch.commit();
+      try { addLog('寮生一括追加', '[' + dorm + '] ' + residents.map(function(r){ return r.name; }).join(', ') + ' を追加'); } catch(_) {}
+      setStatus(residents.length + '人を追加しました。', 'success');
+      entriesRoot.innerHTML = '';
+	  completed = true;
+      try { requestResidentTableRender(); } catch(_) {}
+	  window.setTimeout(function(){
+	    setSaving(false);
+	    closeModal(true);
+	  }, 700);
+    } catch (error) {
+      console.error('new resident intake failed', error);
+      setStatus(error && error.message ? error.message : '登録に失敗しました。通信状態や権限をご確認ください。', 'error');
+    } finally {
+      if (state.loadingTimer) window.clearTimeout(state.loadingTimer);
+      state.loadingTimer = 0;
+      setAppLoading('new-resident-intake', false);
+	  if (!completed) setSaving(false);
+    }
+  }
+
+  document.addEventListener('click', function(event){
+    const openBtn = closestEventTargetCompat(event, '#add-bulk-btn');
+    if (openBtn) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      openModal();
+      return;
+    }
+    const closeBtn = closestEventTargetCompat(event, '#add-bulk-modal-close-btn');
+    if (closeBtn) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      closeModal(false);
+      return;
+    }
+    const dormBtn = closestEventTargetCompat(event, '.new-resident-dorm-btn');
+    if (dormBtn && modal.contains(dormBtn)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setDorm(dormBtn.getAttribute('data-dorm'));
+      return;
+    }
+    const addBtn = closestEventTargetCompat(event, '#add-form-entry-btn');
+    if (addBtn) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      appendEntry(true);
+      return;
+    }
+    const removeBtn = closestEventTargetCompat(event, '.bulk-entry-remove');
+    if (removeBtn && modal.contains(removeBtn)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      removeEntry(closestElementCompat(removeBtn, '.bulk-add-entry'));
+      return;
+    }
+    if (event.target === modal) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      closeModal(false);
+    }
+  }, true);
+
+  form.addEventListener('submit', submitResidents, true);
+  form.addEventListener('input', function(event){
+    const entry = closestElementCompat(event.target, '.bulk-add-entry');
+    if (entry) entry.classList.remove('is-invalid');
+    setStatus('', '');
+    updateEntrySummary();
+  }, false);
+  document.addEventListener('keydown', function(event){
+    if ((event.key === 'Escape' || event.keyCode === 27) && modal.classList.contains('active')) {
+      event.preventDefault();
+      closeModal(false);
+    }
+  }, true);
 })();
 
     /* ==== 庶務モードの状態を保存・復元 ==== */
