@@ -1274,40 +1274,41 @@
 		}
 		#self-select{
 		  width:100%;
-		  min-height:48px;
+		  min-height:58px;
 		  box-sizing:border-box;
-		  padding:9px 10px;
-		  border:1px solid var(--border-color);
+		  padding:11px 12px;
+		  border:2px solid #2a6686;
 		  border-radius:7px;
 		  background:#fff;
 		  color:#142433;
-		  font-size:16px;
+		  font-size:17px;
+		  font-weight:750;
 		}
 		.self-select-missing{
 		  display:flex;
 		  align-items:center;
 		  justify-content:space-between;
-		  gap:12px;
-		  margin-top:14px;
-		  padding:12px;
+		  gap:8px;
+		  margin-top:10px;
+		  padding:7px 9px;
 		  border:1px solid #cbd8e1;
-		  border-radius:8px;
-		  background:#f5f9fb;
+		  border-radius:7px;
+		  background:transparent;
 		}
 		.self-select-missing strong{
 		  display:block;
-		  color:#294253;
-		  font-size:.9rem;
+		  color:#526879;
+		  font-size:.76rem;
 		}
 		.self-register-open-btn{
 		  flex:0 0 auto;
-		  min-height:42px;
-		  padding:8px 13px;
-		  border:0;
-		  border-radius:7px;
-		  background:#2a6686;
-		  color:#fff;
-		  font-size:.88rem;
+		  min-height:34px;
+		  padding:6px 10px;
+		  border:1px solid #2a6686;
+		  border-radius:6px;
+		  background:#fff;
+		  color:#205573;
+		  font-size:.78rem;
 		  font-weight:850;
 		  cursor:pointer;
 		  touch-action:manipulation;
@@ -1392,8 +1393,9 @@
 		  background:#223149;
 		  color:#eef6ff;
 		}
-		body.dark-theme .self-select-missing{ background:#223149; }
+		body.dark-theme .self-select-missing{ background:transparent; }
 		body.dark-theme .self-select-missing strong{ color:#eef6ff; }
+		body.dark-theme .self-register-open-btn{ background:#223149; color:#eef6ff; }
 		body.dark-theme .self-register-cancel-btn{ background:#34445a; color:#eef6ff; }
 		@media (max-width:520px){
 		  .self-select-modal-content,
@@ -1402,12 +1404,9 @@
 		    max-height:calc(100vh - 12px);
 		    padding:15px;
 		  }
-		  .self-select-missing{
-		    display:block;
-		  }
 		  .self-register-open-btn{
-		    width:100%;
-		    margin-top:9px;
+		    width:auto;
+		    margin-top:0;
 		  }
 		}
 
@@ -1438,8 +1437,223 @@
           margin-top:8px;
         }
         .notification-settings-toggle-btn{
-          min-width:180px;
+          min-width:136px;
+          background:#647687 !important;
+          font-size:.84rem;
         }
+		.self-settings-modal-content{
+		  width:calc(100% - 24px);
+		  max-width:650px;
+		  max-height:calc(100vh - 24px);
+		  overflow-y:auto;
+		  padding:18px;
+		  -webkit-overflow-scrolling:touch;
+		}
+		.self-settings-section{
+		  margin-top:12px;
+		  padding:14px;
+		  border:1px solid var(--border-color);
+		  border-radius:8px;
+		  background:var(--announce-item-bg);
+		}
+		.self-settings-section h3{
+		  margin:0;
+		  color:var(--header-text);
+		  font-size:1rem;
+		}
+		.self-settings-profile-row{
+		  display:flex;
+		  align-items:center;
+		  justify-content:space-between;
+		  gap:12px;
+		  margin-top:9px;
+		}
+		.self-settings-resident-summary{
+		  min-width:0;
+		  color:var(--text-color);
+		  font-size:.9rem;
+		  font-weight:800;
+		  line-height:1.45;
+		}
+		.self-settings-resident-summary span{
+		  display:block;
+		  color:#647687;
+		  font-size:.78rem;
+		  font-weight:650;
+		}
+		.self-settings-edit-btn{
+		  flex:0 0 auto;
+		  min-height:38px;
+		  padding:7px 12px;
+		  border:1px solid #2a6686;
+		  border-radius:6px;
+		  background:#fff;
+		  color:#205573;
+		  font-size:.82rem;
+		  font-weight:850;
+		  cursor:pointer;
+		  touch-action:manipulation;
+		}
+		.self-settings-danger{
+		  border-color:rgba(190,65,59,.3);
+		  background:rgba(190,65,59,.035);
+		}
+		.self-settings-danger-row{
+		  display:flex;
+		  align-items:center;
+		  justify-content:space-between;
+		  gap:12px;
+		  margin-top:8px;
+		}
+		.self-settings-danger p{
+		  margin:0;
+		  color:#7f8c8d;
+		  font-size:.78rem;
+		  line-height:1.4;
+		}
+		.self-settings-delete-btn{
+		  flex:0 0 auto;
+		  min-height:32px;
+		  padding:5px 9px;
+		  border:1px solid #bd4b46;
+		  border-radius:6px;
+		  background:transparent;
+		  color:#a93c37;
+		  font-size:.74rem;
+		  font-weight:800;
+		  cursor:pointer;
+		  touch-action:manipulation;
+		}
+		.self-settings-done-btn{
+		  width:100%;
+		  min-height:48px;
+		  margin-top:12px;
+		  border:0;
+		  border-radius:7px;
+		  background:#2a6686;
+		  color:#fff;
+		  font-size:.95rem;
+		  font-weight:850;
+		  cursor:pointer;
+		}
+		.self-profile-edit-modal-content,
+		.self-delete-modal-content{
+		  width:calc(100% - 24px);
+		  max-width:560px;
+		  max-height:calc(100vh - 24px);
+		  overflow-y:auto;
+		  padding:18px;
+		  -webkit-overflow-scrolling:touch;
+		}
+		.self-profile-dorm-label{
+		  margin:0 0 12px;
+		  padding:9px 11px;
+		  border-radius:7px;
+		  background:#eef3f6;
+		  color:#405566;
+		  font-size:.84rem;
+		  font-weight:800;
+		}
+		.self-profile-edit-fields{
+		  display:grid;
+		  grid-template-columns:1fr 1fr;
+		  gap:11px;
+		}
+		.self-profile-edit-fields .self-register-field-name,
+		.self-profile-edit-fields .self-register-field-furigana{
+		  grid-column:1 / -1;
+		}
+		.self-profile-edit-actions{
+		  display:grid;
+		  grid-template-columns:minmax(90px,.7fr) minmax(160px,1.3fr);
+		  gap:10px;
+		  margin-top:8px;
+		}
+		.self-profile-edit-actions button{
+		  min-height:46px;
+		  border:0;
+		  border-radius:7px;
+		  font-size:.92rem;
+		  font-weight:850;
+		  cursor:pointer;
+		}
+		.self-profile-edit-cancel{ background:#e8edf1; color:#405566; }
+		.self-profile-edit-save{ background:#178a5a; color:#fff; }
+		.self-profile-edit-actions button:disabled{ opacity:.58; cursor:default; }
+		.self-delete-warning{
+		  margin:10px 0;
+		  padding:12px;
+		  border:1px solid rgba(190,65,59,.35);
+		  border-radius:8px;
+		  background:rgba(190,65,59,.06);
+		  color:#8f302c;
+		  font-size:.86rem;
+		  line-height:1.5;
+		}
+		.self-delete-target{
+		  margin:10px 0;
+		  font-size:1rem;
+		  font-weight:850;
+		  color:var(--text-color);
+		}
+		.self-delete-confirm-check{
+		  display:flex;
+		  align-items:flex-start;
+		  gap:9px;
+		  margin:12px 0;
+		  color:var(--text-color);
+		  font-size:.84rem;
+		  font-weight:750;
+		  line-height:1.4;
+		}
+		.self-delete-confirm-check input{
+		  flex:0 0 auto;
+		  width:20px;
+		  height:20px;
+		  margin:0;
+		}
+		.self-delete-final-btn{
+		  width:100%;
+		  min-height:46px;
+		  border:0;
+		  border-radius:7px;
+		  background:#b9443e;
+		  color:#fff;
+		  font-size:.9rem;
+		  font-weight:850;
+		}
+		.self-delete-final-btn:disabled{ opacity:.42; }
+		.edit-room-duplicate-warning{
+		  margin:8px 0 0;
+		  padding:9px 10px;
+		  border:1px solid #e1a43c;
+		  border-radius:7px;
+		  background:#fff8e8;
+		  color:#805b17;
+		  font-size:.82rem;
+		  font-weight:750;
+		  line-height:1.4;
+		}
+		.edit-room-duplicate-warning[hidden]{ display:none !important; }
+		body.dark-theme .self-settings-resident-summary span,
+		body.dark-theme .self-settings-danger p{ color:#bdc3c7; }
+		body.dark-theme .self-settings-edit-btn{ background:#223149; color:#eef6ff; }
+		body.dark-theme .self-profile-dorm-label{ background:#223149; color:#eef6ff; }
+		body.dark-theme .self-delete-warning{ background:#3a2424; color:#ffd3d0; }
+		body.dark-theme .edit-room-duplicate-warning{ background:#3d3420; color:#ffe0a1; }
+		@media (max-width:520px){
+		  .self-settings-modal-content,
+		  .self-profile-edit-modal-content,
+		  .self-delete-modal-content{
+		    width:calc(100% - 12px);
+		    max-height:calc(100vh - 12px);
+		    padding:14px;
+		  }
+		  .self-settings-profile-row,
+		  .self-settings-danger-row{
+		    align-items:flex-start;
+		  }
+		}
         /* ===== スマホ用の省スペース調整 ===== */
         @media (max-width:600px){
             .middle-controls{
@@ -4693,6 +4907,7 @@
       <div class="form-group">
         <label for="edit-room">部屋番号</label>
         <input type="text" id="edit-room" inputmode="numeric" pattern="[0-9]*">
+		<div id="edit-room-duplicate-warning" class="edit-room-duplicate-warning" role="status" hidden></div>
       </div>
       <div class="form-group">
         <label for="edit-furigana">ふりがな</label>
@@ -4880,8 +5095,22 @@
       </div>
 
 	  <div id="notification-settings-launcher" class="notification-settings-launcher">
-    <button id="notification-settings-toggle-btn" type="button" class="header-btn notification-settings-toggle-btn" style="background:#3498db;">通知設定を開く</button>
+    <button id="notification-settings-toggle-btn" type="button" class="header-btn notification-settings-toggle-btn">自分の設定</button>
   </div>
+
+  <div id="self-settings-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="self-settings-title">
+    <div class="modal-content self-settings-modal-content">
+      <div class="modal-header">
+        <h2 id="self-settings-title">自分の設定</h2>
+        <button id="self-settings-close-btn" type="button" class="modal-close-btn" aria-label="閉じる">&times;</button>
+      </div>
+      <section class="self-settings-section">
+        <h3>寮生情報</h3>
+        <div class="self-settings-profile-row">
+          <div id="self-settings-resident-summary" class="self-settings-resident-summary">読み込み中...</div>
+          <button id="self-settings-edit-btn" type="button" class="self-settings-edit-btn">情報を編集</button>
+        </div>
+      </section>
 
   <div id="notification-settings-card" class="notification-settings-card">
     <div class="notification-settings-head">
@@ -4942,10 +5171,70 @@
 	          <span class="notification-switch-slider"></span>
 	        </span>
 	      </label>
-	    </div>
+    </div>
     <div id="notification-settings-status" class="notification-settings-status"></div>
-    <div class="form-actions" style="margin-top:12px;">
-      <button id="notification-settings-close-btn" type="button" class="header-btn" style="background:#7f8c8d; margin-left:auto;">閉じる</button>
+  </div>
+
+      <section class="self-settings-section self-settings-danger">
+        <h3>退寮</h3>
+        <div class="self-settings-danger-row">
+          <p>退寮時に、自分の寮生情報を一覧から削除します。</p>
+          <button id="self-settings-delete-btn" type="button" class="self-settings-delete-btn">退寮して削除</button>
+        </div>
+      </section>
+      <button id="notification-settings-close-btn" type="button" class="self-settings-done-btn">完了</button>
+    </div>
+  </div>
+
+  <div id="self-profile-edit-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="self-profile-edit-title">
+    <div class="modal-content self-profile-edit-modal-content">
+      <div class="modal-header">
+        <h2 id="self-profile-edit-title">寮生情報を編集</h2>
+        <button id="self-profile-edit-close-btn" type="button" class="modal-close-btn" aria-label="閉じる">&times;</button>
+      </div>
+      <div id="self-profile-dorm-label" class="self-profile-dorm-label"></div>
+      <form id="self-profile-edit-form" novalidate>
+        <div class="self-profile-edit-fields">
+          <div class="self-register-field self-register-field-name">
+            <label for="self-profile-name">名前 <span class="self-register-required">必須</span></label>
+            <input id="self-profile-name" type="text" maxlength="60" autocomplete="name">
+          </div>
+          <div class="self-register-field self-register-field-furigana">
+            <label for="self-profile-furigana">ふりがな</label>
+            <input id="self-profile-furigana" type="text" maxlength="80" inputmode="kana" lang="ja-Hira" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+          </div>
+          <div class="self-register-field">
+            <label for="self-profile-room">部屋番号</label>
+            <input id="self-profile-room" type="text" maxlength="8" inputmode="numeric" pattern="[0-9]*">
+          </div>
+          <div class="self-register-field">
+            <label for="self-profile-circle">サークル</label>
+            <select id="self-profile-circle"></select>
+          </div>
+        </div>
+        <div id="self-profile-edit-status" class="self-register-status" role="status" aria-live="polite"></div>
+        <div class="self-profile-edit-actions">
+          <button id="self-profile-edit-cancel-btn" type="button" class="self-profile-edit-cancel">戻る</button>
+          <button id="self-profile-edit-save-btn" type="submit" class="self-profile-edit-save">変更を保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="self-delete-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="self-delete-title">
+    <div class="modal-content self-delete-modal-content">
+      <div class="modal-header">
+        <h2 id="self-delete-title">退寮による削除</h2>
+        <button id="self-delete-close-btn" type="button" class="modal-close-btn" aria-label="閉じる">&times;</button>
+      </div>
+      <div class="self-delete-warning">削除すると、荷物・郵便の個数や備考を含む自分の寮生情報が一覧から消えます。この操作は元に戻せません。</div>
+      <div id="self-delete-target" class="self-delete-target"></div>
+      <label class="self-delete-confirm-check" for="self-delete-confirm-check">
+        <input id="self-delete-confirm-check" type="checkbox">
+        <span>表示されている自分の情報を削除することを確認しました</span>
+      </label>
+      <div id="self-delete-status" class="self-register-status" role="status" aria-live="polite"></div>
+      <button id="self-delete-final-btn" type="button" class="self-delete-final-btn" disabled>自分の寮生情報を削除</button>
     </div>
   </div>
 </div>
@@ -7541,6 +7830,7 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       const card = document.getElementById('notification-settings-card');
       const launcher = document.getElementById('notification-settings-launcher');
       const toggleBtn = document.getElementById('notification-settings-toggle-btn');
+	  const settingsModal = document.getElementById('self-settings-modal');
       if (!card) return;
       const enableBtn = document.getElementById('notification-settings-enable-btn');
       const statusEl = document.getElementById('notification-settings-status');
@@ -7571,12 +7861,20 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       }
 
       if (launcher) launcher.style.display = shouldShow ? 'block' : 'none';
-      if (toggleBtn) toggleBtn.textContent = notificationSettingsPanelOpen ? '通知設定を閉じる' : '通知設定を開く';
+	  if (toggleBtn) toggleBtn.textContent = '自分の設定';
       card.style.display = (shouldShow && notificationSettingsPanelOpen) ? 'block' : 'none';
+	  if (settingsModal) {
+		settingsModal.classList.toggle('active', !!(shouldShow && notificationSettingsPanelOpen));
+		settingsModal.style.pointerEvents = (shouldShow && notificationSettingsPanelOpen) ? 'auto' : 'none';
+	  }
       if (!shouldShow) {
         notificationSettingsPanelOpen = false;
+		if (settingsModal) settingsModal.classList.remove('active');
         return;
       }
+	  if (notificationSettingsPanelOpen && typeof window.updateSelfSettingsProfile === 'function') {
+		try { window.updateSelfSettingsProfile(); } catch(_) {}
+	  }
 
       if (luggageToggle) luggageToggle.checked = !!prefs.notifyLuggage;
       if (mailToggle) mailToggle.checked = !!prefs.notifyMail;
@@ -9985,6 +10283,391 @@ window.addEventListener('load', function(){
       returnToSelection();
     }
   }, true);
+})();
+
+// ==== 自分の設定（寮生情報・通知・退寮） ====
+(function initializeSelfSettings(){
+  if (window.__selfSettingsInitialized) return;
+  window.__selfSettingsInitialized = true;
+
+  var settingsModal = document.getElementById('self-settings-modal');
+  var summaryEl = document.getElementById('self-settings-resident-summary');
+  var editBtn = document.getElementById('self-settings-edit-btn');
+  var deleteBtn = document.getElementById('self-settings-delete-btn');
+  var editModal = document.getElementById('self-profile-edit-modal');
+  var editForm = document.getElementById('self-profile-edit-form');
+  var editDormLabel = document.getElementById('self-profile-dorm-label');
+  var editName = document.getElementById('self-profile-name');
+  var editFurigana = document.getElementById('self-profile-furigana');
+  var editRoom = document.getElementById('self-profile-room');
+  var editCircle = document.getElementById('self-profile-circle');
+  var editStatus = document.getElementById('self-profile-edit-status');
+  var editSaveBtn = document.getElementById('self-profile-edit-save-btn');
+  var deleteModal = document.getElementById('self-delete-modal');
+  var deleteTarget = document.getElementById('self-delete-target');
+  var deleteCheck = document.getElementById('self-delete-confirm-check');
+  var deleteFinalBtn = document.getElementById('self-delete-final-btn');
+  var deleteStatus = document.getElementById('self-delete-status');
+  if (!settingsModal || !summaryEl || !editModal || !editForm || !deleteModal) return;
+
+  var state = { resolved:null, profilePromise:null, editSaving:false, deleteSaving:false };
+  var duplicateCache = {
+    shofu:{ loadedAt:0, residents:null, promise:null },
+    meizen:{ loadedAt:0, residents:null, promise:null }
+  };
+
+  function setInlineStatus(element, message, tone){
+    if (!element) return;
+    element.textContent = message || '';
+    element.classList.remove('is-error', 'is-success');
+    if (tone === 'error') element.classList.add('is-error');
+    if (tone === 'success') element.classList.add('is-success');
+  }
+
+  function setSettingsVisible(visible){
+    notificationSettingsPanelOpen = !!visible;
+    updateNotificationSettingsUI();
+  }
+
+  function renderSummary(resolved){
+    summaryEl.innerHTML = '';
+    if (!resolved || !resolved.data) {
+      summaryEl.textContent = '自分の寮生情報が見つかりません。';
+      if (editBtn) editBtn.disabled = true;
+      if (deleteBtn) deleteBtn.disabled = true;
+      return;
+    }
+    var data = resolved.data || {};
+    var dormLabel = resolved.dorm === 'meizen' ? '明善寮' : '松風寮';
+    var main = document.createTextNode(String(data.name || '名前未設定'));
+    var detail = document.createElement('span');
+    detail.textContent = dormLabel + (getResidentDocRoomNumber(data) ? ' / ' + normalizeRoomNumberInput(getResidentDocRoomNumber(data)) : '') + (data.circle ? ' / ' + data.circle : '');
+    summaryEl.appendChild(main);
+    summaryEl.appendChild(detail);
+    if (editBtn) editBtn.disabled = false;
+    if (deleteBtn) deleteBtn.disabled = false;
+  }
+
+  async function resolveOwnResident(force){
+    var id = getStoredResidentId();
+    if (!id) {
+      state.resolved = null;
+      renderSummary(null);
+      return null;
+    }
+    if (!force && state.resolved && state.resolved.data && String(state.resolved.data.id || '') === id) {
+      renderSummary(state.resolved);
+      return state.resolved;
+    }
+    if (state.profilePromise) return state.profilePromise;
+    summaryEl.textContent = '寮生情報を確認しています...';
+    if (editBtn) editBtn.disabled = true;
+    if (deleteBtn) deleteBtn.disabled = true;
+    state.profilePromise = Promise.resolve(__resolveResidentAndDorm(id)).then(function(resolved){
+      state.resolved = resolved;
+      renderSummary(resolved);
+      return resolved;
+    }).catch(function(error){
+      console.error('self settings profile load failed', error);
+      state.resolved = null;
+      renderSummary(null);
+      return null;
+    }).finally(function(){
+      state.profilePromise = null;
+    });
+    return state.profilePromise;
+  }
+
+  window.updateSelfSettingsProfile = function(){ return resolveOwnResident(false); };
+
+  async function loadDormResidents(dorm, force){
+    var safeDorm = dorm === 'meizen' ? 'meizen' : 'shofu';
+    var cache = duplicateCache[safeDorm];
+    if (!force && cache.residents && Date.now() - cache.loadedAt < 20000) return cache.residents;
+    if (cache.promise) return cache.promise;
+    cache.promise = (async function(){
+      var snapshot;
+      try {
+        snapshot = await db.collection('residents_' + safeDorm).get({ source:'server' });
+      } catch(error) {
+        console.warn('room duplicate server check failed; using available data', error);
+        snapshot = await db.collection('residents_' + safeDorm).get();
+      }
+      var residents = [];
+      snapshot.forEach(function(doc){ residents.push(Object.assign({ id:doc.id, dorm:safeDorm }, doc.data() || {})); });
+      cache.residents = residents;
+      cache.loadedAt = Date.now();
+      return residents;
+    })().finally(function(){ cache.promise = null; });
+    return cache.promise;
+  }
+
+  async function findResidentDuplicates(dorm, room, excludeId, name, force){
+    var normalizedRoom = normalizeRoomNumberInput(room || '');
+    if (!normalizedRoom) return { sameRoom:[], sameIdentity:[] };
+    var normalizedName = String(name || '').trim().replace(/\s+/g, '');
+    var residents = await loadDormResidents(dorm, !!force);
+    var sameRoom = residents.filter(function(resident){
+      if (!resident || String(resident.id || '') === String(excludeId || '')) return false;
+      return normalizeRoomNumberInput(getResidentDocRoomNumber(resident)) === normalizedRoom;
+    });
+    var sameIdentity = sameRoom.filter(function(resident){
+      return String(resident.name || '').trim().replace(/\s+/g, '') === normalizedName;
+    });
+    return { sameRoom:sameRoom, sameIdentity:sameIdentity };
+  }
+
+  window.findResidentRoomDuplicates = findResidentDuplicates;
+
+  function openEditModal(){
+    resolveOwnResident(false).then(function(resolved){
+      if (!resolved || !resolved.data) return;
+      var data = resolved.data || {};
+      editDormLabel.textContent = resolved.dorm === 'meizen' ? '明善寮' : '松風寮';
+      editName.value = data.name || '';
+      editFurigana.value = normalizeFuriganaInput(data.furigana || '');
+      editRoom.value = normalizeRoomNumberInput(getResidentDocRoomNumber(data));
+      setCircleOptions(editCircle, resolved.dorm, true);
+      editCircle.value = data.circle || '';
+      setInlineStatus(editStatus, '', '');
+      settingsModal.classList.remove('active');
+      settingsModal.style.pointerEvents = 'none';
+      editModal.classList.add('active');
+      editModal.style.pointerEvents = 'auto';
+      window.setTimeout(function(){ try { editName.focus(); } catch(_) {} }, 30);
+    });
+  }
+
+  function closeEditModal(){
+    if (state.editSaving) return;
+    editModal.classList.remove('active');
+    editModal.style.pointerEvents = 'none';
+    setSettingsVisible(true);
+  }
+
+  function setEditSaving(saving){
+    state.editSaving = !!saving;
+    var controls = editForm.querySelectorAll('button, input, select');
+    for (var i = 0; i < controls.length; i += 1) controls[i].disabled = state.editSaving;
+    editSaveBtn.textContent = state.editSaving ? '保存しています...' : '変更を保存';
+  }
+
+  async function saveOwnProfile(event){
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (state.editSaving || !state.resolved) return;
+    var name = String(editName.value || '').trim();
+    var furigana = normalizeFuriganaInput(editFurigana.value || '');
+    var room = normalizeRoomNumberInput(editRoom.value || '');
+    var circle = String(editCircle.value || '').trim();
+    editFurigana.value = furigana;
+    editRoom.value = room;
+    if (!name) {
+      setInlineStatus(editStatus, '名前を入力してください。', 'error');
+      try { editName.focus(); } catch(_) {}
+      return;
+    }
+    setEditSaving(true);
+    setInlineStatus(editStatus, '重複がないか確認しています...', '');
+    var loadingTimer = window.setTimeout(function(){
+      setAppLoading('self-profile-edit', true, { label:'寮生情報を保存しています...', transient:true, timeoutMs:18000 });
+    }, 500);
+    try {
+      var duplicates = await findResidentDuplicates(state.resolved.dorm, room, state.resolved.data.id, name, true);
+      if (duplicates.sameIdentity.length) throw new Error('同じ名前・部屋番号の寮生がすでに登録されています。');
+      if (duplicates.sameRoom.length) {
+        var names = duplicates.sameRoom.map(function(resident){ return resident.name || '名前未設定'; }).join('、');
+        if (!window.confirm('同じ部屋番号に「' + names + '」さんが登録されています。\nこのまま保存しますか？')) return;
+      }
+      var docRef = db.collection('residents_' + state.resolved.dorm).doc(state.resolved.data.id);
+      await db.runTransaction(async function(transaction){
+        var snap = await transaction.get(docRef);
+        if (!snap.exists) throw new Error('寮生情報が見つかりません。');
+        transaction.update(docRef, {
+          name:name,
+          furigana:furigana,
+          room:room,
+          roomNumber:room,
+          roomNo:room,
+          circle:circle,
+          updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+        });
+      });
+      try { addLog('本人による寮生情報編集', '[' + state.resolved.dorm + '] ' + name + ' が自分の情報を更新'); } catch(_) {}
+      duplicateCache[state.resolved.dorm].loadedAt = 0;
+      state.resolved.data = Object.assign({}, state.resolved.data, { name:name, furigana:furigana, room:room, roomNumber:room, roomNo:room, circle:circle });
+      renderSummary(state.resolved);
+      setInlineStatus(editStatus, '保存しました。', 'success');
+      editModal.classList.remove('active');
+      editModal.style.pointerEvents = 'none';
+      setSettingsVisible(true);
+      try { requestResidentTableRender(); } catch(_) {}
+    } catch(error) {
+      console.error('self profile edit failed', error);
+      setInlineStatus(editStatus, error && error.message ? error.message : '保存に失敗しました。通信状態を確認してください。', 'error');
+    } finally {
+      if (loadingTimer) window.clearTimeout(loadingTimer);
+      setAppLoading('self-profile-edit', false);
+      setEditSaving(false);
+    }
+  }
+
+  function openDeleteModal(){
+    resolveOwnResident(false).then(function(resolved){
+      if (!resolved || !resolved.data) return;
+      var data = resolved.data || {};
+      var dormLabel = resolved.dorm === 'meizen' ? '明善寮' : '松風寮';
+      deleteTarget.textContent = dormLabel + ' ' + normalizeRoomNumberInput(getResidentDocRoomNumber(data)) + ' ' + String(data.name || '');
+      deleteCheck.checked = false;
+      deleteFinalBtn.disabled = true;
+      setInlineStatus(deleteStatus, '', '');
+      settingsModal.classList.remove('active');
+      settingsModal.style.pointerEvents = 'none';
+      deleteModal.classList.add('active');
+      deleteModal.style.pointerEvents = 'auto';
+    });
+  }
+
+  function closeDeleteModal(){
+    if (state.deleteSaving) return;
+    deleteModal.classList.remove('active');
+    deleteModal.style.pointerEvents = 'none';
+    setSettingsVisible(true);
+  }
+
+  async function deleteOwnResident(){
+    if (state.deleteSaving || !deleteCheck.checked || !state.resolved) return;
+    state.deleteSaving = true;
+    deleteFinalBtn.disabled = true;
+    deleteFinalBtn.textContent = '削除しています...';
+    setInlineStatus(deleteStatus, '寮生情報を削除しています...', '');
+    var loadingTimer = window.setTimeout(function(){
+      setAppLoading('self-resident-delete', true, { label:'退寮処理をしています...', transient:true, timeoutMs:18000 });
+    }, 500);
+    try {
+      var data = state.resolved.data || {};
+      var batch = db.batch();
+      batch.delete(db.collection('residents_' + state.resolved.dorm).doc(data.id));
+      var token = currentDeviceToken || localStorage.getItem('fcm_token');
+      if (token) {
+        batch.set(db.collection('fcm_tokens').doc(token), {
+          residentId:null,
+          dorm:null,
+          notificationsEnabled:false,
+          updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge:true });
+      }
+      await batch.commit();
+      try { addLog('本人による退寮削除', '[' + state.resolved.dorm + '] ' + String(data.name || '') + ' が自分の情報を削除'); } catch(_) {}
+      clearStoredResidentId();
+      state.resolved = null;
+      deleteModal.classList.remove('active');
+      deleteModal.style.pointerEvents = 'none';
+      notificationSettingsPanelOpen = false;
+      updateNotificationSettingsUI();
+      try { switchDorm('all'); } catch(_) {}
+      try { openSelfSelectModal(); } catch(_) {}
+    } catch(error) {
+      console.error('self resident delete failed', error);
+      setInlineStatus(deleteStatus, '削除に失敗しました。通信状態を確認してもう一度お試しください。', 'error');
+    } finally {
+      if (loadingTimer) window.clearTimeout(loadingTimer);
+      setAppLoading('self-resident-delete', false);
+      state.deleteSaving = false;
+      deleteFinalBtn.textContent = '自分の寮生情報を削除';
+      deleteFinalBtn.disabled = !deleteCheck.checked;
+    }
+  }
+
+  document.addEventListener('click', function(event){
+    var settingsClose = closestEventTargetCompat(event, '#self-settings-close-btn');
+    if (settingsClose) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setSettingsVisible(false);
+      return;
+    }
+    if (closestEventTargetCompat(event, '#self-settings-edit-btn')) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      openEditModal();
+      return;
+    }
+    if (closestEventTargetCompat(event, '#self-profile-edit-cancel-btn, #self-profile-edit-close-btn')) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      closeEditModal();
+      return;
+    }
+    if (closestEventTargetCompat(event, '#self-settings-delete-btn')) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      openDeleteModal();
+      return;
+    }
+    if (closestEventTargetCompat(event, '#self-delete-close-btn')) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      closeDeleteModal();
+      return;
+    }
+    if (closestEventTargetCompat(event, '#self-delete-final-btn')) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      deleteOwnResident();
+    }
+  }, true);
+
+  editForm.addEventListener('submit', saveOwnProfile, true);
+  editForm.addEventListener('input', function(){ setInlineStatus(editStatus, '', ''); }, false);
+  deleteCheck.addEventListener('change', function(){ deleteFinalBtn.disabled = !deleteCheck.checked || state.deleteSaving; });
+})();
+
+// ==== 管理者編集: 同じ部屋番号の警告 ====
+(function initializeAdminRoomDuplicateWarning(){
+  if (window.__adminRoomDuplicateWarningInitialized) return;
+  window.__adminRoomDuplicateWarningInitialized = true;
+  var roomInput = document.getElementById('edit-room');
+  var warning = document.getElementById('edit-room-duplicate-warning');
+  var timer = 0;
+  var requestId = 0;
+  if (!roomInput || !warning) return;
+
+  window.updateAdminRoomDuplicateWarning = function(residentId, dorm, room, force){
+    var currentRequest = ++requestId;
+    var normalizedRoom = normalizeRoomNumberInput(room || '');
+    if (!normalizedRoom || typeof window.findResidentRoomDuplicates !== 'function') {
+      warning.hidden = true;
+      warning.textContent = '';
+      return Promise.resolve([]);
+    }
+    return window.findResidentRoomDuplicates(dorm, normalizedRoom, residentId, '', !!force).then(function(result){
+      if (currentRequest !== requestId) return [];
+      var matches = result && result.sameRoom ? result.sameRoom : [];
+      window.__adminRoomDuplicateMatches = matches;
+      if (!matches.length) {
+        warning.hidden = true;
+        warning.textContent = '';
+        return matches;
+      }
+      var names = matches.map(function(resident){ return String(resident.name || '名前未設定'); }).join('、');
+      warning.textContent = '同じ部屋番号に「' + names + '」さんが登録されています。退寮者の消し忘れがないか確認してください。';
+      warning.hidden = false;
+      return matches;
+    }).catch(function(error){
+      console.warn('admin room duplicate check failed', error);
+      return [];
+    });
+  };
+
+  roomInput.addEventListener('input', function(){
+    if (timer) window.clearTimeout(timer);
+    timer = window.setTimeout(function(){
+      var id = String((document.getElementById('edit-resident-id') || {}).value || '');
+      var dorm = String((document.getElementById('edit-dorm-key') || {}).value || __editingResidentDorm || 'shofu');
+      window.updateAdminRoomDuplicateWarning(id, dorm, roomInput.value, false);
+    }, 250);
+  });
 })();
 
     /* ==== 庶務モードの状態を保存・復元 ==== */
@@ -13308,6 +13991,16 @@ async function openEditResidentModal(residentId){
             modal.classList.add('active');
             modal.style.pointerEvents = 'auto';
         }
+		try {
+		  const duplicateWarning = document.getElementById('edit-room-duplicate-warning');
+		  if (duplicateWarning) {
+			duplicateWarning.hidden = true;
+			duplicateWarning.textContent = '';
+		  }
+		  if (typeof window.updateAdminRoomDuplicateWarning === 'function') {
+			window.updateAdminRoomDuplicateWarning(r.id, __editingResidentDorm, roomInput ? roomInput.value : '', true);
+		  }
+		} catch(_) {}
     }catch(e){
         console.error('openEditResidentModal error', e);
         alert('編集モーダルの表示でエラーが発生しました。');
@@ -13318,7 +14011,7 @@ async function openEditResidentModal(residentId){
     }
 }
 
-    function saveEditedResident(evt){
+    async function saveEditedResident(evt){
         if (evt && typeof evt.preventDefault === 'function') evt.preventDefault();
 
         const idInput   = document.getElementById('edit-resident-id');
@@ -13359,6 +14052,20 @@ async function openEditResidentModal(residentId){
         const docRef = db.collection(`residents_${dormKey}`).doc(idInput.value);
 
         if (saveBtn) saveBtn.disabled = true;
+		try {
+		  if (typeof window.updateAdminRoomDuplicateWarning === 'function') {
+			const roomMatches = await window.updateAdminRoomDuplicateWarning(idInput.value, dormKey, updated.roomNumber, true);
+			if (roomMatches && roomMatches.length) {
+			  const duplicateNames = roomMatches.map(function(resident){ return resident.name || '名前未設定'; }).join('、');
+			  if (!window.confirm('同じ部屋番号に「' + duplicateNames + '」さんが登録されています。\n退寮者の消し忘れがないか確認しましたか？\n\nこのまま保存しますか？')) {
+				if (saveBtn) saveBtn.disabled = false;
+				return;
+			  }
+			}
+		  }
+		} catch(error) {
+		  console.warn('room duplicate pre-save check failed', error);
+		}
         try {
           console.log('Editing doc path:', `residents_${dormKey}/${idInput.value}`, 'payload:', updated);
         } catch(_) {}
