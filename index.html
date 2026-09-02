@@ -1061,7 +1061,17 @@
 		  background:#f7eee9;
 		  color:#713b22;
 		}
+		.new-resident-dorm-btn[data-self-register-dorm="shofu"].is-active{
+		  border-color:#864A2B;
+		  background:#f7eee9;
+		  color:#713b22;
+		}
 		.new-resident-dorm-btn[data-dorm="meizen"].is-active{
+		  border-color:#2a6686;
+		  background:#e9f3f8;
+		  color:#205573;
+		}
+		.new-resident-dorm-btn[data-self-register-dorm="meizen"].is-active{
 		  border-color:#2a6686;
 		  background:#e9f3f8;
 		  color:#205573;
@@ -1243,6 +1253,161 @@
 		  .bulk-field-name,
 		  .bulk-field-furigana{
 		    grid-column:1 / -1;
+		  }
+		}
+
+		.self-select-modal-content{
+		  width:calc(100% - 24px);
+		  max-width:520px;
+		  padding:20px;
+		}
+		.self-select-modal-content h2{
+		  margin:0 0 16px;
+		  font-size:1.25rem;
+		}
+		.self-select-field-label{
+		  display:block;
+		  margin-bottom:6px;
+		  color:#526879;
+		  font-size:.82rem;
+		  font-weight:800;
+		}
+		#self-select{
+		  width:100%;
+		  min-height:48px;
+		  box-sizing:border-box;
+		  padding:9px 10px;
+		  border:1px solid var(--border-color);
+		  border-radius:7px;
+		  background:#fff;
+		  color:#142433;
+		  font-size:16px;
+		}
+		.self-select-missing{
+		  display:flex;
+		  align-items:center;
+		  justify-content:space-between;
+		  gap:12px;
+		  margin-top:14px;
+		  padding:12px;
+		  border:1px solid #cbd8e1;
+		  border-radius:8px;
+		  background:#f5f9fb;
+		}
+		.self-select-missing strong{
+		  display:block;
+		  color:#294253;
+		  font-size:.9rem;
+		}
+		.self-register-open-btn{
+		  flex:0 0 auto;
+		  min-height:42px;
+		  padding:8px 13px;
+		  border:0;
+		  border-radius:7px;
+		  background:#2a6686;
+		  color:#fff;
+		  font-size:.88rem;
+		  font-weight:850;
+		  cursor:pointer;
+		  touch-action:manipulation;
+		}
+		.self-register-modal-content{
+		  width:calc(100% - 24px);
+		  max-width:620px;
+		  max-height:calc(100vh - 24px);
+		  overflow-y:auto;
+		  padding:20px;
+		  -webkit-overflow-scrolling:touch;
+		}
+		.self-register-intro{
+		  margin:0 0 14px;
+		  color:#526879;
+		  font-size:.88rem;
+		}
+		.self-register-fields{
+		  display:grid;
+		  grid-template-columns:1fr 1fr;
+		  gap:11px;
+		  margin-top:14px;
+		}
+		.self-register-field label{
+		  display:block;
+		  margin-bottom:5px;
+		  color:#526879;
+		  font-size:.78rem;
+		  font-weight:800;
+		}
+		.self-register-field input,
+		.self-register-field select{
+		  width:100%;
+		  min-height:44px;
+		  box-sizing:border-box;
+		  padding:8px 9px;
+		  border:1px solid var(--border-color);
+		  border-radius:6px;
+		  background:#fff;
+		  color:#142433;
+		  font-size:16px;
+		}
+		.self-register-field-name,
+		.self-register-field-furigana{
+		  grid-column:1 / -1;
+		}
+		.self-register-required{ color:#b43b36; }
+		.self-register-status{
+		  min-height:1.35em;
+		  margin:11px 0 0;
+		  color:#5d7182;
+		  font-size:.84rem;
+		  font-weight:750;
+		}
+		.self-register-status.is-error{ color:#b43b36; }
+		.self-register-status.is-success{ color:#178a5a; }
+		.self-register-actions{
+		  display:grid;
+		  grid-template-columns:minmax(100px,.7fr) minmax(180px,1.4fr);
+		  gap:10px;
+		  margin-top:8px;
+		}
+		.self-register-actions button{
+		  min-height:48px;
+		  border:0;
+		  border-radius:7px;
+		  font-size:.95rem;
+		  font-weight:850;
+		  cursor:pointer;
+		  touch-action:manipulation;
+		}
+		.self-register-cancel-btn{ background:#e8edf1; color:#405566; }
+		.self-register-submit-btn{ background:#178a5a; color:#fff; }
+		.self-register-actions button:disabled{ opacity:.58; cursor:default; }
+		body.dark-theme .self-select-field-label,
+		body.dark-theme .self-register-intro,
+		body.dark-theme .self-register-field label,
+		body.dark-theme .self-register-status{ color:#c5d5e2; }
+		body.dark-theme #self-select,
+		body.dark-theme .self-register-field input,
+		body.dark-theme .self-register-field select{
+		  background:#223149;
+		  color:#eef6ff;
+		}
+		body.dark-theme .self-select-missing{ background:#223149; }
+		body.dark-theme .self-select-missing strong{ color:#eef6ff; }
+		body.dark-theme .self-register-cancel-btn{ background:#34445a; color:#eef6ff; }
+		@media (max-width:520px){
+		  .self-select-modal-content,
+		  .self-register-modal-content{
+		    width:calc(100% - 12px);
+		    max-height:calc(100vh - 12px);
+		    padding:15px;
+		  }
+		  .self-select-missing{
+		    display:block;
+		  }
+		  .self-register-open-btn{
+		    width:100%;
+		    margin-top:9px;
 		  }
 		}
 
@@ -4149,9 +4314,14 @@
 
 <!-- ==== 自分選択モーダル ==== -->
 <div id="self-select-modal" class="modal-overlay">
-  <div class="modal-content">
+  <div class="modal-content self-select-modal-content">
     <h2>あなたの名前を選択してください</h2>
+    <label class="self-select-field-label" for="self-select">自分の名前</label>
     <select id="self-select"></select>
+    <div class="self-select-missing">
+      <strong>一覧に自分の名前がない方</strong>
+      <button id="self-register-open-btn" type="button" class="self-register-open-btn">新入寮生として登録</button>
+    </div>
     <div class="form-actions">
       <button id="self-cancel-btn" class="header-btn" style="background-color:#e74c3c;">キャンセル</button>
       <button id="self-select-btn" class="header-btn" style="background-color:#27ae60;">決定</button>
@@ -4159,6 +4329,54 @@
   </div>
 </div>
 <!-- ==== 自分選択モーダル ここまで ==== -->
+
+<!-- ==== 新入寮生本人登録モーダル ==== -->
+<div id="self-register-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="self-register-title">
+  <div class="modal-content self-register-modal-content">
+    <div class="modal-header">
+      <h2 id="self-register-title">自分の寮生情報を登録</h2>
+      <button id="self-register-close-btn" type="button" class="modal-close-btn" aria-label="閉じる">&times;</button>
+    </div>
+    <p class="self-register-intro">新入寮生で、まだ一覧に名前がない場合のみ登録してください。</p>
+    <form id="self-register-form" novalidate>
+      <section class="new-resident-dorm-section" aria-labelledby="self-register-dorm-heading">
+        <div class="new-resident-dorm-heading">
+          <strong id="self-register-dorm-heading">入寮した寮</strong>
+          <span>登録先を選択してください</span>
+        </div>
+        <div class="new-resident-dorm-options" role="group" aria-label="入寮した寮">
+          <button type="button" class="new-resident-dorm-btn self-register-dorm-btn is-active" data-self-register-dorm="shofu" aria-pressed="true">松風寮</button>
+          <button type="button" class="new-resident-dorm-btn self-register-dorm-btn" data-self-register-dorm="meizen" aria-pressed="false">明善寮</button>
+        </div>
+        <input id="self-register-dorm" type="hidden" value="shofu">
+      </section>
+      <div class="self-register-fields">
+        <div class="self-register-field self-register-field-name">
+          <label for="self-register-name">名前 <span class="self-register-required">必須</span></label>
+          <input id="self-register-name" type="text" maxlength="60" autocomplete="name" placeholder="氏名を入力">
+        </div>
+        <div class="self-register-field self-register-field-furigana">
+          <label for="self-register-furigana">ふりがな</label>
+          <input id="self-register-furigana" type="text" maxlength="80" inputmode="kana" lang="ja-Hira" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="ひらがなで入力">
+        </div>
+        <div class="self-register-field">
+          <label for="self-register-room">部屋番号 <span class="self-register-required">必須</span></label>
+          <input id="self-register-room" type="text" maxlength="8" inputmode="numeric" pattern="[0-9]*" placeholder="例 201">
+        </div>
+        <div class="self-register-field">
+          <label for="self-register-circle">サークル</label>
+          <select id="self-register-circle"></select>
+        </div>
+      </div>
+      <div id="self-register-status" class="self-register-status" role="status" aria-live="polite"></div>
+      <div class="self-register-actions">
+        <button id="self-register-cancel-btn" type="button" class="self-register-cancel-btn">戻る</button>
+        <button id="self-register-submit-btn" type="submit" class="self-register-submit-btn">登録して利用を始める</button>
+      </div>
+    </form>
+  </div>
+</div>
+<!-- ==== 新入寮生本人登録モーダル ここまで ==== -->
 
 <!-- ==== 寮生受け取りモーダル ==== -->
 <div id="receive-modal" class="modal-overlay">
@@ -9526,6 +9744,245 @@ window.addEventListener('load', function(){
     if ((event.key === 'Escape' || event.keyCode === 27) && modal.classList.contains('active')) {
       event.preventDefault();
       closeModal(false);
+    }
+  }, true);
+})();
+
+// ==== 新入寮生本人登録 ====
+(function initializeSelfResidentRegistration(){
+  if (window.__selfResidentRegistrationInitialized) return;
+  window.__selfResidentRegistrationInitialized = true;
+
+  var selectModal = document.getElementById('self-select-modal');
+  var modal = document.getElementById('self-register-modal');
+  var form = document.getElementById('self-register-form');
+  var dormInput = document.getElementById('self-register-dorm');
+  var nameInput = document.getElementById('self-register-name');
+  var furiganaInput = document.getElementById('self-register-furigana');
+  var roomInput = document.getElementById('self-register-room');
+  var circleSelect = document.getElementById('self-register-circle');
+  var statusEl = document.getElementById('self-register-status');
+  var submitBtn = document.getElementById('self-register-submit-btn');
+  if (!selectModal || !modal || !form || !dormInput || !nameInput || !roomInput || !submitBtn) return;
+
+  var state = { saving:false, loadingTimer:0 };
+
+  function setStatus(message, tone){
+    if (!statusEl) return;
+    statusEl.textContent = message || '';
+    statusEl.classList.remove('is-error', 'is-success');
+    if (tone === 'error') statusEl.classList.add('is-error');
+    if (tone === 'success') statusEl.classList.add('is-success');
+  }
+
+  function currentDefaultDorm(){
+    try {
+      var key = String(currentCollectionName || '');
+      if (key === 'residents_meizen') return 'meizen';
+      if (key === 'residents_shofu') return 'shofu';
+    } catch(_) {}
+    return 'shofu';
+  }
+
+  function setDorm(dorm){
+    var nextDorm = dorm === 'meizen' ? 'meizen' : 'shofu';
+    dormInput.value = nextDorm;
+    var buttons = modal.querySelectorAll('.self-register-dorm-btn');
+    for (var i = 0; i < buttons.length; i += 1) {
+      var active = buttons[i].getAttribute('data-self-register-dorm') === nextDorm;
+      buttons[i].classList.toggle('is-active', active);
+      buttons[i].setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
+    setCircleOptions(circleSelect, nextDorm, true);
+  }
+
+  function resetForm(){
+    nameInput.value = '';
+    if (furiganaInput) furiganaInput.value = '';
+    roomInput.value = '';
+    setDorm(currentDefaultDorm());
+    if (circleSelect) circleSelect.value = '';
+    setStatus('', '');
+  }
+
+  function setSaving(saving){
+    state.saving = !!saving;
+    var controls = form.querySelectorAll('button, input, select');
+    for (var i = 0; i < controls.length; i += 1) controls[i].disabled = state.saving;
+    submitBtn.textContent = state.saving ? '登録を確認しています...' : '登録して利用を始める';
+  }
+
+  function openModal(){
+    if (state.saving) return;
+    resetForm();
+    selectModal.classList.remove('active');
+    selectModal.style.pointerEvents = 'none';
+    modal.classList.add('active');
+    modal.style.pointerEvents = 'auto';
+    window.setTimeout(function(){ try { nameInput.focus(); } catch(_) {} }, 30);
+  }
+
+  function returnToSelection(){
+    if (state.saving) return;
+    modal.classList.remove('active');
+    modal.style.pointerEvents = 'none';
+    selectModal.classList.add('active');
+    selectModal.style.pointerEvents = 'auto';
+    try { window.populateSelfSelectOptions && window.populateSelfSelectOptions(); } catch(_) {}
+  }
+
+  function normalizeIdentityName(value){
+    return String(value || '').trim().replace(/\s+/g, '');
+  }
+
+  function makeSelfResidentDocumentId(name, room){
+    var key = normalizeIdentityName(name) + '\u0000' + room;
+    return 'self_' + encodeURIComponent(key).replace(/%/g, '_');
+  }
+
+  async function findDuplicate(collectionName, name, room){
+    var snapshot;
+    try {
+      snapshot = await db.collection(collectionName).get({ source:'server' });
+    } catch (error) {
+      console.warn('self registration duplicate server check failed; retrying normally', error);
+      snapshot = await db.collection(collectionName).get();
+    }
+    var normalizedName = normalizeIdentityName(name);
+    var duplicate = null;
+    snapshot.forEach(function(doc){
+      if (duplicate) return;
+      var data = doc.data() || {};
+      var existingName = normalizeIdentityName(data.name || '');
+      var existingRoom = normalizeRoomNumberInput(getResidentDocRoomNumber(data));
+      if (existingName === normalizedName && existingRoom === room) duplicate = doc;
+    });
+    return duplicate;
+  }
+
+  function finishRegistration(docRef, dorm){
+    setStoredResidentId(docRef.id);
+    modal.classList.remove('active');
+    modal.style.pointerEvents = 'none';
+    selectModal.classList.remove('active');
+    selectModal.style.pointerEvents = 'none';
+    try { switchDorm(dorm); } catch(error) { console.error('self registration dorm switch failed', error); }
+    try { requestResidentTableRender(); } catch(_) {}
+    window.setTimeout(function(){
+      try { maybeRequestNotifAfterSelfSelect(); } catch(_) {}
+      try {
+        if (typeof window.resyncFcmToken === 'function') {
+          Promise.resolve(window.resyncFcmToken()).catch(function(error){
+            console.warn('self registration token sync skipped', error);
+          });
+        }
+      } catch(_) {}
+    }, 0);
+  }
+
+  async function submitRegistration(event){
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (state.saving) return;
+
+    var dorm = dormInput.value === 'meizen' ? 'meizen' : 'shofu';
+    var name = String(nameInput.value || '').trim();
+    var furigana = normalizeFuriganaInput(String(furiganaInput && furiganaInput.value || '').trim());
+    var room = normalizeRoomNumberInput(String(roomInput.value || '').trim());
+    var circle = String(circleSelect && circleSelect.value || '').trim();
+    if (furiganaInput) furiganaInput.value = furigana;
+    roomInput.value = room;
+
+    if (!name) {
+      setStatus('名前を入力してください。', 'error');
+      try { nameInput.focus(); } catch(_) {}
+      return;
+    }
+    if (!room) {
+      setStatus('部屋番号を入力してください。', 'error');
+      try { roomInput.focus(); } catch(_) {}
+      return;
+    }
+
+    var collectionName = 'residents_' + dorm;
+    var docRef = db.collection(collectionName).doc(makeSelfResidentDocumentId(name, room));
+    setSaving(true);
+    setStatus('同じ名前と部屋番号の登録がないか確認しています...', '');
+    state.loadingTimer = window.setTimeout(function(){
+      setAppLoading('self-resident-registration', true, {
+        label:'寮生情報を登録しています...', transient:true, timeoutMs:20000
+      });
+    }, 500);
+
+    try {
+      var duplicate = await findDuplicate(collectionName, name, room);
+      if (duplicate) {
+        throw new Error('同じ名前・部屋番号はすでに登録されています。「戻る」から一覧で自分の名前を選択してください。');
+      }
+
+      await db.runTransaction(async function(transaction){
+        var existing = await transaction.get(docRef);
+        if (existing.exists) throw new Error('同じ名前・部屋番号はすでに登録されています。');
+        var now = firebase.firestore.FieldValue.serverTimestamp();
+        transaction.set(docRef, {
+          dorm:dorm,
+          name:name,
+          furigana:furigana,
+          room:room,
+          roomNumber:room,
+          roomNo:room,
+          circle:circle,
+          luggage:0,
+          mail:0,
+          createdAt:now,
+          updatedAt:now,
+          selfRegistered:true
+        });
+      });
+
+      try { addLog('新入寮生本人登録', '[' + dorm + '] ' + room + ' ' + name + ' を追加'); } catch(_) {}
+      setStatus('登録しました。', 'success');
+      finishRegistration(docRef, dorm);
+    } catch (error) {
+      console.error('self resident registration failed', error);
+      setStatus(error && error.message ? error.message : '登録に失敗しました。通信状態を確認してもう一度お試しください。', 'error');
+    } finally {
+      if (state.loadingTimer) window.clearTimeout(state.loadingTimer);
+      state.loadingTimer = 0;
+      setAppLoading('self-resident-registration', false);
+      setSaving(false);
+    }
+  }
+
+  document.addEventListener('click', function(event){
+    var openBtn = closestEventTargetCompat(event, '#self-register-open-btn');
+    if (openBtn) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      openModal();
+      return;
+    }
+    var dormBtn = closestEventTargetCompat(event, '.self-register-dorm-btn');
+    if (dormBtn && modal.contains(dormBtn)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setDorm(dormBtn.getAttribute('data-self-register-dorm'));
+      return;
+    }
+    var backBtn = closestEventTargetCompat(event, '#self-register-cancel-btn, #self-register-close-btn');
+    if (backBtn) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      returnToSelection();
+    }
+  }, true);
+
+  form.addEventListener('submit', submitRegistration, true);
+  form.addEventListener('input', function(){ setStatus('', ''); }, false);
+  document.addEventListener('keydown', function(event){
+    if ((event.key === 'Escape' || event.keyCode === 27) && modal.classList.contains('active')) {
+      event.preventDefault();
+      returnToSelection();
     }
   }, true);
 })();
