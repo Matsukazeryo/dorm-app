@@ -4056,6 +4056,26 @@
 	    -webkit-backdrop-filter:none !important;
 	  }
 
+	  #self-settings-modal,
+	  #self-profile-edit-modal,
+	  #self-delete-modal{ padding:12px; box-sizing:border-box; overflow:hidden; }
+	  #self-settings-modal > .modal-content,
+	  #self-profile-edit-modal > .modal-content,
+	  #self-delete-modal > .modal-content{
+	    width:100%; min-width:0; max-width:650px;
+	    max-height:calc(100vh - 24px); box-sizing:border-box;
+	    overflow-y:auto; overflow-x:hidden;
+	  }
+	  #self-settings-modal .notification-settings-card{
+	    min-width:0; width:100%; box-sizing:border-box;
+	  }
+	  #self-settings-modal .notification-settings-head{ flex-wrap:wrap; }
+	  #self-settings-modal .notification-settings-text{ overflow-wrap:break-word; }
+	  @supports (height:100dvh){
+	    #self-settings-modal > .modal-content,
+	    #self-profile-edit-modal > .modal-content,
+	    #self-delete-modal > .modal-content{ max-height:calc(100dvh - 24px); }
+	  }
 	  /* ===== 横画面タブレット検索 ===== */
 	  .tablet-search-setting-row{
 	    display:none;
@@ -5095,13 +5115,13 @@
       </div>
 
 	  <div id="notification-settings-launcher" class="notification-settings-launcher">
-    <button id="notification-settings-toggle-btn" type="button" class="header-btn notification-settings-toggle-btn">自分の設定</button>
+    <button id="notification-settings-toggle-btn" type="button" class="header-btn notification-settings-toggle-btn">設定</button>
   </div>
 
   <div id="self-settings-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="self-settings-title">
     <div class="modal-content self-settings-modal-content">
       <div class="modal-header">
-        <h2 id="self-settings-title">自分の設定</h2>
+        <h2 id="self-settings-title">設定</h2>
         <button id="self-settings-close-btn" type="button" class="modal-close-btn" aria-label="閉じる">&times;</button>
       </div>
       <section class="self-settings-section">
@@ -6252,7 +6272,7 @@
       var fields = getResidentSearchFields(resident);
       var roomNumber = normalizeSearchText((resident && resident.roomNumber) || '');
       return terms.every(function(term){
-        if (/^[0-9]+$/.test(term)) return roomNumber === term;
+        if (/^[0-9]+$/.test(term)) return roomNumber.indexOf(term) === 0;
         return fields.some(function(field){
           return strictIncludesSearchText(field, term);
         });
@@ -7861,11 +7881,16 @@ window.__morningModeTargetDorm = null; // 'shofu' | 'meizen' | 'all' | null
       }
 
       if (launcher) launcher.style.display = shouldShow ? 'block' : 'none';
-	  if (toggleBtn) toggleBtn.textContent = '自分の設定';
+	  if (toggleBtn) toggleBtn.textContent = '設定';
       card.style.display = (shouldShow && notificationSettingsPanelOpen) ? 'block' : 'none';
 	  if (settingsModal) {
-		settingsModal.classList.toggle('active', !!(shouldShow && notificationSettingsPanelOpen));
-		settingsModal.style.pointerEvents = (shouldShow && notificationSettingsPanelOpen) ? 'auto' : 'none';
+		const childOpen = ['self-profile-edit-modal', 'self-delete-modal'].some(function(id){
+		  const child = document.getElementById(id);
+		  return child && child.classList.contains('active');
+		});
+		const settingsVisible = shouldShow && notificationSettingsPanelOpen && !childOpen;
+		settingsModal.classList.toggle('active', !!settingsVisible);
+		settingsModal.style.pointerEvents = settingsVisible ? 'auto' : 'none';
 	  }
       if (!shouldShow) {
         notificationSettingsPanelOpen = false;
@@ -10285,7 +10310,7 @@ window.addEventListener('load', function(){
   }, true);
 })();
 
-// ==== 自分の設定（寮生情報・通知・退寮） ====
+// ==== 設定（寮生情報・通知・退寮） ====
 (function initializeSelfSettings(){
   if (window.__selfSettingsInitialized) return;
   window.__selfSettingsInitialized = true;
@@ -10309,6 +10334,9 @@ window.addEventListener('load', function(){
   var deleteFinalBtn = document.getElementById('self-delete-final-btn');
   var deleteStatus = document.getElementById('self-delete-status');
   if (!settingsModal || !summaryEl || !editModal || !editForm || !deleteModal) return;
+  [settingsModal, editModal, deleteModal].forEach(function(element){
+    document.body.appendChild(element);
+  });
 
   var state = { resolved:null, profilePromise:null, editSaving:false, deleteSaving:false };
   var duplicateCache = {
