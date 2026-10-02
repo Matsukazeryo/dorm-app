@@ -4579,10 +4579,10 @@
           <span>登録先を選択してください</span>
         </div>
         <div class="new-resident-dorm-options" role="group" aria-label="入寮した寮">
-          <button type="button" class="new-resident-dorm-btn self-register-dorm-btn is-active" data-self-register-dorm="shofu" aria-pressed="true">松風寮</button>
+          <button type="button" class="new-resident-dorm-btn self-register-dorm-btn" data-self-register-dorm="shofu" aria-pressed="false">松風寮</button>
           <button type="button" class="new-resident-dorm-btn self-register-dorm-btn" data-self-register-dorm="meizen" aria-pressed="false">明善寮</button>
         </div>
-        <input id="self-register-dorm" type="hidden" value="shofu">
+        <input id="self-register-dorm" type="hidden" value="">
       </section>
       <div class="self-register-fields">
         <div class="self-register-field self-register-field-name">
@@ -10108,7 +10108,7 @@ window.addEventListener('load', function(){
   }
 
   function setDorm(dorm){
-    var nextDorm = dorm === 'meizen' ? 'meizen' : 'shofu';
+    var nextDorm = dorm === 'meizen' || dorm === 'shofu' ? dorm : '';
     dormInput.value = nextDorm;
     var buttons = modal.querySelectorAll('.self-register-dorm-btn');
     for (var i = 0; i < buttons.length; i += 1) {
@@ -10123,7 +10123,7 @@ window.addEventListener('load', function(){
     nameInput.value = '';
     if (furiganaInput) furiganaInput.value = '';
     roomInput.value = '';
-    setDorm(currentDefaultDorm());
+    setDorm('');
     if (circleSelect) circleSelect.value = '';
     setStatus('', '');
   }
@@ -10208,7 +10208,13 @@ window.addEventListener('load', function(){
     event.stopImmediatePropagation();
     if (state.saving) return;
 
-    var dorm = dormInput.value === 'meizen' ? 'meizen' : 'shofu';
+    var dorm = dormInput.value;
+    if (dorm !== 'shofu' && dorm !== 'meizen') {
+      setStatus('入寮した寮を選択してください。', 'error');
+      var firstDormButton = modal.querySelector('.self-register-dorm-btn');
+      if (firstDormButton) firstDormButton.focus();
+      return;
+    }
     var name = String(nameInput.value || '').trim();
     var furigana = normalizeFuriganaInput(String(furiganaInput && furiganaInput.value || '').trim());
     var room = normalizeRoomNumberInput(String(roomInput.value || '').trim());
