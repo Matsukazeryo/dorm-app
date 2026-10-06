@@ -4076,6 +4076,27 @@
 	    #self-profile-edit-modal > .modal-content,
 	    #self-delete-modal > .modal-content{ max-height:calc(100dvh - 24px); }
 	  }
+	  #announcement-archive-modal{ padding:12px; box-sizing:border-box; z-index:2000; }
+	  #announcement-archive-modal > .announcement-archive-content{
+	    box-sizing:border-box; width:100%; min-width:0; max-width:760px;
+	    max-height:calc(100vh - 24px); padding:16px;
+	    display:flex; flex-direction:column; overflow:hidden;
+	  }
+	  #announcement-archive-modal .modal-header{ flex:0 0 auto; }
+	  #announcement-archive-title{ margin:0; font-size:1.2rem; }
+	  #announcement-archive-list{
+	    min-height:0; overflow-y:auto; overflow-x:hidden;
+	    -webkit-overflow-scrolling:touch; overscroll-behavior:contain;
+	    padding:2px 3px 12px;
+	  }
+	  #announcement-archive-list .announce-item,
+	  #announcement-list .announce-item{ min-width:0; box-sizing:border-box; }
+	  #announcement-archive-list .announce-body,
+	  #announcement-list .announce-body{ overflow-wrap:break-word; word-wrap:break-word; }
+	  #announcement-archive-list .announce-head{ flex-wrap:wrap; }
+	  @supports (height:100dvh){
+	    #announcement-archive-modal > .announcement-archive-content{ max-height:calc(100dvh - 24px); }
+	  }
 	  /* ===== 横画面タブレット検索 ===== */
 	  .tablet-search-setting-row{
 	    display:none;
@@ -4545,6 +4566,16 @@
     <button type="button" class="tablet-search-key is-function" data-tablet-key-action="backspace" aria-label="1文字削除">⌫</button>
   </div>
 </aside>
+
+<div id="announcement-archive-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="announcement-archive-title">
+  <div class="modal-content announcement-archive-content">
+    <div class="modal-header">
+      <h2 id="announcement-archive-title">お知らせ一覧</h2>
+      <button id="announcement-archive-close-btn" type="button" class="modal-close-btn" aria-label="お知らせ一覧を閉じる">&times;</button>
+    </div>
+    <ul id="announcement-archive-list" class="announcement-list"></ul>
+  </div>
+</div>
 
 <!-- ==== 自分選択モーダル ==== -->
 <div id="self-select-modal" class="modal-overlay">
@@ -8695,7 +8726,7 @@ function unifiedConfirm(action){
   const DEFAULT_COMPOSER_COLOR_PICKER = '#333333';
   const COLLAPSED_ANNOUNCEMENT_COUNT = 3;
   const pendingAnnouncementIds = new Set();
-  let announcementListExpanded = false;
+  let announcementArchiveOpen = false;
 
   function isAdmin(){
     return document.body.classList.contains('admin-logged-in');
@@ -9095,25 +9126,18 @@ function unifiedConfirm(action){
     });
   }
 
-  function render(){
-    const listEl = document.getElementById('announcement-list');
-    const toggleBtn = document.getElementById('announcement-list-toggle');
+  function renderAnnouncementList(listEl, items){
     if (!listEl) return;
 
-    if (!annCache || annCache.length === 0){
+    if (!items || items.length === 0){
       listEl.innerHTML = '<li>お知らせはありません。</li>';
-      if (toggleBtn) toggleBtn.classList.remove('is-visible');
       return;
     }
 
     const admin = isAdmin();
     const frag = document.createDocumentFragment();
 
-    const visibleAnnouncements = announcementListExpanded
-      ? annCache
-      : annCache.slice(0, COLLAPSED_ANNOUNCEMENT_COUNT);
-
-    visibleAnnouncements.forEach(({id, data}) => {
+    items.forEach(({id, data}) => {
       const d = data || {};
       const pinned = !!d.pinned;
 
@@ -9173,13 +9197,34 @@ function unifiedConfirm(action){
 
     listEl.innerHTML = '';
     listEl.appendChild(frag);
+  }
+
+  function render(){
+    renderAnnouncementList(document.getElementById('announcement-list'), annCache.slice(0, COLLAPSED_ANNOUNCEMENT_COUNT));
+    if (announcementArchiveOpen) {
+      renderAnnouncementList(document.getElementById('announcement-archive-list'), annCache);
+    }
+    const toggleBtn = document.getElementById('announcement-list-toggle');
     if (toggleBtn) {
       const canToggle = annCache.length > COLLAPSED_ANNOUNCEMENT_COUNT;
       toggleBtn.classList.toggle('is-visible', canToggle);
-      toggleBtn.setAttribute('aria-expanded', announcementListExpanded ? 'true' : 'false');
-      toggleBtn.textContent = announcementListExpanded
-        ? 'お知らせを閉じる'
-        : `すべてのお知らせを見る（${annCache.length}件）`;
+      toggleBtn.setAttribute('aria-haspopup', 'dialog');
+      toggleBtn.setAttribute('aria-controls', 'announcement-archive-modal');
+      toggleBtn.setAttribute('aria-expanded', announcementArchiveOpen ? 'true' : 'false');
+      toggleBtn.textContent = `すべてのお知らせを見る（${annCache.length}件）`;
+    }
+  }
+
+  function closeAnnouncementArchive(){
+    announcementArchiveOpen = false;
+    const modal = document.getElementById('announcement-archive-modal');
+    if (modal) modal.classList.remove('active');
+    const list = document.getElementById('announcement-archive-list');
+    if (list) list.innerHTML = '';
+    const button = document.getElementById('announcement-list-toggle');
+    if (button) {
+      button.setAttribute('aria-expanded', 'false');
+      try { button.focus({ preventScroll:true }); } catch(_) { button.focus(); }
     }
   }
 
@@ -9282,19 +9327,32 @@ function unifiedConfirm(action){
   })();
 
   document.addEventListener('click', function(ev){
-    const toggle = ev.target && ev.target.closest && ev.target.closest('#announcement-list-toggle');
-    if (!toggle) return;
-    ev.preventDefault();
-    announcementListExpanded = !announcementListExpanded;
-    render();
-    if (!announcementListExpanded) {
-      const box = document.getElementById('announcement-container');
-      if (box && box.getBoundingClientRect().top < 0) {
-        try { box.scrollIntoView({ block: 'start' }); }
-        catch(_) { box.scrollIntoView(true); }
-      }
+    const toggle = closestEventTargetCompat(ev, '#announcement-list-toggle');
+    const close = closestEventTargetCompat(ev, '#announcement-archive-close-btn');
+    const modal = document.getElementById('announcement-archive-modal');
+    if (close || (modal && ev.target === modal)) {
+      ev.preventDefault();
+      closeAnnouncementArchive();
+      return;
     }
+    if (!toggle || !modal) return;
+    ev.preventDefault();
+    announcementArchiveOpen = true;
+    renderAnnouncementList(document.getElementById('announcement-archive-list'), annCache);
+    modal.classList.add('active');
+    toggle.setAttribute('aria-expanded', 'true');
+    const closeButton = document.getElementById('announcement-archive-close-btn');
+    if (closeButton) closeButton.focus();
   }, false);
+
+  document.addEventListener('keydown', function(ev){
+    if (announcementArchiveOpen && (ev.key === 'Escape' || ev.keyCode === 27)) {
+      const composer = document.getElementById('post-announcement-modal');
+      if (composer && composer.classList.contains('active')) return;
+      ev.preventDefault();
+      closeAnnouncementArchive();
+    }
+  });
 
   // 投稿送信
   (function bindPostSubmit(){
@@ -9376,7 +9434,7 @@ function unifiedConfirm(action){
     }
 
     document.addEventListener('click', async (ev) => {
-      const li = ev.target && ev.target.closest && ev.target.closest('#announcement-list li.announce-item');
+      const li = closestEventTargetCompat(ev, '#announcement-list li.announce-item, #announcement-archive-list li.announce-item');
       if (!li) return;
       if (!isAdmin()) return; // 管理者以外は操作不可
 
@@ -9442,8 +9500,12 @@ function unifiedConfirm(action){
     window.__annV2Obs = true;
 
     try{
+      let previousAdmin = isAdmin();
       const obs = new MutationObserver(() => {
         ensureVisibility();
+        const nextAdmin = isAdmin();
+        if (nextAdmin === previousAdmin) return;
+        previousAdmin = nextAdmin;
         render(); // admin表示のボタン付け替え
         try { rehydrateBbcodeInDom(); } catch(_) {}
       });
@@ -10398,6 +10460,7 @@ window.addEventListener('load', function(){
     if (editBtn) editBtn.disabled = true;
     if (deleteBtn) deleteBtn.disabled = true;
     state.profilePromise = Promise.resolve(__resolveResidentAndDorm(id)).then(function(resolved){
+      if (getStoredResidentId() !== id) return null;
       state.resolved = resolved;
       renderSummary(resolved);
       return resolved;
@@ -10490,6 +10553,10 @@ window.addEventListener('load', function(){
     event.preventDefault();
     event.stopImmediatePropagation();
     if (state.editSaving || !state.resolved) return;
+    if (String(state.resolved.data.id || '') !== getStoredResidentId()) {
+      setInlineStatus(editStatus, '寮生の選択が変更されています。設定を開き直してください。', 'error');
+      return;
+    }
     var name = String(editName.value || '').trim();
     var furigana = normalizeFuriganaInput(editFurigana.value || '');
     var room = normalizeRoomNumberInput(editRoom.value || '');
@@ -10571,6 +10638,10 @@ window.addEventListener('load', function(){
 
   async function deleteOwnResident(){
     if (state.deleteSaving || !deleteCheck.checked || !state.resolved) return;
+    if (String(state.resolved.data.id || '') !== getStoredResidentId()) {
+      setInlineStatus(deleteStatus, '寮生の選択が変更されています。設定を開き直してください。', 'error');
+      return;
+    }
     state.deleteSaving = true;
     deleteFinalBtn.disabled = true;
     deleteFinalBtn.textContent = '削除しています...';
