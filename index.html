@@ -3800,6 +3800,69 @@
 	    box-sizing:border-box;
 	    text-align:center;
 	  }
+	  .parcel-loading-scene{
+	    position:relative;
+	    width:112px;
+	    height:96px;
+	    flex:0 0 auto;
+	    pointer-events:none;
+	  }
+	  .parcel-loading-box{
+	    position:absolute;
+	    left:24px;
+	    top:16px;
+	    width:64px;
+	    height:58px;
+	    border:2px solid #b97737;
+	    border-radius:6px;
+	    box-sizing:border-box;
+	    background:#efbd77;
+	    transform:translateY(0) rotate(-4deg);
+	    animation:parcel-loading-bounce 1.6s ease-in-out infinite;
+	  }
+	  .parcel-loading-box::before{
+	    content:'';
+	    position:absolute;
+	    left:23px;
+	    top:0;
+	    width:14px;
+	    height:24px;
+	    background:#fff0cf;
+	    border-radius:0 0 2px 2px;
+	  }
+	  .parcel-loading-box::after{
+	    content:'';
+	    position:absolute;
+	    right:7px;
+	    bottom:8px;
+	    width:17px;
+	    height:12px;
+	    background:#fffaf0;
+	    border-radius:2px;
+	  }
+	  .parcel-loading-shadow{
+	    position:absolute;
+	    left:27px;
+	    bottom:9px;
+	    width:58px;
+	    height:5px;
+	    border-radius:50%;
+	    background:rgba(49,67,81,.14);
+	    animation:parcel-loading-shadow 1.6s ease-in-out infinite;
+	  }
+	  @keyframes parcel-loading-bounce{
+	    0%,100%{ transform:translateY(0) rotate(-4deg); }
+	    45%{ transform:translateY(-12px) rotate(5deg); }
+	    70%{ transform:translateY(0) rotate(-2deg); }
+	    83%{ transform:translateY(-3px) rotate(0); }
+	  }
+	  @keyframes parcel-loading-shadow{
+	    0%,70%,100%{ transform:scaleX(1); opacity:1; }
+	    45%{ transform:scaleX(.75); opacity:.5; }
+	  }
+	  @media (prefers-reduced-motion:reduce){
+	    .parcel-loading-box,.parcel-loading-shadow{ animation:none; }
+	  }
 	  body.dark-theme #loading-overlay{
 	    background:#111827 !important;
 	    color:#eef6ff;
@@ -4351,7 +4414,11 @@
   <button id="morning-reminder-close-btn" type="button" class="morning-reminder-close">今日は閉じる</button>
 </div>
 
-<div id="loading-overlay" style="display:none; position:fixed; inset:0; top:0; right:0; bottom:0; left:0; background:rgba(255,255,255,0.8); z-index:3000; align-items:center; justify-content:center;">
+<div id="loading-overlay" class="is-initial-loading" style="display:flex; position:fixed; inset:0; top:0; right:0; bottom:0; left:0; background:rgba(255,255,255,0.8); z-index:3000; align-items:center; justify-content:center;">
+  <div class="parcel-loading-scene" aria-hidden="true">
+    <div class="parcel-loading-shadow"></div>
+    <div class="parcel-loading-box"></div>
+  </div>
   <div id="loading-overlay-message">読み込み中...</div>
   <div id="loading-recovery-panel" class="loading-recovery-panel" role="status" aria-live="polite">
     <div class="loading-recovery-title">読み込みに時間がかかっています</div>
@@ -4359,6 +4426,17 @@
     <button id="loading-force-reload-btn" type="button" class="loading-recovery-btn">このタブを再読み込み</button>
   </div>
 </div>
+
+<script>
+  // Release the initial cover even if an external startup script fails to load.
+  window.__parcelBootFallbackTimer = window.setTimeout(function(){
+    var overlay = document.getElementById('loading-overlay');
+    if (overlay && overlay.classList.contains('is-initial-loading')) {
+      overlay.classList.remove('is-initial-loading');
+      overlay.style.display = 'none';
+    }
+  }, 8000);
+</script>
 
 <div id="receive-complete-toast" class="receive-complete-toast" role="status" aria-live="polite" aria-atomic="true">
   <span class="receive-complete-toast-icon" aria-hidden="true">&#10003;</span>
@@ -5839,6 +5917,11 @@
 	function syncAppLoadingOverlay(){
 	  var overlay = document.getElementById('loading-overlay');
 	  if (!overlay) return;
+	  overlay.classList.remove('is-initial-loading');
+	  if (window.__parcelBootFallbackTimer) {
+	    window.clearTimeout(window.__parcelBootFallbackTimer);
+	    window.__parcelBootFallbackTimer = 0;
+	  }
 	  var latest = getLatestAppLoadingOwner();
 	  var message = document.getElementById('loading-overlay-message');
 	  if (latest) {
