@@ -4190,6 +4190,10 @@
       .morning-review-table th:first-child,
       .morning-review-table td:first-child{ text-align:left; width:auto; overflow-wrap:break-word; }
       .morning-review-table th:not(:first-child){ width:60px; }
+      .morning-review-reference{ display:block; margin-top:4px; font-size:11px; font-weight:400; }
+      .morning-review-difference{ display:block; margin-top:2px; font-size:12px; font-weight:800; }
+      .morning-review-difference.is-changed{ color:#a14320; }
+      body.dark-theme .morning-review-difference.is-changed{ color:#ffc88b; }
       .morning-review-actions{ display:flex; gap:12px; margin-top:12px; flex-wrap:wrap; }
       .morning-review-actions button{
         flex:1 1 200px; min-height:46px; padding:9px 12px;
@@ -12587,18 +12591,39 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       const fragment = document.createDocumentFragment();
       let luggageTotal = 0;
       let mailTotal = 0;
+      let referenceLuggageTotal = 0;
+      let referenceMailTotal = 0;
+      let changedResidents = 0;
       let visibleRows = 0;
+      function formatDifference(value){ return (value > 0 ? '+' : '') + value; }
       entries.entries.forEach(function(entry){
         const luggage = getMorningCountNumber(entry.luggage);
         const mail = getMorningCountNumber(entry.mail);
+        const referenceLuggage = getMorningCountNumber(entry.originalLuggage);
+        const referenceMail = getMorningCountNumber(entry.originalMail);
         luggageTotal += luggage;
         mailTotal += mail;
-        if (!luggage && !mail && !entry.originalLuggage && !entry.originalMail) return;
+        referenceLuggageTotal += referenceLuggage;
+        referenceMailTotal += referenceMail;
+        if (luggage !== referenceLuggage || mail !== referenceMail) changedResidents += 1;
+        if (!luggage && !mail && !referenceLuggage && !referenceMail) return;
         const row = document.createElement('tr');
         const values = [(entry.dorm === 'meizen' ? '明善 ' : '松風 ') + entry.roomNumber + ' ' + entry.name, luggage, mail];
-        values.forEach(function(value){
+        values.forEach(function(value, index){
           const cell = document.createElement('td');
           cell.textContent = String(value);
+          if (index > 0) {
+            const reference = index === 1 ? referenceLuggage : referenceMail;
+            const difference = value - reference;
+            const referenceLine = document.createElement('span');
+            referenceLine.className = 'morning-review-reference';
+            referenceLine.textContent = '参考 ' + reference;
+            const differenceLine = document.createElement('span');
+            differenceLine.className = 'morning-review-difference' + (difference ? ' is-changed' : '');
+            differenceLine.textContent = difference ? '差 ' + formatDifference(difference) : '差なし';
+            cell.appendChild(referenceLine);
+            cell.appendChild(differenceLine);
+          }
           row.appendChild(cell);
         });
         fragment.appendChild(row);
@@ -12607,6 +12632,8 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       rows.innerHTML = '';
       rows.appendChild(fragment);
       summary.textContent = '今回の入力：荷物 ' + luggageTotal + '個 / 郵便 ' + mailTotal + '通'
+        + '。参考との差：荷物 ' + formatDifference(luggageTotal - referenceLuggageTotal) + '個 / 郵便 ' + formatDifference(mailTotal - referenceMailTotal) + '通'
+        + '（差がある寮生 ' + changedResidents + '人）'
         + (luggageTotal + mailTotal === 0 ? '。すべて0です。数え忘れがないか確認してください。' : '');
       if (!visibleRows) summary.textContent += ' 一覧の全員が0です。';
       modal.classList.add('active');
