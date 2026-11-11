@@ -12596,7 +12596,11 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
       let changedResidents = 0;
       let visibleRows = 0;
       function formatDifference(value){ return (value > 0 ? '+' : '') + value; }
-      entries.entries.forEach(function(entry){
+      const reviewEntries = sortResidentsByPreference(entries.entries, {
+        pinResidentId: '',
+        sortOrder: normalizeResidentSortOrder(window.__residentSortOrderState || getResidentSortOrder())
+      });
+      reviewEntries.forEach(function(entry){
         const luggage = getMorningCountNumber(entry.luggage);
         const mail = getMorningCountNumber(entry.mail);
         const referenceLuggage = getMorningCountNumber(entry.originalLuggage);
