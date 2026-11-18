@@ -5863,6 +5863,11 @@
 	      addTouchEndGuard(function(ev){
 	        if (!ev || !ev.changedTouches || ev.changedTouches.length !== 1) return;
 	        var target = ev.target || ev.srcElement;
+	        // The tablet keypad handles touchend itself; never replay its taps.
+	        if (closestElementCompat(target, '#tablet-search-panel')) {
+	          lastControlTapAt = 0;
+	          return;
+	        }
 	        var control = closestElementCompat(target, controlSelector);
 	        if (!control) {
 	          lastControlTapAt = 0;
@@ -9754,109 +9759,11 @@ function unifiedConfirm(action){
 
 })();
 
-(function adminStateGuard(){
-  function cleanupAnnouncementEditUI(){
-    const list = document.getElementById('announcement-list');
-    if (!list) return;
-    // 編集状態解除
-    list.querySelectorAll('[contenteditable]')
-        .forEach(el => el.removeAttribute('contenteditable'));
-    list.querySelectorAll('li.editing')
-        .forEach(li => li.classList.remove('editing'));
-    // 編集ボタン群の除去
-    list.querySelectorAll('.announce-actions')
-        .forEach(el => el.remove());
-  }
-
-  function syncFromSession(){
-    const isAdmin = (sessionStorage.getItem('isAdminLoggedIn') === 'true');
-    if (isAdmin){
-      document.body.classList.add('admin-logged-in');
-      // インラインでdisplay:noneが残っている場合に備えて、一度クリアしてCSS制御に戻す
-      try {
-        const postBtn = document.getElementById('post-announcement-btn');
-        if (postBtn) postBtn.style.display = '';
-      } catch(_) {}
-      // ログイン直後でも編集UIを即時適用
-      try { window.applyAnnouncementAdminControls && window.applyAnnouncementAdminControls(); } catch(_) {}
-      // 失敗時の再試行（最大10回 / 2秒程度）
-      let __tries = 0;
-      clearInterval(window.__annApplyRetryTimer);
-      window.__annApplyRetryTimer = setInterval(() => {
-        if (!document.body.classList.contains('admin-logged-in')){ clearInterval(window.__annApplyRetryTimer); return; }
-        try { window.applyAnnouncementAdminControls && window.applyAnnouncementAdminControls(); } catch(_) {}
-        __tries++;
-        if (__tries >= 10) clearInterval(window.__annApplyRetryTimer);
-      }, 200);
-      // ログイン直後に自動で「編集モード」を開く（最大10回リトライ）
-      let __aeTries = 0;
-      clearInterval(window.__annAutoEditTimer);
-      window.__annAutoEditTimer = setInterval(() => {
-        if (!document.body.classList.contains('admin-logged-in')){ clearInterval(window.__annAutoEditTimer); return; }
-        // 既に何か編集中なら終了
-        if (document.querySelector('#announcement-list li.editing')) { clearInterval(window.__annAutoEditTimer); return; }
-        let ok = false;
-        try { ok = window.__autoEnterFirstAnnEdit && window.__autoEnterFirstAnnEdit(); } catch(_){ }
-        __aeTries++;
-        if (ok || __aeTries >= 10) clearInterval(window.__annAutoEditTimer);
-      }, 200);
-      try { updateAnnouncementVisibility(); } catch(_) {}
-    } else {
-      document.body.classList.remove('admin-logged-in');
-      // 管理者状態変更時はインラインdisplayをクリアしておく
-      try {
-        const postBtn = document.getElementById('post-announcement-btn');
-        if (postBtn) postBtn.style.display = '';
-      } catch(_) {}
-      clearInterval(window.__annAutoEditTimer);
-      cleanupAnnouncementEditUI();
-      // === ログアウト時は「庶務モードONの閲覧」へ強制 ===
-      try {
-        // 閲覧モードへ
-        document.body.classList.remove('resident-edit-mode');
-        document.body.classList.remove('count-edit-mode');
-        const viewRadio = document.getElementById('view-mode');
-        if (viewRadio) viewRadio.checked = true;
-        // 庶務ON（sohmu-off を外し、トグルをONに、イベントも飛ばす）
-        const sohmu = document.getElementById('sohmu-toggle');
-        if (sohmu) {
-          sohmu.checked = true;
-      dispatchEventCompat(sohmu, 'change', true);
-        }
-        document.body.classList.remove('sohmu-off');
-        // 表を最新状態で再描画
-        if (typeof window.renderTable === 'function') window.renderTable();
-      } catch(_){ }
-      try { updateAnnouncementVisibility(); } catch(_) {}
-    }
-  }
-
-  // 初期同期（リロード直後の表示を正す）
-  try { syncFromSession(); } catch(_) {}
-
-  // storageイベントで他タブ/同タブの変更も拾う
-  window.addEventListener('storage', (e) => {
-    if (e && e.key === 'isAdminLoggedIn') syncFromSession();
-  });
-
-  // bodyのclass変化を監視して、admin-logged-in が外れたら即クリーン & お知らせ欄の表示更新
-  try {
-    const obs = new MutationObserver(() => {
-      if (!document.body.classList.contains('admin-logged-in')) {
-        cleanupAnnouncementEditUI();
-      }
-      try { updateAnnouncementVisibility(); } catch(_) {}
-    });
-    obs.observe(document.body, { attributes:true, attributeFilter:['class'] });
-  } catch(_) {}
-
-  // 既存のログイン/ログアウト処理実行後に状態を合せる（競合しないように遅延）
-  document.addEventListener('click', (ev) => {
-    const btn = closestEventTargetCompat(ev, '#login-logout-btn, #admin-logout-btn');
-    if (!btn) return;
-    setTimeout(syncFromSession, 0);
-  }, true);
-})();
+// Login, logout and startup already call applyAdminUI. Only mirror session
+// changes from another document; never change the user's workflow mode here.
+window.addEventListener('storage', function(event){
+  if (event.key === 'isAdminLoggedIn') applyAdminUI();
+});
 
 // 初期表示時にもお知らせ欄の表示/非表示を整える
 window.addEventListener('load', function(){
@@ -11383,7 +11290,7 @@ let currentCollectionName = localStorage.getItem('currentDorm') || 'residents_sh
     }
 
     function scheduleAnnotate(){
-      if (!isMorningMode) return;
+      if (!isMorningMode || morningRef.referenceRevealed !== true) return;
       if (__annotateTimer) return;
       __annotateTimer = setTimeout(() => {
         __annotateTimer = null;
@@ -15666,7 +15573,8 @@ function isWorkflowRegisterMode() {
 	    ? remainingMs
 	    : Math.max(0, workflowState.timerEndsAt - Date.now());
 	  const seconds = Math.max(0, Math.ceil(ms / 1000));
-	  elements.workflowHomeCountdown.textContent = String(seconds);
+	  const label = String(seconds);
+	  if (elements.workflowHomeCountdown.textContent !== label) elements.workflowHomeCountdown.textContent = label;
 	}
 
 	function resetWorkflowHomeTimer() {
@@ -18583,8 +18491,8 @@ if(elements.changePasswordForm){
 	                const meizenResidents = meizenDocs.map(function(doc){
 	                    return mergeResidentDocData(doc, 'meizen');
 	                });
-	                setCrossDormSearchCache('shofu', shofuResidents);
-	                setCrossDormSearchCache('meizen', meizenResidents);
+	                if (shofuLoaded) setCrossDormSearchCache('shofu', shofuResidents);
+	                if (meizenLoaded) setCrossDormSearchCache('meizen', meizenResidents);
 	                allResidents = shofuResidents.concat(meizenResidents);
 	                residentDataSubscriptionKey = subscriptionKey;
 	                requestResidentTableRender();
@@ -18678,13 +18586,21 @@ if(elements.changePasswordForm){
 	            hint.innerHTML = '';
 	        }
 
+	        const pendingCrossDormReads = Object.create(null);
 	        async function loadCrossDormSearchResidents(dormKey) {
 	            const cached = crossDormSearchCache[dormKey];
 	            if (cached && cached.loaded) return cached.residents;
-	            const snap = await db.collection(`residents_${dormKey}`).get();
-	            const residents = snap.docs.map(doc => mergeResidentDocData(doc, dormKey));
-	            setCrossDormSearchCache(dormKey, residents);
-	            return residents;
+	            if (pendingCrossDormReads[dormKey]) return pendingCrossDormReads[dormKey];
+	            const read = db.collection(`residents_${dormKey}`).get().then(function(snap){
+	                const latest = crossDormSearchCache[dormKey];
+	                if (latest && latest.loaded) return latest.residents;
+	                const residents = snap.docs.map(doc => mergeResidentDocData(doc, dormKey));
+	                setCrossDormSearchCache(dormKey, residents);
+	                return residents;
+	            });
+	            pendingCrossDormReads[dormKey] = read;
+	            try { return await read; }
+	            finally { delete pendingCrossDormReads[dormKey]; }
 	        }
 
 	        function showCrossDormSearchHint(otherDormKey, matchCount) {
@@ -18725,15 +18641,21 @@ if(elements.changePasswordForm){
 	                const residents = await loadCrossDormSearchResidents(otherDormKey);
 	                if (requestId !== crossDormSearchRequestId) return;
 	                const preparedTerms = normalizeSearchTerms(term);
-	                const matches = residents.filter(r => residentMatchesSearch(r, term, preparedTerms));
-	                if (matches.length > 0) {
-	                    showCrossDormSearchHint(otherDormKey, matches.length);
+	                let matches = 0;
+	                for (let i = 0; i < residents.length; i++) {
+	                    if (residentMatchesSearch(residents[i], term, preparedTerms)) matches++;
+	                }
+	                if (matches > 0) {
+	                    showCrossDormSearchHint(otherDormKey, matches);
 	                } else {
 	                    hideCrossDormSearchHint();
 	                }
 	            } catch (error) {
 	                console.warn('cross dorm search hint failed', error);
-	                if (requestId === crossDormSearchRequestId) hideCrossDormSearchHint();
+	                if (requestId === crossDormSearchRequestId) {
+	                    crossDormSearchUiSignature = '';
+	                    hideCrossDormSearchHint();
+	                }
 	            }
 	        }
 
@@ -20052,7 +19974,9 @@ if(elements.changePasswordForm){
 	                touchedControl = null;
 	                if (!event.touches || event.touches.length !== 1) return;
 	                const button = closestElementCompat(event.target, 'button');
-	                if (button && !button.hasAttribute('data-kana-group')) touchedControl = button;
+	                if (button && (button.hasAttribute('data-number-key') ||
+	                    button.hasAttribute('data-tablet-search-mode') ||
+	                    button.hasAttribute('data-tablet-key-action'))) touchedControl = button;
 	            }, { passive:true });
 	            elements.tabletSearchPanel.addEventListener('touchcancel', function(){ touchedControl = null; }, false);
 	            elements.tabletSearchPanel.addEventListener('touchend', function(event) {
