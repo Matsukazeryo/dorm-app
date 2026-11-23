@@ -16617,6 +16617,56 @@ async function recognizeOcrImage(Tesseract, imageSource, label, progressBase, pr
   };
 }
 
+// Protocol of the pinned PaddleOCR.js 0.4.2 module worker.
+let paddleWorker = null, paddleDisabled = false, paddleIdleTimer = 0;
+function releasePaddleWorker(){
+  clearTimeout(paddleIdleTimer);
+  if (paddleWorker) paddleWorker.terminate();
+  paddleWorker = null;
+}
+async function readParcelLabel(source){
+  if (!paddleDisabled && window.Worker && window.OffscreenCanvas && window.createImageBitmap && source && source.getContext) {
+    clearTimeout(paddleIdleTimer);
+    const request = (type, payload, transfer) => new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('OCR timeout')), 60000);
+      paddleWorker.onerror = () => { clearTimeout(timer); reject(new Error('OCR worker failed')); };
+      paddleWorker.onmessage = event => {
+        const msg = event.data;
+        if (!msg || msg.kind !== 'worker-transport-response' || msg.requestId !== 1) return;
+        clearTimeout(timer);
+        if (msg.status === 'success') resolve(msg.payload);
+        else reject(new Error(msg.error && msg.error.message || 'OCR failed'));
+      };
+      try { paddleWorker.postMessage({kind:'worker-transport-request', requestId:1, type, payload}, transfer || []); }
+      catch (error) { clearTimeout(timer); reject(error); }
+    });
+    try {
+      if (!paddleWorker) {
+        setOcrStatus('新しい読み取りモデルを準備しています…', '');
+        const entry = 'https://cdn.jsdelivr.net/npm/@paddleocr/paddleocr-js@0.4.2/dist/assets/worker-entry-C9UNuyOJ.js';
+        const url = URL.createObjectURL(new Blob(['import ' + JSON.stringify(entry)], {type:'text/javascript'}));
+        try {
+          paddleWorker = new Worker(url, {type:'module'});
+          await request('init', {options:{textDetectionModelName:'PP-OCRv5_mobile_det', textRecognitionModelName:'PP-OCRv5_mobile_rec',
+            ortOptions:{backend:'wasm', numThreads:1, disableWasmProxy:true, wasmPaths:'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.24.3/dist/'}}});
+        } finally { URL.revokeObjectURL(url); }
+      }
+      setOcrStatus('宛名の文字を読み取っています…', '');
+      const bitmap = await createImageBitmap(source);
+      const results = await request('predict', {sources:[{kind:'imageBitmap', imageBitmap:bitmap}], params:{}}, [bitmap]);
+      const lines = results[0].items.filter(line => line.text && line.text.trim());
+      paddleIdleTimer = setTimeout(releasePaddleWorker, 120000);
+      return {text:lines.map(line => line.text).join('\n'), confidence:lines.length ? 100 * lines.reduce((n,line) => n + line.score, 0) / lines.length : 0};
+    } catch (error) {
+      releasePaddleWorker();
+      paddleDisabled = true;
+      console.warn('PaddleOCR unavailable', error);
+    }
+  }
+  setOcrStatus('標準のOCRで読み取っています…', '');
+  return recognizeOcrImage(await loadOcrEngine(), source, '文字を読み取っています...', 0, 100);
+}
+
 async function runOcrOnImage(imageSource) {
   if (!imageSource) return;
   ocrState.registeredResidentId = '';
@@ -16641,9 +16691,7 @@ async function runOcrOnImage(imageSource) {
       return;
     }
     setOcrStatus(prepared ? `OCRエンジンを読み込んでいます...（${prepared.width}×${prepared.height}）` : 'OCRエンジンを読み込んでいます...', '');
-    const Tesseract = await loadOcrEngine();
-    setOcrStatus('文字を読み取っています... 0%', '');
-    let result = await recognizeOcrImage(Tesseract, ocrSource, '文字を読み取っています...', 0, 100);
+    let result = await readParcelLabel(ocrSource);
     let analysis = await applyOcrRecognitionResult(result);
 
     const text = result.text || '';
